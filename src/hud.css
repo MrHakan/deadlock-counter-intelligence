@@ -1,0 +1,26 @@
+#DCIVisibility {
+    width: 100%;
+    height: 100%;
+}
+
+.DCIBox {
+    visibility: collapse;
+    horizontal-align: right;
+    vertical-align: bottom;
+    width: 320px;
+    margin: 0 36px 130px 0;
+    padding: 12px 16px;
+    flow-children: down;
+    background-color: #211b32f6;
+    border: 1px solid #986de1;
+    border-radius: 4px;
+}
+
+.gScoreboardOpen .DCIBox, .gShopOpen .DCIBox { visibility: visible; }
+
+.DCITitle { color: #f7f0ff; font-size: 19px; font-weight: bold; }
+.DCIStatus { color: #d3bee9; font-size: 14px; margin-top: 3px; }
+.DCIRow { width: 100%; flow-children: down; margin-top: 8px; border-top: 1px solid #665383; padding-top: 6px; }
+.DCIName { color: #fcdb9d; font-size: 17px; font-weight: bold; }
+.DCIEvidence { color: #e0baff; font-size: 14px; }
+.DCIReason { color: #f0e6f8; font-size: 14px; }
