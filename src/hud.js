@@ -2,15 +2,8 @@
 
 (function () {
   var context = $.GetContextPanel();
-  var engine = DCIEngine.create(DCI_CATALOG, DCI_LANGUAGE);
-  var turkish = DCI_LANGUAGE === "turkish";
-  var text = turkish ? {
-    roster: "Kadro",
-    shop: "Son alımlar",
-    waiting: "Rakip kadrosu bekleniyor.",
-    noMatch: "Bu kadro için öneri yok.",
-    error: "Karşı item verisi okunamadı.",
-  } : {
+  var engine = DCIEngine.create(DCI_CATALOG);
+  var text = {
     roster: "Lineup",
     shop: "Recent purchases",
     waiting: "Waiting for enemy lineup.",
@@ -60,7 +53,7 @@
       row.panel.SetHasClass("DCISpirit", item.category === "spirit");
       row.panel.SetHasClass("DCIPurchase", item.purchaseBased);
       row.name.text = item.name;
-      row.price.text = String(item.cost).replace(/\B(?=(\d{3})+(?!\d))/g, turkish ? "." : ",");
+      row.price.text = String(item.cost).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
       row.reason.text = item.reason;
       row.evidence.text = item.evidence;
     });

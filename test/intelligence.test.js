@@ -6,16 +6,16 @@ const catalog = require("../src/catalog.json");
 const { create, validateRules } = require("../src/engine");
 const { observe } = require("../src/observer");
 
-test("rules resolve against the pinned bilingual shop inventory", () => {
+test("rules resolve against the pinned catalog and accept localized input", () => {
   assert.deepEqual(validateRules(catalog), []);
-  const tr = create(catalog, "turkish");
-  assert.equal(tr.itemKey("Şifakıran"), "upgrade_healbane");
-  assert.equal(tr.itemKey("2603935618"), "upgrade_healbane");
-  assert.equal(tr.heroKey("Vindicta"), "hero_hornet");
+  const lookup = create(catalog);
+  assert.equal(lookup.itemKey("Şifakıran"), "upgrade_healbane");
+  assert.equal(lookup.itemKey("2603935618"), "upgrade_healbane");
+  assert.equal(lookup.heroKey("Vindicta"), "hero_hornet");
 });
 
 test("visible purchase changes the order and removing it restores the hero baseline", () => {
-  const engine = create(catalog, "english");
+  const engine = create(catalog);
   const rivals = ["hero_ghost", "hero_atlas", "hero_haze", "hero_wraith", "hero_bebop"];
   const shot = { hero: "hero_haze", item: "upgrade_glass_cannon" };
   const baseline = engine.recommend(rivals, []);
@@ -28,7 +28,7 @@ test("visible purchase changes the order and removing it restores the hero basel
 });
 
 test("unknown items and purchases from outside the enemy roster contribute nothing", () => {
-  const engine = create(catalog, "english");
+  const engine = create(catalog);
   const rivals = ["hero_haze"];
   assert.deepEqual(engine.recommend(rivals, [
     { hero: "hero_wraith", item: "upgrade_glass_cannon" },
@@ -135,32 +135,31 @@ test("HUD distinguishes purchase evidence, roster evidence, and empty results", 
       Msg: (line) => assert.fail(line),
     },
     DCIEngine: {create},
-    DCI_LANGUAGE: "turkish",
     DCI_CATALOG: catalog,
     DCIObserver: {observe: () => observed},
   }, {filename});
 
   scheduled.shift()();
-  assert.equal(nodes.DCISource.text, "Kadro");
+  assert.equal(nodes.DCISource.text, "Lineup");
   assert.equal(nodes.DCIRow0.DCISpirit, true);
-  assert.equal(nodes.DCIPrice0.text, "3.200");
+  assert.equal(nodes.DCIPrice0.text, "3,200");
   assert.equal(nodes.DCIEmpty.visible, false);
 
   modes.add("gShopOpen");
   observed = {heroes: ["hero_haze"], purchases: [{hero: "hero_haze", item: "upgrade_glass_cannon"}]};
   scheduled.shift()();
-  assert.equal(nodes.DCISource.text, "Son alımlar");
+  assert.equal(nodes.DCISource.text, "Recent purchases");
   assert.equal(nodes.DCIRow0.DCIPurchase, true);
   assert.equal(nodes.DCIRow0.DCISpirit, false);
-  assert.equal(nodes.DCIEvidence0.text, "Duman · Kırılgan Kudret");
+  assert.equal(nodes.DCIEvidence0.text, "Haze · Glass Cannon");
 
   observed = {heroes: ["hero_inferno"], purchases: []};
   scheduled.shift()();
   assert.equal(nodes.DCISource.visible, false);
   assert.equal(nodes.DCIRow0.visible, false);
-  assert.equal(nodes.DCIEmpty.text, "Bu kadro için öneri yok.");
+  assert.equal(nodes.DCIEmpty.text, "No suggestions for this lineup.");
 
   modes.clear();
   scheduled.shift()();
-  assert.equal(nodes.DCIEmpty.text, "Rakip kadrosu bekleniyor.");
+  assert.equal(nodes.DCIEmpty.text, "Waiting for enemy lineup.");
 });

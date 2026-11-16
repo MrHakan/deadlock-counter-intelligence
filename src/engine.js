@@ -7,32 +7,28 @@ var DCIEngine = (function () {
       category: "vitality",
       heroes: ["hero_atlas", "hero_ghost", "hero_kelvin"],
       items: ["upgrade_healing_booster", "upgrade_health_nova", "upgrade_healbuff", "upgrade_health_stealing_magic"],
-      en: "Spirit damage reduces incoming healing.",
-      tr: "Spirit hasarı rakibin aldığı iyileşmeyi azaltır.",
+      reason: "Spirit damage reduces incoming healing.",
     },
     {
       counter: "upgrade_metal_skin",
       category: "vitality",
       heroes: ["hero_haze", "hero_wraith"],
       items: ["upgrade_ricochet", "upgrade_glass_cannon", "upgrade_intensifying_clip", "upgrade_burst_fire"],
-      en: "Briefly blocks bullet damage on use.",
-      tr: "Kullanıldığında mermi hasarını kısa süre engeller.",
+      reason: "Briefly blocks bullet damage on use.",
     },
     {
       counter: "upgrade_spirit_bubble",
       category: "vitality",
       heroes: ["hero_bebop", "hero_gigawatt"],
       items: ["upgrade_magic_burst", "upgrade_boundless_spirit", "upgrade_spirit_burn"],
-      en: "Adds a shield against spirit damage.",
-      tr: "Spirit hasarına karşı kalkan sağlar.",
+      reason: "Adds a shield against spirit damage.",
     },
     {
       counter: "upgrade_target_stun",
       category: "spirit",
       heroes: ["hero_hornet", "hero_orion"],
       items: [],
-      en: "Stuns airborne targets for longer.",
-      tr: "Havadaki hedefleri daha uzun süre sersemletir.",
+      reason: "Stuns airborne targets for longer.",
     },
   ];
 
@@ -56,10 +52,9 @@ var DCIEngine = (function () {
     };
   }
 
-  function create(catalog, language) {
+  function create(catalog) {
     var heroes = index(catalog.heroes);
     var items = index(catalog.items);
-    var nameColumn = language === "turkish" ? 3 : 2;
 
     function recommend(enemyHeroes, purchases) {
       var enemies = Object.create(null);
@@ -84,15 +79,15 @@ var DCIEngine = (function () {
 
         return {
           key: rule.counter,
-          name: counter[nameColumn],
+          name: counter[2],
           cost: counter[4],
           category: rule.category,
           purchaseBased: distinct.length > 0,
           score: score,
-          reason: nameColumn === 3 ? rule.tr : rule.en,
+          reason: rule.reason,
           evidence: distinct.length
-            ? heroes.keys[distinct[0].hero][nameColumn] + " · " + items.keys[distinct[0].item][nameColumn]
-            : heroes.keys[threats[0]][nameColumn],
+            ? heroes.keys[distinct[0].hero][2] + " · " + items.keys[distinct[0].item][2]
+            : heroes.keys[threats[0]][2],
         };
       }).filter(Boolean).sort(function (a, b) {
         return b.score - a.score || a.cost - b.cost || (a.key < b.key ? -1 : 1);

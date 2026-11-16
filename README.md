@@ -1,38 +1,46 @@
 # Deadlock Counter Intelligence
 
-Deadlock Mod Manager için deneysel bir Panorama HUD başlangıcı. Skor tablosu veya mağaza açıldığında en fazla üç karşı item, soul fiyatı ve gerekçesi gösterir. Panel skor tablosunda mini haritanın üstünde, mağazada sol altta açılacak şekilde konumlandırılmıştır. Mağaza, canlılık ve spirit simgeleri ile soul göstergesini oyunun kendi kaynaklarından alır. İstemcinin mağazadaki **görünen son alımları** rakip kadrosuyla eşleşirse öneriler 0,5 saniyelik aralıklarla güncellenir. Bunun dışında desteklenen rakip kahramanlardan öneri üretir.
+An experimental Panorama HUD for Deadlock Mod Manager. Open the scoreboard or shop to see up to three counter-item suggestions with their soul prices, the effect that makes each item useful, and the enemy hero or purchase that prompted it.
 
-Öneri motoru, örnek Panorama panelleri ve arşiv oluşturma yerelde test edilir. Bu sürümün Deadlock veya Mod Manager içinde kurulumu ve çalışması henüz test edilmedi. Rakibin tam envanteri ve satışları takip edilmez. Mod maç sırasında API çağrısı, oyun belleği erişimi veya giriş otomasyonu yapmaz.
+The panel sits above the minimap on the scoreboard and in the lower-left corner of the shop. It uses Deadlock's category and soul icons. While the shop is open, the mod checks its visible recent-purchase list every half second and matches those entries to the enemy lineup. When purchase evidence is unavailable, suggestions use the visible enemy lineup.
 
-## Deneysel VPK oluşturma
+The recommendation engine, HUD state changes, and archive format are covered by local tests. Loading the VPK in Deadlock Mod Manager and displaying it in Deadlock still require in-game verification. Purchases are observations from the shop list. The HUD does not track full inventories or item sales.
 
-Gerekenler Python 3.9+, Steam üzerinden kurulu Deadlock ve [Source2Viewer-CLI](https://github.com/ValveResourceFormat/ValveResourceFormat/releases). Kurulu oyundan alınan `hud.vxml_c` derleme girdisidir.
+## Install
+
+1. Download the HUD ZIP from [GitHub Releases](https://github.com/MrHakan/deadlock-counter-intelligence/releases).
+2. Close Deadlock. In Deadlock Mod Manager v2.3.0, open **Mods Library → Add Local Mod** and import the ZIP.
+3. Enable the mod and launch Deadlock through Mod Manager.
+
+Use Mod Manager to disable or remove the mod. Other mods that replace `panorama/layout/hud.vxml_c` can conflict with this package.
+
+## Build the VPK
+
+Building requires Python 3.9+, a Steam installation of Deadlock, and [Source2Viewer-CLI](https://github.com/ValveResourceFormat/ValveResourceFormat/releases). The build reads the base HUD layout from the installed game.
 
 ```powershell
 py -3 tools/build.py --deadlock-dir "C:\Program Files (x86)\Steam\steamapps\common\Deadlock" --vrf "C:\Tools\Source2Viewer-CLI.exe"
 ```
 
-Zaten açılmış orijinal HUD XML'i varsa `--hud-xml path/to/hud.xml` kullan. Oyun içi metinleri İngilizce üretmek için `--language english` ekle. Paket `dist/deadlock-counter-intelligence-experimental.zip` yolunda oluşur ve tek bir `pak01_dir.vpk` içerir.
+If you already have the extracted stock layout, use `--hud-xml path/to/hud.xml`. The build produces `dist/deadlock-counter-intelligence-experimental.zip` with one `pak01_dir.vpk` inside.
 
-Deadlock kapalıyken paketi Mod Manager'da **Mods Library → Add Local Mod** ile içe aktar, etkinleştir ve oyunu Mod Manager üzerinden aç. Kurulum menüsünün hedef sürümü v2.3.0. Deneysel HUD'un kaldırılması Mod Manager'ın devre dışı bırakma veya kaldırma işlemiyle yapılır. Bu paket `panorama/layout/hud.vxml_c` dosyasını değiştirdiği için aynı kaynağı değiştiren HUD modlarıyla çakışabilir.
+## Catalog and tests
 
-## Katalog ve testler
+The bundled catalog targets Deadlock client build **6861** and contains 173 shop items and 44 hero records. The HUD displays English names. Localized aliases help match item and hero names read from the game client. When targeting a new build, refresh the catalog and use the stock HUD from that build.
 
-Birlikte gelen katalog istemci sürümü **6861** için 173 satın alınabilir item ve 44 kahraman kaydı içerir. İngilizce ve Türkçe adlar aynı oyun kimlikleri üzerinden eşleştirilir. Yeni bir sürüm için katalog numarasını ve HUD girdisini birlikte güncelle.
-
-```text
+```sh
 python tools/update_catalog.py 6861
 node --test test/intelligence.test.js
 python -m unittest discover -s test -v
 ```
 
-İlk kurallar iyileşme, mermi hasarı, spirit hasarı ve havadaki hedefleri kapsar. Okunamayan veya birden çok itemle eşleşen etiketler atlanır. Mağaza kapandığında mağaza gözlemleri bırakılır. Gözlem, satın alım satırının görünür olmasına dayanır ve sahiplik göstergesi olarak kullanılmaz.
+The initial rules cover healing, bullet damage, spirit damage, and airborne targets. Ambiguous labels are skipped. Shop observations expire when the shop closes. During a match, the mod works from the visible HUD and the bundled catalog.
 
-İlk oyun içi doğrulamada temiz bir Mod Manager profili ve özel lobi kullanılabilir. Tek bir rakip görünür örnek item aldığında öneri değişimini, müttefik alımının atlandığını ve mod kapatıldığında vanilla HUD'un geri geldiğini kontrol et.
+For in-game verification, use a clean Mod Manager profile and a private lobby. Check that a visible enemy purchase changes a relevant recommendation, an allied purchase is ignored, and disabling the mod restores the stock HUD.
 
-## Kaynaklar
+## References
 
-- [Deadlock Mod Manager yerel mod kılavuzu](https://docs.deadlockmods.app/using-mod-manager/library#add-local-mods) ve [Live bridge](https://github.com/deadlock-mod-manager/deadlock-mod-manager/blob/v2.3.0/apps/desktop/src-tauri/src/live_bridge/dmm_live_bridge.js)
-- [Deadlock API](https://api.deadlock-api.com/docs) ve [GameTracking-Deadlock HUD düzeni](https://github.com/SteamTracking/GameTracking-Deadlock/blob/master/game/citadel/pak01_dir/panorama/layout/hud.xml)
-- [Threat HUD mağaza düzeni](https://github.com/antonborndev/deadlock-threat-hud/blob/9fc4cbfd7290c834eb81490ecc004c578ae4fbba/threathud/panorama/layout/citadel_hud_hero_shop.xml) ve [BiggerIdleMap derleme örneği](https://github.com/regulad/BiggerIdleMap)
-- `third_party/panorama.py`, BiggerIdleMap'teki [MIT lisanslı Panorama derleyicisinden](https://github.com/regulad/BiggerIdleMap/blob/d54483205cbc01a3f496d536e338f58b919c2caa/panorama.py) alınmıştır. Orijinal telif ve lisans bildirimi dosyada yer alır.
+- [Deadlock Mod Manager local mod guide](https://docs.deadlockmods.app/using-mod-manager/library#add-local-mods) and [Live bridge source](https://github.com/deadlock-mod-manager/deadlock-mod-manager/blob/v2.3.0/apps/desktop/src-tauri/src/live_bridge/dmm_live_bridge.js)
+- [Deadlock API](https://api.deadlock-api.com/docs) and [GameTracking-Deadlock HUD layout](https://github.com/SteamTracking/GameTracking-Deadlock/blob/master/game/citadel/pak01_dir/panorama/layout/hud.xml)
+- [Threat HUD shop layout](https://github.com/antonborndev/deadlock-threat-hud/blob/9fc4cbfd7290c834eb81490ecc004c578ae4fbba/threathud/panorama/layout/citadel_hud_hero_shop.xml) and [BiggerIdleMap build example](https://github.com/regulad/BiggerIdleMap)
+- `third_party/panorama.py` comes from the [MIT-licensed Panorama compiler in BiggerIdleMap](https://github.com/regulad/BiggerIdleMap/blob/d54483205cbc01a3f496d536e338f58b919c2caa/panorama.py). The original copyright and license notices are included in that file.

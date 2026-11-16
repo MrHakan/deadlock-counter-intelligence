@@ -66,26 +66,26 @@ def read_resource(data):
 
 class PackagingTests(unittest.TestCase):
     def test_patch_keeps_the_base_hud_and_adds_only_its_own_controls(self):
-        root = ET.fromstring(patch_hud(STOCK, "turkish"))
+        root = ET.fromstring(patch_hud(STOCK))
         self.assertEqual(root.find("styles/include").get("src"), "stock.vcss")
         self.assertEqual(root.findall("styles/include")[-1].get("src"), STYLE)
         self.assertEqual(root.find("scripts/include").get("src"), SCRIPT)
         self.assertIsNotNone(root.find("CitadelHud/CitadelHudTopBar"))
         self.assertEqual(root.find(".//*[@id='DCIVisibility']").get("hittestchildren"), "false")
-        self.assertEqual(root.find(".//*[@class='DCITitle']").get("text"), "Karşı itemler")
+        self.assertEqual(root.find(".//*[@class='DCITitle']").get("text"), "Counter items")
         self.assertIsNotNone(root.find(".//*[@id='DCIPrice2']"))
         self.assertEqual(root.find(".//*[@id='DCIRow2']").get("visible"), "false")
 
     def test_patch_refuses_an_incompatible_or_already_patched_layout(self):
         with self.assertRaises(ValueError):
-            patch_hud(STOCK.replace("TopBar\"", "Different\""), "turkish")
+            patch_hud(STOCK.replace("TopBar\"", "Different\""))
         with self.assertRaises(ValueError):
-            patch_hud(patch_hud(STOCK, "english"), "english")
+            patch_hud(patch_hud(STOCK))
 
     def test_zip_contains_a_self_contained_vpk_with_real_source2_resources(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "dci.zip"
-            self.assertEqual(build(STOCK, ROOT / "src/catalog.json", "english", output), 6861)
+            self.assertEqual(build(STOCK, ROOT / "src/catalog.json", output), 6861)
             with ZipFile(output) as archive:
                 self.assertEqual(archive.namelist(), ["pak01_dir.vpk"])
                 self.assertIsNone(archive.testzip())
@@ -95,7 +95,9 @@ class PackagingTests(unittest.TestCase):
                 "panorama/styles/dci_hud.vcss_c",
             ])
             self.assertIn("DCIVisibility", read_resource(resources["panorama/layout/hud.vxml_c"]))
-            self.assertIn('DCI_LANGUAGE = "english"', read_resource(resources["panorama/scripts/dci_hud.vts_c"]))
+            script = read_resource(resources["panorama/scripts/dci_hud.vts_c"])
+            self.assertIn('shop: "Recent purchases"', script)
+            self.assertNotIn("DCI_LANGUAGE", script)
             self.assertIn(".gShopOpen .DCIBox", read_resource(resources["panorama/styles/dci_hud.vcss_c"]))
 
     def test_catalog_requires_matching_locales_and_rejects_disabled_items(self):

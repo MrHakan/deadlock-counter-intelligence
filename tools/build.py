@@ -21,7 +21,7 @@ STYLE = "s2r://panorama/styles/dci_hud.vcss"
 SCRIPT = "s2r://panorama/scripts/dci_hud.vts"
 
 
-def patch_hud(stock, language):
+def patch_hud(stock):
     root = ET.fromstring(stock)
     huds = root.findall("CitadelHud")
     styles = root.findall("styles")
@@ -47,11 +47,9 @@ def patch_hud(stock, language):
                              hittestchildren="false")
     box = ET.SubElement(listener, "Panel", {"class": "DCIBox"})
     header = ET.SubElement(box, "Panel", {"class": "DCIHeader"})
-    title = "Karşı itemler" if language == "turkish" else "Counter items"
-    waiting = "Rakip kadrosu bekleniyor." if language == "turkish" else "Waiting for enemy lineup."
-    ET.SubElement(header, "Label", {"class": "DCITitle", "text": title})
+    ET.SubElement(header, "Label", {"class": "DCITitle", "text": "Counter items"})
     ET.SubElement(header, "Label", {"id": "DCISource", "class": "DCISource", "visible": "false"})
-    ET.SubElement(box, "Label", {"id": "DCIEmpty", "class": "DCIEmpty", "text": waiting})
+    ET.SubElement(box, "Label", {"id": "DCIEmpty", "class": "DCIEmpty", "text": "Waiting for enemy lineup."})
     for index in range(3):
         row = ET.SubElement(box, "Panel", {"id": f"DCIRow{index}", "class": "DCIRow", "visible": "false"})
         ET.SubElement(row, "Panel", {"class": "DCICategory"})
@@ -89,16 +87,15 @@ def pack_vpk(resources):
     return struct.pack("<7I", 0x55AA1234, 2, len(tree), len(data), 0, 0, 0) + tree + data
 
 
-def build(stock, catalog_path, language, output):
+def build(stock, catalog_path, output):
     src = ROOT / "src"
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     sources = [
-        ("panorama/layout/hud.xml", patch_hud(stock, language)),
+        ("panorama/layout/hud.xml", patch_hud(stock)),
         ("panorama/styles/dci_hud.css", (src / "hud.css").read_text(encoding="utf-8")),
     ]
     script = '"use strict";\n'
     script += f"var DCI_CATALOG = {json.dumps(catalog, separators=(',', ':'), ensure_ascii=True)};\n"
-    script += f"var DCI_LANGUAGE = {json.dumps(language)};\n"
     for filename in ("engine.js", "observer.js", "hud.js"):
         script += (src / filename).read_text(encoding="utf-8") + "\n"
     sources.append(("panorama/scripts/dci_hud.vts", script))
@@ -130,7 +127,6 @@ def main():
     input_options.add_argument("--hud-xml", type=Path, help="Already decompiled stock HUD XML")
     parser.add_argument("--vrf", type=Path, help="Source2Viewer-CLI executable")
     parser.add_argument("--catalog", type=Path, default=ROOT / "src" / "catalog.json")
-    parser.add_argument("--language", choices=("turkish", "english"), default="turkish")
     parser.add_argument("--output", type=Path, default=ROOT / "dist" / "deadlock-counter-intelligence-experimental.zip")
     args = parser.parse_args()
     if args.deadlock_dir and not args.vrf:
@@ -138,7 +134,7 @@ def main():
     try:
         stock = (args.hud_xml.read_text(encoding="utf-8-sig") if args.hud_xml
                  else decompile(args.deadlock_dir, args.vrf.resolve()))
-        version = build(stock, args.catalog, args.language, args.output)
+        version = build(stock, args.catalog, args.output)
     except (ET.ParseError, OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         parser.exit(1, f"Build failed: {error}\n")
     print(f"{args.output} | catalog {version} | experimental, not tested in Deadlock")
