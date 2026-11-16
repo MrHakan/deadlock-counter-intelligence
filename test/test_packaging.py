@@ -72,6 +72,9 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(root.find("scripts/include").get("src"), SCRIPT)
         self.assertIsNotNone(root.find("CitadelHud/CitadelHudTopBar"))
         self.assertEqual(root.find(".//*[@id='DCIVisibility']").get("hittestchildren"), "false")
+        self.assertEqual(root.find(".//*[@class='DCITitle']").get("text"), "Karşı itemler")
+        self.assertIsNotNone(root.find(".//*[@id='DCIPrice2']"))
+        self.assertEqual(root.find(".//*[@id='DCIRow2']").get("visible"), "false")
 
     def test_patch_refuses_an_incompatible_or_already_patched_layout(self):
         with self.assertRaises(ValueError):

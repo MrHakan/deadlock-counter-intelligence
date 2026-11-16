@@ -110,3 +110,57 @@ test("observer requires a visible local player and visible enemy cards", () => {
   assert.deepEqual(observe(buildHud({ realLocal: false }), engine, localize, true), { heroes: [], purchases: [] });
   assert.deepEqual(observe(buildHud({ enemyVisible: false }), engine, localize, true), { heroes: [], purchases: [] });
 });
+
+test("HUD distinguishes purchase evidence, roster evidence, and empty results", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const vm = require("node:vm");
+  const nodes = {};
+  const modes = new Set(["gScoreboardOpen"]);
+  const scheduled = [];
+  let observed = {heroes: ["hero_hornet"], purchases: []};
+  const root = {
+    IsValid: () => true,
+    BHasClass: (name) => modes.has(name),
+    FindChildTraverse: (id) => id === "DCIVisibility" ? root : (nodes[id] ||= {
+      FindChildTraverse: root.FindChildTraverse,
+      SetHasClass(name, active) { this[name] = active; },
+    }),
+  };
+  const filename = path.resolve(__dirname, "../src/hud.js");
+  vm.runInNewContext(fs.readFileSync(filename, "utf8"), {
+    $: {
+      GetContextPanel: () => root,
+      Schedule: (_, callback) => scheduled.push(callback),
+      Msg: (line) => assert.fail(line),
+    },
+    DCIEngine: {create},
+    DCI_LANGUAGE: "turkish",
+    DCI_CATALOG: catalog,
+    DCIObserver: {observe: () => observed},
+  }, {filename});
+
+  scheduled.shift()();
+  assert.equal(nodes.DCISource.text, "Kadro");
+  assert.equal(nodes.DCIRow0.DCISpirit, true);
+  assert.equal(nodes.DCIPrice0.text, "3.200");
+  assert.equal(nodes.DCIEmpty.visible, false);
+
+  modes.add("gShopOpen");
+  observed = {heroes: ["hero_haze"], purchases: [{hero: "hero_haze", item: "upgrade_glass_cannon"}]};
+  scheduled.shift()();
+  assert.equal(nodes.DCISource.text, "Son alımlar");
+  assert.equal(nodes.DCIRow0.DCIPurchase, true);
+  assert.equal(nodes.DCIRow0.DCISpirit, false);
+  assert.equal(nodes.DCIEvidence0.text, "Duman · Kırılgan Kudret");
+
+  observed = {heroes: ["hero_inferno"], purchases: []};
+  scheduled.shift()();
+  assert.equal(nodes.DCISource.visible, false);
+  assert.equal(nodes.DCIRow0.visible, false);
+  assert.equal(nodes.DCIEmpty.text, "Bu kadro için öneri yok.");
+
+  modes.clear();
+  scheduled.shift()();
+  assert.equal(nodes.DCIEmpty.text, "Rakip kadrosu bekleniyor.");
+});

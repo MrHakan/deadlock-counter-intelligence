@@ -46,13 +46,23 @@ def patch_hud(stock, language):
                              classes="gScoreboardOpen gShopOpen", hittest="false",
                              hittestchildren="false")
     box = ET.SubElement(listener, "Panel", {"class": "DCIBox"})
-    ET.SubElement(box, "Label", {"class": "DCITitle", "text": "Counter Intelligence"})
-    status = "Rakip bilgisi bekleniyor" if language == "turkish" else "Waiting for enemy information"
-    ET.SubElement(box, "Label", {"id": "DCIStatus", "class": "DCIStatus", "text": status})
+    header = ET.SubElement(box, "Panel", {"class": "DCIHeader"})
+    title = "Karşı itemler" if language == "turkish" else "Counter items"
+    waiting = "Rakip kadrosu bekleniyor." if language == "turkish" else "Waiting for enemy lineup."
+    ET.SubElement(header, "Label", {"class": "DCITitle", "text": title})
+    ET.SubElement(header, "Label", {"id": "DCISource", "class": "DCISource", "visible": "false"})
+    ET.SubElement(box, "Label", {"id": "DCIEmpty", "class": "DCIEmpty", "text": waiting})
     for index in range(3):
         row = ET.SubElement(box, "Panel", {"id": f"DCIRow{index}", "class": "DCIRow", "visible": "false"})
-        for field in ("Name", "Evidence", "Reason"):
-            ET.SubElement(row, "Label", {"id": f"DCI{field}{index}", "class": f"DCI{field}"})
+        ET.SubElement(row, "Panel", {"class": "DCICategory"})
+        details = ET.SubElement(row, "Panel", {"class": "DCIDetails"})
+        line = ET.SubElement(details, "Panel", {"class": "DCIItemLine"})
+        ET.SubElement(line, "Label", {"id": f"DCIName{index}", "class": "DCIName"})
+        cost = ET.SubElement(line, "Panel", {"class": "DCICost"})
+        ET.SubElement(cost, "Panel", {"class": "DCISoul"})
+        ET.SubElement(cost, "Label", {"id": f"DCIPrice{index}", "class": "DCIPrice"})
+        ET.SubElement(details, "Label", {"id": f"DCIReason{index}", "class": "DCIReason"})
+        ET.SubElement(details, "Label", {"id": f"DCIEvidence{index}", "class": "DCIEvidence"})
     return ET.tostring(root, encoding="unicode")
 
 

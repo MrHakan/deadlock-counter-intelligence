@@ -4,6 +4,7 @@ var DCIEngine = (function () {
   var rules = [
     {
       counter: "upgrade_healbane",
+      category: "vitality",
       heroes: ["hero_atlas", "hero_ghost", "hero_kelvin"],
       items: ["upgrade_healing_booster", "upgrade_health_nova", "upgrade_healbuff", "upgrade_health_stealing_magic"],
       en: "Spirit damage reduces incoming healing.",
@@ -11,13 +12,15 @@ var DCIEngine = (function () {
     },
     {
       counter: "upgrade_metal_skin",
+      category: "vitality",
       heroes: ["hero_haze", "hero_wraith"],
       items: ["upgrade_ricochet", "upgrade_glass_cannon", "upgrade_intensifying_clip", "upgrade_burst_fire"],
-      en: "Activate to block bullet damage briefly.",
-      tr: "Etkinleştirildiğinde mermi hasarını kısa süre engeller.",
+      en: "Briefly blocks bullet damage on use.",
+      tr: "Kullanıldığında mermi hasarını kısa süre engeller.",
     },
     {
       counter: "upgrade_spirit_bubble",
+      category: "vitality",
       heroes: ["hero_bebop", "hero_gigawatt"],
       items: ["upgrade_magic_burst", "upgrade_boundless_spirit", "upgrade_spirit_burn"],
       en: "Adds a shield against spirit damage.",
@@ -25,6 +28,7 @@ var DCIEngine = (function () {
     },
     {
       counter: "upgrade_target_stun",
+      category: "spirit",
       heroes: ["hero_hornet", "hero_orion"],
       items: [],
       en: "Stuns airborne targets for longer.",
@@ -82,6 +86,8 @@ var DCIEngine = (function () {
           key: rule.counter,
           name: counter[nameColumn],
           cost: counter[4],
+          category: rule.category,
+          purchaseBased: distinct.length > 0,
           score: score,
           reason: nameColumn === 3 ? rule.tr : rule.en,
           evidence: distinct.length

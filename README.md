@@ -1,6 +1,6 @@
 # Deadlock Counter Intelligence
 
-Deadlock Mod Manager için deneysel bir Panorama HUD başlangıcı. Skor tablosu veya mağaza açıldığında en fazla üç karşı item, soul fiyatı ve gerekçesi gösterir. İstemcinin mağazadaki **görünen son alımları** rakip kadrosuyla eşleşirse öneriler 0,5 saniyelik aralıklarla güncellenir. Bunun dışında desteklenen rakip kahramanlardan öneri üretir.
+Deadlock Mod Manager için deneysel bir Panorama HUD başlangıcı. Skor tablosu veya mağaza açıldığında en fazla üç karşı item, soul fiyatı ve gerekçesi gösterir. Panel skor tablosunda mini haritanın üstünde, mağazada sol altta açılacak şekilde konumlandırılmıştır. Mağaza, canlılık ve spirit simgeleri ile soul göstergesini oyunun kendi kaynaklarından alır. İstemcinin mağazadaki **görünen son alımları** rakip kadrosuyla eşleşirse öneriler 0,5 saniyelik aralıklarla güncellenir. Bunun dışında desteklenen rakip kahramanlardan öneri üretir.
 
 Öneri motoru, örnek Panorama panelleri ve arşiv oluşturma yerelde test edilir. Bu sürümün Deadlock veya Mod Manager içinde kurulumu ve çalışması henüz test edilmedi. Rakibin tam envanteri ve satışları takip edilmez. Mod maç sırasında API çağrısı, oyun belleği erişimi veya giriş otomasyonu yapmaz.
 
