@@ -36,6 +36,15 @@ var DCIEngine = (function () {
 
     var columns = Object.create(null);
     var measured = Object.create(null);
+    var minutes = (stats && stats.minutes) || {};
+    var lane = Object.create(null);
+    if (stats && stats.lane) {
+      Object.keys(stats.lane).forEach(function (hero) {
+        if (heroes.keys[hero]) {
+          lane[hero] = stats.lane[hero].filter(function (pick) { return items.keys[pick[0]]; });
+        }
+      });
+    }
     if (stats) {
       stats.items.forEach(function (item, position) {
         if (items.keys[item]) columns[item] = position;
@@ -80,17 +89,20 @@ var DCIEngine = (function () {
         category: row[5],
         tag: tags[key] || "",
         impact: impact(key, enemies),
+        minute: typeof minutes[key] === "number" ? minutes[key] : null,
       };
       Object.keys(extra).forEach(function (field) { result[field] = extra[field]; });
       return result;
     }
 
     // Rank the reference counter items by how many enemy heroes they answer; match data breaks ties.
-    function recommend(enemyHeroes, limit) {
+    // Items in exclude (already owned) are skipped so the list always shows something new.
+    function recommend(enemyHeroes, limit, exclude) {
       var enemies = unique(enemyHeroes);
       var picks = Object.create(null);
       enemies.forEach(function (hero) {
         (table[hero] || []).forEach(function (item, position) {
+          if (exclude && exclude.indexOf(item) !== -1) return;
           var pick = picks[item] || (picks[item] = { heroes: [], rank: 0 });
           pick.heroes.push(hero);
           pick.rank += position;
@@ -139,6 +151,45 @@ var DCIEngine = (function () {
       });
     }
 
+    // The best early item against the enemies in the local player's lane (first ten minutes).
+    function lanePick(laneHeroes, exclude) {
+      var enemies = unique(laneHeroes);
+      var totals = Object.create(null);
+      enemies.forEach(function (hero) {
+        (lane[hero] || []).forEach(function (pick) {
+          if (exclude && exclude.indexOf(pick[0]) !== -1) return;
+          totals[pick[0]] = (totals[pick[0]] || 0) + pick[1];
+        });
+      });
+      var best = Object.keys(totals).sort(function (a, b) {
+        return totals[b] - totals[a] || items.keys[a][4] - items.keys[b][4] || (a < b ? -1 : 1);
+      })[0];
+      if (!best) return null;
+      var against = enemies.filter(function (hero) {
+        return (lane[hero] || []).some(function (pick) { return pick[0] === best; });
+      });
+      var tag = tags[best];
+      var result = entry(best, enemies, {
+        source: "lane",
+        score: 0,
+        heroes: against,
+        reason: "Lane phase" + (tag ? " · " + tag : ""),
+        evidence: "Early vs " + names(against),
+      });
+      result.impact = totals[best];
+      result.minute = null; // the usual buy minute is for the whole match, not for the lane
+      return result;
+    }
+
+    // The first suggestion the player can pay for now, or -1.
+    function buyNow(rows, souls) {
+      if (typeof souls !== "number" || !(souls >= 0)) return -1;
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].cost <= souls) return i;
+      }
+      return -1;
+    }
+
     // Enemy purchases that appear in the reference counter list of an allied hero.
     function threats(purchases, allyHeroes, self) {
       var allies = unique(allyHeroes);
@@ -177,6 +228,8 @@ var DCIEngine = (function () {
       impact: function (item, enemies) { return impact(item, unique(enemies)); },
       recommend: recommend,
       dataPick: dataPick,
+      lanePick: lanePick,
+      buyNow: buyNow,
       threats: threats,
     };
   }
@@ -195,6 +248,10 @@ var DCIEngine = (function () {
     Object.keys(counters.tags || {}).forEach(function (item) { check(item, items); });
     if (stats) {
       stats.items.forEach(function (item) { check(item, items); });
+      Object.keys(stats.lane || {}).forEach(function (hero) {
+        check(hero, heroes);
+        stats.lane[hero].forEach(function (pick) { check(pick[0], items); });
+      });
       Object.keys(stats.heroes).forEach(function (hero) {
         check(hero, heroes);
         if (stats.heroes[hero].length !== stats.items.length) missing.push(hero + " (row length)");
@@ -209,7 +266,16 @@ var DCIEngine = (function () {
     return (value > 0 ? "+" : "−") + (Math.abs(value) / 100).toFixed(1) + " WR";
   }
 
-  return { create: create, validate: validate, formatImpact: formatImpact };
+  // "+0.6 WR · ~14m": the measured change and the typical buy minute, whichever are known.
+  function formatStats(item) {
+    var parts = [];
+    var impact = formatImpact(item.impact);
+    if (impact) parts.push(impact);
+    if (typeof item.minute === "number") parts.push("~" + item.minute + "m");
+    return parts.join(" · ");
+  }
+
+  return { create: create, validate: validate, formatImpact: formatImpact, formatStats: formatStats };
 })();
 
 if (typeof module !== "undefined") module.exports = DCIEngine;

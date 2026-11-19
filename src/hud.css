@@ -175,6 +175,30 @@
 
 .DCIDataPick .DCIReason { color: #9cc9ff; }
 
+.DCILanePick {
+    background-color: #17241c;
+    border-top: 1px solid #3c6a4a;
+}
+
+.DCILanePick .DCIReason { color: #9fe0b0; }
+
+.DCIBuy {
+    margin-left: 6px;
+    padding: 1px 5px 0px 5px;
+    vertical-align: center;
+    background-color: #3f8f4f;
+    color: #f4fff2;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.DCIBuyNow .DCIName { color: #d9f7cf; }
+
+.DCIExpensive .DCIPrice { color: #8d8a80; }
+
+.DCIExpensive .DCISoul { wash-color: #8d8a80; }
+
 .DCIAlert {
     visibility: collapse;
     horizontal-align: center;

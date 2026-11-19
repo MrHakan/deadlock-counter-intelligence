@@ -9,7 +9,7 @@ from zlib import crc32
 
 from tools.build import ROOT, SCRIPT, STYLE, build, patch_hud
 from tools.update_catalog import merge, write_catalog
-from tools.update_counter_stats import compute, report
+from tools.update_counter_stats import compute, format_stats, latest_gameplay_patch, report
 
 STOCK = """
 <root><styles><include src="stock.vcss"/></styles><CitadelHud>
@@ -78,6 +78,7 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(root.find(".//*[@id='DCIRow2']").get("visible"), "false")
         self.assertIsNotNone(root.find(".//*[@id='DCIAlertText']"))
         self.assertIsNotNone(root.find(".//*[@id='DCIImpact3']"))
+        self.assertEqual(root.find(".//*[@id='DCIBuy0']").get("visible"), "false")
         self.assertIsNone(root.find(".//*[@id='DCIRow4']"))
 
     def test_patch_refuses_an_incompatible_or_already_patched_layout(self):
@@ -89,7 +90,8 @@ class PackagingTests(unittest.TestCase):
     def test_zip_contains_a_self_contained_vpk_with_real_source2_resources(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "dci.zip"
-            self.assertEqual(build(STOCK, ROOT / "src/catalog.json", output), 6864)
+            catalog_build = json.loads((ROOT / "src/catalog.json").read_text(encoding="utf-8"))["clientVersion"]
+            self.assertEqual(build(STOCK, ROOT / "src/catalog.json", output), catalog_build)
             with ZipFile(output) as archive:
                 self.assertEqual(archive.namelist(), ["pak01_dir.vpk"])
                 self.assertIsNone(archive.testzip())
@@ -146,6 +148,42 @@ class PackagingTests(unittest.TestCase):
                       counters, stats, measured)
         self.assertIn("Of the 2 reference picks, 1 raise", text)
         self.assertIn("| X | A +2.00 · C +0.00 | A +2.00 |", text)
+
+
+    def test_the_window_starts_at_the_latest_patch_that_changes_items_or_heroes(self):
+        catalog = {"items": [[1, "upgrade_healbane", "Healbane", "Şifakıran", 1600, "vitality"]],
+                   "heroes": [[6, "hero_atlas", "Abrams", "Abrams"]]}
+        patches = [
+            {"title": "Ranked - Beta Season 2", "pub_date": "2026-11-05T19:58:14Z", "content": "<p>Season two begins.</p>"},
+            {"title": " Minor Update - 11-04-2026", "pub_date": "2026-11-05T05:02:30Z",
+             "content": "<p class=\"bb_paragraph\">- Healbane: Stacks now diminish 20% more aggressively</p>"},
+            {"title": "Gameplay Update", "pub_date": "2026-10-30T20:51:49Z", "content": "<p>- Abrams: Base health increased</p>"},
+        ]
+        self.assertEqual(latest_gameplay_patch(catalog, patches),
+                         {"title": "Minor Update - 11-04-2026", "date": "2026-11-05", "timestamp": 1793854950})
+        self.assertIsNone(latest_gameplay_patch(catalog, patches[:1]))
+
+    def test_lane_counters_and_buy_minutes(self):
+        catalog = {"items": [[1, "a", "A", "A", 800, "weapon"], [2, "b", "B", "B", 800, "spirit"],
+                             [3, "big", "Big", "Big", 6400, "vitality"]],
+                   "heroes": [[7, "hero_x", "X", "X"]]}
+        counters = {"heroes": {"hero_x": ["a"]}}
+
+        def rows(*values):
+            return [{"item_id": item, "wins": wins, "matches": matches, "avg_buy_time_s": seconds}
+                    for item, wins, matches, seconds in values]
+
+        base = rows((1, 50000, 100000, 300), (2, 50000, 100000, 330), (3, 50000, 100000, 1800))
+        early = rows((1, 50000, 100000, 200), (2, 50000, 100000, 250), (3, 50000, 100000, 590))
+        lane = rows((1, 54000, 100000, 200), (2, 46000, 100000, 250), (3, 60000, 100000, 590))
+        stats, _ = compute(catalog, counters, base, {7: base}, {"from": "f", "to": "t"},
+                           lane_base_rows=early, lane_rows={7: lane},
+                           patch={"title": "Minor Update", "date": "2026-11-05", "timestamp": 0})
+        # Big costs more than lane items may (3,200), so only A, which beats B, is a lane pick.
+        self.assertEqual(stats["lane"], {"hero_x": [["a", 400]]})
+        self.assertEqual(stats["minutes"], {"a": 5})
+        self.assertEqual(stats["patch"], {"title": "Minor Update", "date": "2026-11-05"})
+        self.assertEqual(json.loads(format_stats(stats)), stats)
 
 
 if __name__ == "__main__":

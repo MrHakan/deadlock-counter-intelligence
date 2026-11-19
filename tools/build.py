@@ -60,6 +60,7 @@ def patch_hud(stock):
         details = ET.SubElement(row, "Panel", {"class": "DCIDetails"})
         line = ET.SubElement(details, "Panel", {"class": "DCIItemLine"})
         ET.SubElement(line, "Label", {"id": f"DCIName{index}", "class": "DCIName"})
+        ET.SubElement(line, "Label", {"id": f"DCIBuy{index}", "class": "DCIBuy", "text": "BUY NOW", "visible": "false"})
         cost = ET.SubElement(line, "Panel", {"class": "DCICost"})
         ET.SubElement(cost, "Panel", {"class": "DCISoul"})
         ET.SubElement(cost, "Label", {"id": f"DCIPrice{index}", "class": "DCIPrice"})
