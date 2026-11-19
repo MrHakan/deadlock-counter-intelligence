@@ -2,11 +2,12 @@
   "source": "Counter Eşyalar: kime karşı ne alınır?",
   "reviewed": {
     "date": "2026-10-30",
+    "build": 6829,
     "heroes": {
-      "hero_ratking": "2026-11-19",
-      "hero_synth": "2026-11-19"
+      "hero_ratking": {"date": "2026-11-19", "build": 6864},
+      "hero_synth": {"date": "2026-11-19", "build": 6864}
     },
-    "note": "The series' lists are taken to match the 10-30-2026 gameplay update; Pocket and Rat King were checked against match data after the 11-04-2026 update. Move a date forward after checking a hero's counters against a newer patch, and its patch warning disappears."
+    "note": "The series' lists are taken to match the 10-30-2026 gameplay update, whose game data builds 6826 to 6829 carry; Pocket and Rat King were checked against match data after the 11-04-2026 update, on build 6864. After checking a hero's counters against newer patch notes or game data, set its date and build to the current ones, and its warnings disappear."
   },
   "otherSources": {
     "hero_ratking": "Not in the series. Deadlock Item Builder's counter guide (deadlockitembuilder.com/counter/rat-king); all five picks raise the buyer's win rate in match data since the 11-04-2026 patch.",

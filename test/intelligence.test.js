@@ -394,6 +394,9 @@ test("HUD flags patched enemies and items and shows what changed on hover", () =
     title: "Minor Update - 11-04-2026", date: "2026-11-05",
     heroes: {hero_haze: {lines: ["Sleep Dagger - Cooldown increased from 25s to 30s"], more: 2}},
     items: {upgrade_metal_skin: {lines: ["Duration reduced from 3.5s to 3s"], more: 0}},
+  }, {
+    title: "an update without patch notes", build: 6864,
+    heroes: {hero_inferno: {lines: ["Afterburn - Damage 10 → 12"], more: 0}}, items: {},
   }]};
   const nodes = {};
   const modes = new Set(["gShopOpen"]);
@@ -440,4 +443,12 @@ test("HUD flags patched enemies and items and shows what changed on hover", () =
   observed = {...observed, heroes: ["hero_hornet"]};
   scheduled.shift()();
   assert.equal(nodes.DCIPatchBadge.visible, false);
+
+  // Changes the game data shows without patch notes are flagged the same way.
+  observed = {...observed, heroes: ["hero_inferno"]};
+  scheduled.shift()();
+  assert.equal(nodes.DCIPatchBadge.visible, true);
+  nodes.DCIPatchBadge.events.onmouseover();
+  assert.equal(nodes.DCITipTitle.text, "Changed in an update without patch notes · counters not reviewed for it yet");
+  assert.equal(nodes.DCITipText.text, "Infernus: Afterburn - Damage 10 → 12");
 });

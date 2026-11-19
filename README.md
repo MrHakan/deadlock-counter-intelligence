@@ -6,7 +6,7 @@ An experimental Panorama HUD for Deadlock. Open the scoreboard or shop to see:
 - **What to buy now.** A **BUY NOW** badge marks the first suggestion your souls can pay for, and prices you cannot reach yet turn grey.
 - **What match data says.** Each row shows the estimated change in the buyer's win rate against the current lineup and the minute the item is usually bought, for example `+0.6 WR · ~14m`. A fourth row adds the item with the largest measured gain against the lineup that the table does not already suggest.
 - **Lane counters.** For the first ten minutes the fourth row switches to the best early item against the enemies in your lane.
-- **Patch warnings.** When a game patch changes an enemy hero after the counter table was last reviewed, a **PATCHED** badge appears next to the title; when it changes a suggested item, that row gets a **!** mark. Hover either one to see what changed, taken from Valve's patch notes. The warnings stay until the counters are reviewed for that patch.
+- **Patch warnings.** When a game patch changes an enemy hero after the counter table was last reviewed, a **PATCHED** badge appears next to the title; when it changes a suggested item, that row gets a **!** mark. Hover either one to see what changed, taken from Valve's patch notes or, when Valve changed values without notes, from the game data. The warnings stay until the counters are reviewed for that patch.
 - **Enemy counter-purchase alerts.** When an enemy buys an item from the counter list of a hero on your team, a banner names the buyer, the item, and the allies it counters. It stays up for 8 seconds and turns red when the item counters your own hero. Each enemy purchase alerts once per match.
 
 ## Reference counter table
@@ -15,7 +15,12 @@ An experimental Panorama HUD for Deadlock. Open the scoreboard or shop to see:
 
 To change the reference, edit the item class names in `src/counters.json`. The tests check that every entry exists in the catalog and has a tag.
 
-`reviewed` in the same file records the date the table was last checked against the game, with later dates for heroes checked since. `tools/patch_notes.py` reads every gameplay patch published after it from the patch notes (through deadlock-api's copy of Valve's posts) and keeps the lines of the form `- <Hero or item>: <change>` in `src/patches.json`. Those heroes and items carry the PATCHED and **!** warnings. After checking a hero's counters against a new patch, move its date forward and run the tool again, and its warning disappears. Right now the series' lists are taken to match the 10-30-2026 update, so the 11-04-2026 changes to Apollo, Baba, Celeste, Deadman Danny, Mo & Krill, Nurse Harrow and Healbane are flagged. Rat King and Pocket were checked against match data after that patch.
+`reviewed` in the same file records the date the table was last checked against the game and the game build whose data it was checked against, with a later date and build for heroes checked since. `tools/patch_notes.py` collects two kinds of changes into `src/patches.json`:
+
+- **Patch notes.** Every gameplay patch published after the review date, read from deadlock-api's copy of Valve's posts. The tool keeps the lines of the form `- <Hero or item>: <change>`.
+- **Changes without patch notes.** Valve sometimes changes values without saying so: build 6833, between the 10-30 and 11-04 updates, raised Spiritual Overflow's spirit lifesteal from 13% to 15%, and no post mentions it. The tool compares the hero, ability, weapon and item values of the reviewed build with those of the current build, as deadlock-api reads them from each build's game files. Every hero or item whose values changed and that no patch note already warns about is listed under *an update without patch notes*, with lines such as `Sovereign's Decree - Bullet damage 5.7 → 5.8`. Abilities most heroes share, such as the jump, are left out, and so are weapon values the game computes from others, such as damage per second.
+
+Those heroes and items carry the PATCHED and **!** warnings. After checking a hero's counters against newer notes or data, set its date and build to the current ones and run the tool again, and its warnings disappear. Right now the series' lists are taken to match the 10-30-2026 update, whose data builds 6826 to 6829 carry. The 11-04-2026 changes to Apollo, Baba, Celeste, Deadman Danny, Mo & Krill, Nurse Harrow and Healbane are flagged, and so is Spiritual Overflow's unannounced change. Rat King and Pocket were checked against match data on build 6864. The 11-18-2026 update (builds 6863 and 6864) changed no hero, ability, weapon or item value and no interface file, so it adds no warnings. Its download was large because it rebuilt about 4,600 hero animation files and replaced Baba's ability effects. It also replaced `gameinfo.gi`, which turns mods off until the search paths are added again (`r` in dlmod).
 
 ## Match data
 
@@ -150,7 +155,7 @@ py -3 tools/build.py --deadlock-dir "C:\Program Files (x86)\Steam\steamapps\comm
 
 If you already have the extracted stock layout, use `--hud-xml path/to/hud.xml`. [GameTracking-Deadlock](https://github.com/SteamTracking/GameTracking-Deadlock/blob/master/game/citadel/pak01_dir/panorama/layout/hud.xml) publishes it for the live build. The build produces `dist/deadlock-counter-intelligence-experimental.zip` with one `pak01_dir.vpk` inside.
 
-`.github/workflows/game-update.yml` runs every day. When Deadlock's client build changes, it refreshes the catalog, the match data and the patch warnings, runs every test, builds the mod against the new stock HUD, commits the update to `main`, and starts the release workflow for the next patch version, so a HUD for the new build is usually available within a day of a game update. If deadlock-api does not have the new build yet, it tries again the next day; if a test or the build fails, nothing is released. It can also be run from the Actions tab.
+`.github/workflows/game-update.yml` runs every day. When Deadlock's client build changes, it refreshes the catalog, the match data and the patch warnings (from the notes and from the game data), runs every test, builds the mod against the new stock HUD, commits the update to `main`, and starts the release workflow for the next patch version, so a HUD for the new build is usually available within a day of a game update. If deadlock-api does not have the new build yet, it tries again the next day; if a test or the build fails, nothing is released. It can also be run from the Actions tab.
 
 `.github/workflows/release.yml` publishes releases. It runs when a `v*` tag is pushed, or from the Actions tab: choose **Release → Run workflow** and enter a version such as `v0.2.0`, and it creates the tag on the commit it builds. It runs the tests, builds the ZIP from the GameTracking layout (and stops if that layout is from a different build than the catalog), builds dlmod for Windows and Linux, and publishes a release with the notes in `.github/release-notes/<version>.md`.
 
@@ -166,7 +171,7 @@ node --test test/intelligence.test.js
 python -m unittest discover -s test -v
 ```
 
-`update_counter_stats.py` makes 45 API requests and takes a few minutes. Pass `--cache DIR` to keep the raw responses and regenerate without downloading again.
+`update_counter_stats.py` makes 90 API requests and takes a few minutes. Pass `--cache DIR` to keep the raw responses and regenerate without downloading again. `patch_notes.py` downloads the hero and item data of the reviewed and the current build, about 17 MB; `--notes-only` skips that comparison.
 
 Ambiguous labels are skipped. During a match, the mod works from the visible HUD and the bundled catalog, counter table, and match data. It makes no network requests.
 

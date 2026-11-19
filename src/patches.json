@@ -1,5 +1,7 @@
 {
   "reviewed": "2026-10-30",
+  "reviewedBuild": 6829,
+  "build": 6864,
   "patches": [
     {
       "title": "Minor Update - 11-04-2026",
@@ -14,6 +16,14 @@
       },
       "items": {
         "upgrade_healbane": {"lines": ["Stacks now diminish 20% more aggressively (at 2 stacks 57.8%->54.7%, at 4 stacks 82.2% to 72%)"], "more": 0}
+      }
+    },
+    {
+      "title": "an update without patch notes",
+      "build": 6864,
+      "heroes": {},
+      "items": {
+        "upgrade_tech_overflow": {"lines": ["Spirit Lifesteal 13% → 15%"], "more": 0}
       }
     }
   ]

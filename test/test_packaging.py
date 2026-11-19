@@ -222,6 +222,61 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(patch["items"], {"upgrade_healbane": {"lines": ["Stacks now diminish 20% more aggressively"], "more": 0}})
         self.assertEqual(json.loads(format_notes(notes)), notes)
 
+    def test_game_data_changes_without_patch_notes_are_flagged(self):
+        catalog = {"clientVersion": 200,
+                   "items": [[10, "upgrade_overflow", "Spiritual Overflow", "Ruhani Taşma", 3200, "spirit"],
+                             [11, "upgrade_same", "Same", "Aynı", 800, "weapon"]],
+                   "heroes": [[1, "hero_a", "Alpha", "Alfa"], [2, "hero_b", "Beta", "Beta"], [3, "hero_c", "Gamma", "Gama"]]}
+        counters = {"reviewed": {"date": "2026-10-30", "build": 100,
+                                 "heroes": {"hero_c": {"date": "2026-11-10", "build": 150}}}}
+        patches = [{"title": "Minor Update", "pub_date": "2026-11-05T05:02:30Z",
+                    "content": "<p>- Alpha: Fireball cooldown reduced from 10s to 8s</p>"}]
+
+        def build(number):
+            later = number >= 200
+            shared = {"ability_jump": "citadel_ability_jump"}
+            def prop(value, label, unit=""):
+                return {"value": value, "label": label, "postfix": unit}
+            return {
+                # Five heroes share the jump, so a jump change is not a change to any one of them.
+                "heroes": [{"class_name": key, "items": dict(shared, **slots), "starting_stats": {"max_health": {"value": 600}}}
+                           for key, slots in (("hero_a", {"signature1": "ability_fire"}),
+                                              ("hero_b", {"signature1": "ability_ice", "weapon_primary": "weapon_b"}),
+                                              ("hero_c", {"signature1": "ability_rock"}),
+                                              ("hero_d", {}), ("hero_e", {}))],
+                "items/by-type/ability": [
+                    {"class_name": "ability_fire", "name": "Fireball", "properties": {"AbilityCooldown": prop("8" if later else "10", "Cooldown", "s")}},
+                    {"class_name": "ability_ice", "name": "Ice Wall", "properties": {"Radius": prop("6m" if later else "5m", "Radius", "m")},
+                     "upgrades": [{"property_upgrades": [{"name": "Radius", "bonus": 2 if later else 1}]}]},
+                    {"class_name": "ability_rock", "name": "Rock", "properties": {"Damage": prop("50" if number >= 150 else "40", "Damage")}},
+                    {"class_name": "citadel_ability_jump", "name": "Jump", "properties": {"Height": prop("2" if later else "1", "Height")}},
+                ],
+                "items/by-type/weapon": [{"class_name": "weapon_b", "name": "Beta Gun", "weapon_info": {
+                    "bullet_damage": 5.8 if later else 5.7, "damage_per_second": 58.0 if later else 57.0, "can_zoom": True}}],
+                "items/by-type/upgrade": [
+                    {"class_name": "upgrade_overflow", "type": "upgrade", "cost": 3200,
+                     "properties": {"AbilityLifestealPercentHero": prop("15" if later else "13", "Spirit Lifesteal", "%")}},
+                    {"class_name": "upgrade_same", "type": "upgrade", "cost": 800, "properties": {"Ammo": prop("20", "Ammo")}},
+                ],
+            }
+
+        loaded = []
+        notes = collect(catalog, counters, patches, lambda number: loaded.append(number) or build(number))
+        self.assertEqual(sorted(loaded), [100, 150, 200], "each build is loaded once")
+        self.assertEqual((notes["reviewedBuild"], notes["build"]), (100, 200))
+        noted, silent = notes["patches"]
+        self.assertEqual(set(noted["heroes"]), {"hero_a"})
+        self.assertEqual((silent["title"], silent["build"]), ("an update without patch notes", 200))
+        # Alpha's change is in the notes, Gamma's came before its own review, and the shared jump
+        # and the weapon's derived damage per second do not count.
+        self.assertEqual(silent["heroes"], {"hero_b": {"lines": [
+            "Ice Wall - Radius 5m → 6m", "Ice Wall - T1 Radius 1m → 2m", "Beta Gun - Bullet damage 5.7 → 5.8"], "more": 0}})
+        self.assertEqual(silent["items"], {"upgrade_overflow": {"lines": ["Spirit Lifesteal 13% → 15%"], "more": 0}})
+        self.assertEqual(json.loads(format_notes(notes)), notes)
+
+        unchanged = collect(catalog, {"reviewed": {"date": "2026-10-30", "build": 200}}, [], build)
+        self.assertEqual(unchanged["patches"], [], "the same build has nothing to report")
+
 
 if __name__ == "__main__":
     unittest.main()
