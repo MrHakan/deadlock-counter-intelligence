@@ -9,7 +9,8 @@ from zlib import crc32
 
 from tools.build import ROOT, SCRIPT, STYLE, build, patch_hud
 from tools.update_catalog import merge, write_catalog
-from tools.update_counter_stats import compute, report
+from tools.patch_notes import collect, format_notes
+from tools.update_counter_stats import compute, format_stats, latest_gameplay_patch, report
 
 STOCK = """
 <root><styles><include src="stock.vcss"/></styles><CitadelHud>
@@ -72,12 +73,19 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(root.findall("styles/include")[-1].get("src"), STYLE)
         self.assertEqual(root.find("scripts/include").get("src"), SCRIPT)
         self.assertIsNotNone(root.find("CitadelHud/CitadelHudTopBar"))
-        self.assertEqual(root.find(".//*[@id='DCIVisibility']").get("hittestchildren"), "false")
+        listener = root.find(".//*[@id='DCIVisibility']")
+        self.assertEqual((listener.get("hittest"), listener.get("hittestchildren")), ("false", "true"))
+        hoverable = {panel.get("id") for panel in listener.iter() if panel.get("hittest") == "true"}
+        self.assertEqual(hoverable, {"DCIPatchBadge", "DCIPatch0", "DCIPatch1", "DCIPatch2", "DCIPatch3"},
+                         "only the patch icons may catch the mouse; everything else lets clicks through")
+        self.assertTrue(all(panel.get("hittest") in ("true", "false") for panel in listener.iter() if panel is not listener))
+        self.assertEqual(root.find(".//*[@id='DCITip']").get("visible"), "false")
         self.assertEqual(root.find(".//*[@class='DCITitle']").get("text"), "Counter items")
         self.assertIsNotNone(root.find(".//*[@id='DCIPrice2']"))
         self.assertEqual(root.find(".//*[@id='DCIRow2']").get("visible"), "false")
         self.assertIsNotNone(root.find(".//*[@id='DCIAlertText']"))
         self.assertIsNotNone(root.find(".//*[@id='DCIImpact3']"))
+        self.assertEqual(root.find(".//*[@id='DCIBuy0']").get("visible"), "false")
         self.assertIsNone(root.find(".//*[@id='DCIRow4']"))
 
     def test_patch_refuses_an_incompatible_or_already_patched_layout(self):
@@ -89,7 +97,8 @@ class PackagingTests(unittest.TestCase):
     def test_zip_contains_a_self_contained_vpk_with_real_source2_resources(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "dci.zip"
-            self.assertEqual(build(STOCK, ROOT / "src/catalog.json", output), 6864)
+            catalog_build = json.loads((ROOT / "src/catalog.json").read_text(encoding="utf-8"))["clientVersion"]
+            self.assertEqual(build(STOCK, ROOT / "src/catalog.json", output), catalog_build)
             with ZipFile(output) as archive:
                 self.assertEqual(archive.namelist(), ["pak01_dir.vpk"])
                 self.assertIsNone(archive.testzip())
@@ -103,6 +112,7 @@ class PackagingTests(unittest.TestCase):
             self.assertIn('alertTitle: "Enemy counter purchase"', script)
             self.assertIn('var DCI_COUNTERS = {"source"', script)
             self.assertIn('var DCI_STATS = {"source"', script)
+            self.assertIn('var DCI_PATCHES = {"reviewed"', script)
             self.assertNotIn("DCI_LANGUAGE", script)
             self.assertIn(".gShopOpen .DCIBox", read_resource(resources["panorama/styles/dci_hud.vcss_c"]))
 
@@ -146,6 +156,126 @@ class PackagingTests(unittest.TestCase):
                       counters, stats, measured)
         self.assertIn("Of the 2 reference picks, 1 raise", text)
         self.assertIn("| X | A +2.00 · C +0.00 | A +2.00 |", text)
+
+
+    def test_the_window_starts_at_the_latest_patch_that_changes_items_or_heroes(self):
+        catalog = {"items": [[1, "upgrade_healbane", "Healbane", "Şifakıran", 1600, "vitality"]],
+                   "heroes": [[6, "hero_atlas", "Abrams", "Abrams"]]}
+        patches = [
+            {"title": "Ranked - Beta Season 2", "pub_date": "2026-11-05T19:58:14Z", "content": "<p>Season two begins.</p>"},
+            {"title": " Minor Update - 11-04-2026", "pub_date": "2026-11-05T05:02:30Z",
+             "content": "<p class=\"bb_paragraph\">- Healbane: Stacks now diminish 20% more aggressively</p>"},
+            {"title": "Gameplay Update", "pub_date": "2026-10-30T20:51:49Z", "content": "<p>- Abrams: Base health increased</p>"},
+        ]
+        self.assertEqual(latest_gameplay_patch(catalog, patches),
+                         {"title": "Minor Update - 11-04-2026", "date": "2026-11-05", "timestamp": 1793854950})
+        self.assertIsNone(latest_gameplay_patch(catalog, patches[:1]))
+
+    def test_lane_counters_and_buy_minutes(self):
+        catalog = {"items": [[1, "a", "A", "A", 800, "weapon"], [2, "b", "B", "B", 800, "spirit"],
+                             [3, "big", "Big", "Big", 6400, "vitality"]],
+                   "heroes": [[7, "hero_x", "X", "X"]]}
+        counters = {"heroes": {"hero_x": ["a"]}}
+
+        def rows(*values):
+            return [{"item_id": item, "wins": wins, "matches": matches, "avg_buy_time_s": seconds}
+                    for item, wins, matches, seconds in values]
+
+        base = rows((1, 50000, 100000, 300), (2, 50000, 100000, 330), (3, 50000, 100000, 1800))
+        early = rows((1, 50000, 100000, 200), (2, 50000, 100000, 250), (3, 50000, 100000, 590))
+        lane = rows((1, 54000, 100000, 200), (2, 46000, 100000, 250), (3, 60000, 100000, 590))
+        stats, _ = compute(catalog, counters, base, {7: base}, {"from": "f", "to": "t"},
+                           lane_base_rows=early, lane_rows={7: lane},
+                           patch={"title": "Minor Update", "date": "2026-11-05", "timestamp": 0})
+        # Big costs more than lane items may (3,200), so only A, which beats B, is a lane pick.
+        self.assertEqual(stats["lane"], {"hero_x": [["a", 400]]})
+        self.assertEqual(stats["minutes"], {"a": 5})
+        self.assertEqual(stats["patch"], {"title": "Minor Update", "date": "2026-11-05"})
+        self.assertEqual(json.loads(format_stats(stats)), stats)
+
+
+    def test_patch_notes_cover_changes_after_the_review_date(self):
+        catalog = {"items": [[1, "upgrade_healbane", "Healbane", "Şifakıran", 1600, "vitality"]],
+                   "heroes": [[6, "hero_atlas", "Abrams", "Abrams"], [69, "hero_doorman", "The Doorman", "Kapıcı"],
+                              [84, "hero_ratking", "Rat King", "Fare Kral"]]}
+        counters = {"reviewed": {"date": "2026-10-30", "heroes": {"hero_ratking": "2026-11-19"}}}
+        long_line = "Shoulder Charge - " + "much longer stun " * 10
+        patches = [
+            {"title": "Gameplay Update", "pub_date": "2026-10-30T20:51:49Z", "content": "<p>- Abrams: Old change</p>"},
+            {"title": " Minor Update - 11-04-2026", "pub_date": "2026-11-05T05:02:30Z", "content": (
+                "<p>- Healbane: Stacks now diminish 20% more aggressively</p><p>- Abrams: Base health increased</p>"
+                "<p>- Abrams: " + long_line + "</p><p>- Abrams: Siphon Life radius increased</p>"
+                "<p>- Abrams: Infernal Resilience regen increased</p><p>- Doorman: Hotel Guest duration reduced</p>"
+                "<p>- Rat King: Ammo increased from 24 to 26</p>")},
+            {"title": "Ranked - Beta Season 2", "pub_date": "2026-11-05T19:58:14Z", "content": "<p>Season two</p>"},
+        ]
+        notes = collect(catalog, counters, patches)
+        self.assertEqual(notes["reviewed"], "2026-10-30")
+        self.assertEqual(len(notes["patches"]), 1, "the reviewed patch and the non-gameplay post are left out")
+        patch = notes["patches"][0]
+        self.assertEqual((patch["title"], patch["date"]), ("Minor Update - 11-04-2026", "2026-11-05"))
+        self.assertEqual(set(patch["heroes"]), {"hero_atlas", "hero_doorman"}, "Rat King was reviewed after the patch")
+        abrams = patch["heroes"]["hero_atlas"]
+        self.assertEqual(abrams["more"], 1)
+        self.assertEqual(abrams["lines"][0], "Base health increased")
+        self.assertTrue(abrams["lines"][1].endswith("…") and len(abrams["lines"][1]) == 110)
+        self.assertEqual(patch["items"], {"upgrade_healbane": {"lines": ["Stacks now diminish 20% more aggressively"], "more": 0}})
+        self.assertEqual(json.loads(format_notes(notes)), notes)
+
+    def test_game_data_changes_without_patch_notes_are_flagged(self):
+        catalog = {"clientVersion": 200,
+                   "items": [[10, "upgrade_overflow", "Spiritual Overflow", "Ruhani Taşma", 3200, "spirit"],
+                             [11, "upgrade_same", "Same", "Aynı", 800, "weapon"]],
+                   "heroes": [[1, "hero_a", "Alpha", "Alfa"], [2, "hero_b", "Beta", "Beta"], [3, "hero_c", "Gamma", "Gama"]]}
+        counters = {"reviewed": {"date": "2026-10-30", "build": 100,
+                                 "heroes": {"hero_c": {"date": "2026-11-10", "build": 150}}}}
+        patches = [{"title": "Minor Update", "pub_date": "2026-11-05T05:02:30Z",
+                    "content": "<p>- Alpha: Fireball cooldown reduced from 10s to 8s</p>"}]
+
+        def build(number):
+            later = number >= 200
+            shared = {"ability_jump": "citadel_ability_jump"}
+            def prop(value, label, unit=""):
+                return {"value": value, "label": label, "postfix": unit}
+            return {
+                # Five heroes share the jump, so a jump change is not a change to any one of them.
+                "heroes": [{"class_name": key, "items": dict(shared, **slots), "starting_stats": {"max_health": {"value": 600}}}
+                           for key, slots in (("hero_a", {"signature1": "ability_fire"}),
+                                              ("hero_b", {"signature1": "ability_ice", "weapon_primary": "weapon_b"}),
+                                              ("hero_c", {"signature1": "ability_rock"}),
+                                              ("hero_d", {}), ("hero_e", {}))],
+                "items/by-type/ability": [
+                    {"class_name": "ability_fire", "name": "Fireball", "properties": {"AbilityCooldown": prop("8" if later else "10", "Cooldown", "s")}},
+                    {"class_name": "ability_ice", "name": "Ice Wall", "properties": {"Radius": prop("6m" if later else "5m", "Radius", "m")},
+                     "upgrades": [{"property_upgrades": [{"name": "Radius", "bonus": 2 if later else 1}]}]},
+                    {"class_name": "ability_rock", "name": "Rock", "properties": {"Damage": prop("50" if number >= 150 else "40", "Damage")}},
+                    {"class_name": "citadel_ability_jump", "name": "Jump", "properties": {"Height": prop("2" if later else "1", "Height")}},
+                ],
+                "items/by-type/weapon": [{"class_name": "weapon_b", "name": "Beta Gun", "weapon_info": {
+                    "bullet_damage": 5.8 if later else 5.7, "damage_per_second": 58.0 if later else 57.0, "can_zoom": True}}],
+                "items/by-type/upgrade": [
+                    {"class_name": "upgrade_overflow", "type": "upgrade", "cost": 3200,
+                     "properties": {"AbilityLifestealPercentHero": prop("15" if later else "13", "Spirit Lifesteal", "%")}},
+                    {"class_name": "upgrade_same", "type": "upgrade", "cost": 800, "properties": {"Ammo": prop("20", "Ammo")}},
+                ],
+            }
+
+        loaded = []
+        notes = collect(catalog, counters, patches, lambda number: loaded.append(number) or build(number))
+        self.assertEqual(sorted(loaded), [100, 150, 200], "each build is loaded once")
+        self.assertEqual((notes["reviewedBuild"], notes["build"]), (100, 200))
+        noted, silent = notes["patches"]
+        self.assertEqual(set(noted["heroes"]), {"hero_a"})
+        self.assertEqual((silent["title"], silent["build"]), ("an update without patch notes", 200))
+        # Alpha's change is in the notes, Gamma's came before its own review, and the shared jump
+        # and the weapon's derived damage per second do not count.
+        self.assertEqual(silent["heroes"], {"hero_b": {"lines": [
+            "Ice Wall - Radius 5m → 6m", "Ice Wall - T1 Radius 1m → 2m", "Beta Gun - Bullet damage 5.7 → 5.8"], "more": 0}})
+        self.assertEqual(silent["items"], {"upgrade_overflow": {"lines": ["Spirit Lifesteal 13% → 15%"], "more": 0}})
+        self.assertEqual(json.loads(format_notes(notes)), notes)
+
+        unchanged = collect(catalog, {"reviewed": {"date": "2026-10-30", "build": 200}}, [], build)
+        self.assertEqual(unchanged["patches"], [], "the same build has nothing to report")
 
 
 if __name__ == "__main__":

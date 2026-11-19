@@ -28,6 +28,13 @@ Usage:
   dlmod patch                  make the game load mods again after a game update
   dlmod unpatch                undo dlmod's gameinfo.gi change
   dlmod play                   patch if needed, then start Deadlock through Steam
+  dlmod update                 download the Counter Intelligence HUD for your game build (GitHub)
+  dlmod profile                list profiles (named sets of mods)
+  dlmod profile save <name>    remember which mods are on now
+  dlmod profile use <name>     switch on exactly the mods in a profile
+  dlmod profile delete <name>  forget a profile
+
+Only "dlmod update" uses the network.
 
 <mod> is the number shown by "dlmod list", a slot such as pak03, or part of the name.
 
@@ -82,7 +89,7 @@ func parseArgs(argv []string) ([]string, options, error) {
 var commands = map[string]bool{
 	"install": true, "list": true, "status": true, "on": true, "enable": true, "off": true,
 	"disable": true, "remove": true, "uninstall": true, "patch": true, "repair": true,
-	"unpatch": true, "play": true, "help": true,
+	"unpatch": true, "play": true, "help": true, "update": true, "profile": true, "profiles": true,
 }
 
 // palette holds escape sequences; every field is empty when colours are off (NO_COLOR, old consoles).
@@ -331,8 +338,59 @@ func execute(ui *UI, game Game, command string, args []string, opts options) err
 		}
 		ui.say("Starting Deadlock through Steam...")
 		return launchGame()
+	case "update":
+		if err := store.updateHUD(ui); err != nil {
+			return err
+		}
+		return ensurePatched(ui, game)
+	case "profile", "profiles":
+		return profileCommand(ui, store, args)
 	}
 	return fmt.Errorf("unknown command %s", command)
+}
+
+func profileCommand(ui *UI, store *Store, args []string) error {
+	if len(args) == 0 || args[0] == "list" {
+		names := store.profileNames()
+		if len(names) == 0 {
+			ui.say("No profiles yet. Switch on the mods you want together, then run: dlmod profile save <name>")
+			return nil
+		}
+		entries, err := store.entries()
+		if err != nil {
+			return err
+		}
+		active := store.activeProfile(entries)
+		for _, name := range names {
+			marker := "  "
+			if name == active {
+				marker = "> "
+			}
+			ui.say("%s%s (%s)", marker, name, plural(len(store.manifest.Profiles[name]), "%d mod", "%d mods"))
+		}
+		return nil
+	}
+	if len(args) < 2 {
+		return fmt.Errorf("name the profile, for example: dlmod profile %s Ranked", args[0])
+	}
+	name := strings.Join(args[1:], " ")
+	switch args[0] {
+	case "save":
+		count, err := store.saveProfile(name)
+		if err == nil {
+			ui.say("Saved profile '%s' with %s.", strings.TrimSpace(name), plural(count, "%d mod", "%d mods"))
+		}
+		return err
+	case "use", "load":
+		return store.useProfile(ui, name)
+	case "delete", "remove":
+		if err := store.deleteProfile(name); err != nil {
+			return err
+		}
+		ui.say("Deleted profile '%s'.", name)
+		return nil
+	}
+	return fmt.Errorf("unknown profile command %s; use save, use, delete or list", args[0])
 }
 
 func change(p prompter, store *Store, entry *Entry, command string) error {
@@ -473,7 +531,8 @@ func menu(ui *UI, game Game) int {
 			ui.say("Error: %v", err)
 		}
 		ui.say("\n  1  Install a mod (.zip or .vpk)\n  2  Switch a mod on or off\n  3  Remove a mod\n" +
-			"  4  Repair after a game update (patch gameinfo.gi)\n  5  Start Deadlock\n  0  Exit")
+			"  4  Repair after a game update (patch gameinfo.gi)\n  5  Start Deadlock\n" +
+			"  6  Download the Counter Intelligence HUD for this game build\n  0  Exit")
 		choice := ui.ask("\nChoose: ")
 		if ui.eof {
 			return 0
@@ -521,6 +580,8 @@ func menu(ui *UI, game Game) int {
 			failure = execute(ui, game, "patch", nil, options{})
 		case "5":
 			failure = execute(ui, game, "play", nil, options{})
+		case "6":
+			failure = execute(ui, game, "update", nil, options{})
 		case "0", "q", "exit":
 			return 0
 		}

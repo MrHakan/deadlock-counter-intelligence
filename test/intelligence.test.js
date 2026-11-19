@@ -5,13 +5,13 @@ const test = require("node:test");
 const catalog = require("../src/catalog.json");
 const counters = require("../src/counters.json");
 const stats = require("../src/stats.json");
-const { create, validate, formatImpact } = require("../src/engine");
+const { create, validate, formatImpact, formatStats, formatNotes } = require("../src/engine");
 const { observe } = require("../src/observer");
 
 test("reference counter table resolves against the pinned catalog and accepts localized input", () => {
   assert.deepEqual(validate(catalog, counters, stats), []);
   const heroes = Object.keys(counters.heroes);
-  assert.equal(heroes.length, 42);
+  assert.equal(heroes.length, catalog.heroes.length, "every hero has reference counters");
   for (const hero of heroes) {
     assert.equal(new Set(counters.heroes[hero]).size, 5, hero);
     for (const item of counters.heroes[hero]) assert.ok(counters.tags[item], `${item} has a tag`);
@@ -31,6 +31,11 @@ test("reference counter table resolves against the pinned catalog and accepts lo
 // Synthetic match data, in hundredths of a win-rate point.
 const fixture = {
   window: {from: "2026-10-20", to: "2026-11-19"},
+  minutes: {upgrade_metal_skin: 14, upgrade_glass_cannon: 22, upgrade_close_range: 3},
+  lane: {
+    hero_haze: [["upgrade_close_range", 120], ["upgrade_vex_barrier", 40]],
+    hero_wraith: [["upgrade_vex_barrier", 90]],
+  },
   items: ["upgrade_metal_skin", "upgrade_glass_cannon", "upgrade_deflecting_armor", "upgrade_hollow_point_rounds"],
   heroes: {
     hero_haze: [120, 40, -10, null],
@@ -70,8 +75,37 @@ test("the match-data pick skips shown items and needs a meaningful gain", () => 
   assert.equal(pick.reason, "Match data");
   assert.equal(pick.evidence, "Strongest vs Haze · Wraith");
   assert.equal(engine.dataPick(lineup, ["upgrade_metal_skin", "upgrade_glass_cannon"]), null);
-  assert.equal(engine.dataPick(["hero_synth"], []), null);
+  assert.equal(engine.dataPick(["hero_unknown"], []), null);
   assert.equal(create(catalog, counters).dataPick(lineup, []), null, "no data, no pick");
+});
+
+test("owned items are skipped and the first affordable suggestion is the one to buy", () => {
+  const engine = create(catalog, counters, fixture);
+  const all = engine.recommend(lineup).map((item) => item.key);
+  const rest = engine.recommend(lineup, 3, ["upgrade_metal_skin"]).map((item) => item.key);
+  assert.equal(all[0], "upgrade_metal_skin");
+  assert.ok(!rest.includes("upgrade_metal_skin"), "an owned item is not suggested again");
+  const rows = engine.recommend(lineup); // Metal Skin 3,200 · Plated Armor 6,400 · Unstoppable 6,400
+  assert.equal(engine.buyNow(rows, 3199), -1);
+  assert.equal(engine.buyNow(rows, 3200), 0);
+  assert.equal(engine.buyNow(rows.slice(1), 7000), 0);
+  assert.equal(engine.buyNow(rows, null), -1, "no badge when souls are unknown");
+  assert.equal(rows[0].minute, 14);
+});
+
+test("the lane pick sums early lifts against the lane opponents", () => {
+  const engine = create(catalog, counters, fixture);
+  const pick = engine.lanePick(["hero_haze", "hero_wraith"], []);
+  assert.equal(pick.key, "upgrade_vex_barrier", "40 + 90 beats 120");
+  assert.equal(pick.impact, 130);
+  assert.equal(pick.source, "lane");
+  assert.equal(pick.reason, "Lane phase · Barrier when CC'd");
+  assert.equal(pick.evidence, "Early vs Haze · Wraith");
+  assert.equal(pick.minute, null, "a lane pick is for the first ten minutes");
+  assert.equal(engine.lanePick(["hero_haze"], ["upgrade_close_range"]).key, "upgrade_vex_barrier");
+  assert.equal(engine.lanePick(["hero_warden"], []), null);
+  assert.equal(formatStats({impact: 120, minute: 3}), "+1.2 WR · ~3m");
+  assert.equal(formatStats({impact: null, minute: null}), "");
 });
 
 test("win-rate changes are formatted for the HUD", () => {
@@ -85,7 +119,7 @@ test("win-rate changes are formatted for the HUD", () => {
 test("heroes without a reference build and duplicates contribute nothing", () => {
   const engine = create(catalog, counters);
   assert.deepEqual(engine.recommend([]), []);
-  assert.deepEqual(engine.recommend(["hero_synth", "missing"]), []);
+  assert.deepEqual(engine.recommend(["missing", "hero_unknown"]), []);
   assert.deepEqual(engine.recommend(["hero_haze", "hero_haze"]), engine.recommend(["hero_haze"]));
 });
 
@@ -117,9 +151,10 @@ test("ambiguous labels are skipped and missing items cannot be offered", () => {
   assert.deepEqual(validate(fixture, {heroes: counters.heroes}), ["upgrade_auto_cleanse"]);
 });
 
-function panel({id, type = "Panel", classes = [], children = [], visible = true, collapsed = false, tokens = {}, text = ""} = {}) {
+function panel({id, type = "Panel", classes = [], children = [], visible = true, collapsed = false, tokens = {}, text = "",
+  props = {}} = {}) {
   const value = {
-    id, paneltype: type, visible, text, tokens,
+    ...props, id, paneltype: type, visible, text, tokens,
     actuallayoutwidth: collapsed ? 0 : 120,
     actuallayoutheight: collapsed ? 0 : 120,
     IsValid: () => true,
@@ -137,9 +172,18 @@ function panel({id, type = "Panel", classes = [], children = [], visible = true,
 }
 
 function buildHud({realLocal = true, enemyVisible = true} = {}) {
-  const player = (heroId, classes, visible = true) => panel({
-    type: "CitadelHudTopBarPlayer", classes, visible, tokens: {"{i:hero_id}": heroId},
+  const player = (heroId, classes, visible = true, extra = {}) => panel({
+    type: "CitadelHudTopBarPlayer", classes, visible, tokens: {"{i:hero_id}": heroId, ...extra.tokens},
+    children: extra.children || [],
   });
+  // The local player's card: souls in {s:gold} and purchased item icons under mod_universal.
+  const local = {
+    tokens: {"{s:gold}": "3.4k"},
+    children: [panel({ id: "mod_universal", children: [
+      panel({ props: {abilityname: "upgrade_healbane"} }),
+      panel({ props: {abilityname: "citadel_ability_unknown"} }),
+    ] })],
+  };
   const purchase = (hero, text, { visible = true, collapsed = false } = {}) => panel({
     classes: ["recentPurchase"], visible, tokens: {"{s:recent_hero_name}": hero},
     children: [
@@ -149,8 +193,9 @@ function buildHud({realLocal = true, enemyVisible = true} = {}) {
   });
   return panel({ children: [
     panel({ id: "TopBar", children: [
-      panel({ id: "TeamFriendly", children: [player("7", realLocal ? ["LocalPlayer"] : []), player("1", [])] }),
-      panel({ id: "TeamEnemy", children: [player("13", [], enemyVisible)] }),
+      panel({ id: "GameTime", text: "4:12" }),
+      panel({ id: "TeamFriendly", children: [player("7", realLocal ? ["LocalPlayer"] : [], true, local), player("1", [])] }),
+      panel({ id: "TeamEnemy", children: [player("13", ["IsInLocalPlayerLane"], enemyVisible)] }),
     ] }),
     panel({ id: "CitadelHudHeroShop", children: [
       panel({ id: "RecentPurchasesContainer", children: [
@@ -169,17 +214,20 @@ const localize = (token, panel) => panel.tokens[token] || token;
 
 test("observer reads only visible enemy purchases and only with the shop open", () => {
   const hud = buildHud();
-  const teams = { heroes: ["hero_haze"], allies: ["hero_wraith", "hero_inferno"], self: "hero_wraith" };
+  const teams = {
+    heroes: ["hero_haze"], allies: ["hero_wraith", "hero_inferno"], self: "hero_wraith",
+    lane: ["hero_haze"], souls: 3400, owned: ["upgrade_healbane"], clock: 252,
+  };
   assert.deepEqual(observe(hud, engine, localize, true), {
-    ...teams, purchases: [{ hero: "hero_haze", item: "upgrade_glass_cannon" }],
+    ...teams, purchases: [{ hero: "hero_haze", item: "upgrade_glass_cannon" }], mine: ["upgrade_ricochet"],
   });
-  assert.deepEqual(observe(hud, engine, localize, false), { ...teams, purchases: [] });
+  assert.deepEqual(observe(hud, engine, localize, false), { ...teams, purchases: [], mine: [] });
   hud.FindChildTraverse("CitadelHudHeroShop").visible = false;
-  assert.deepEqual(observe(hud, engine, localize, true), { ...teams, purchases: [] });
+  assert.deepEqual(observe(hud, engine, localize, true), { ...teams, purchases: [], mine: [] });
 });
 
 test("observer requires a visible local player and visible enemy cards", () => {
-  const none = { heroes: [], allies: [], self: null, purchases: [] };
+  const none = { heroes: [], allies: [], self: null, lane: [], souls: null, owned: [], clock: null, purchases: [], mine: [] };
   assert.deepEqual(observe(buildHud({ realLocal: false }), engine, localize, true), none);
   assert.deepEqual(observe(buildHud({ enemyVisible: false }), engine, localize, true), none);
 });
@@ -199,6 +247,7 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
     FindChildTraverse: (id) => id === "DCIVisibility" ? root : (nodes[id] ||= {
       FindChildTraverse: root.FindChildTraverse,
       SetHasClass(name, active) { this[name] = active; },
+      SetPanelEvent(event, handler) { (this.events ||= {})[event] = handler; },
     }),
   };
   const filename = path.resolve(__dirname, "../src/hud.js");
@@ -208,7 +257,7 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
       Schedule: (delay, callback) => scheduled.push({delay, callback}),
       Msg: (line) => assert.fail(line),
     },
-    DCIEngine: {create, formatImpact},
+    DCIEngine: {create, formatImpact, formatStats, formatNotes},
     DCI_CATALOG: catalog,
     DCI_COUNTERS: counters,
     DCI_STATS: fixture,
@@ -228,7 +277,7 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
   assert.equal(nodes.DCIRow3.DCIDataPick, true);
   assert.equal(nodes.DCIRow3.DCIWeapon, true);
   assert.equal(nodes.DCIReason3.text, "Match data");
-  assert.equal(nodes.DCIImpact3.text, "+0.6 WR");
+  assert.equal(nodes.DCIImpact3.text, "+0.6 WR · ~22m");
   assert.equal(nodes.DCIImpact3.DCIImpactUp, true);
   assert.equal(nodes.DCIEmpty.visible, false);
   assert.equal(nodes.DCIAlert?.DCIAlertActive, undefined);
@@ -237,7 +286,7 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
   step();
   assert.deepEqual([0, 1, 2, 3].map((i) => nodes[`DCIName${i}`].text),
     ["Metal Skin", "Plated Armor", "Unstoppable", "Glass Cannon"]);
-  assert.equal(nodes.DCIImpact0.text, "+1.5 WR");
+  assert.equal(nodes.DCIImpact0.text, "+1.5 WR · ~14m");
   assert.equal(nodes.DCIImpact1.text, "−0.1 WR");
   assert.equal(nodes.DCIImpact1.DCIImpactDown, true);
   assert.equal(nodes.DCIImpact1.DCIImpactUp, false);
@@ -269,8 +318,137 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
   assert.equal(nodes.DCIAlert.DCIAlertActive, true, "a new enemy lineup starts a new match");
   assert.equal(nodes.DCIAlertText.text, "Vindicta bought Healbane — counters you (Infernus), Lady Geist");
 
-  observed = {heroes: ["hero_synth"], allies, self: "hero_inferno", purchases: []};
+  observed = {heroes: ["hero_unknown"], allies, self: "hero_inferno", purchases: []};
   step();
   assert.equal(nodes.DCIRow0.visible, false);
   assert.equal(nodes.DCIEmpty.text, "No reference builds for this lineup.");
+});
+
+test("HUD marks what to buy now, hides owned items and uses lane counters until minute 10", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const vm = require("node:vm");
+  const nodes = {};
+  const modes = new Set(["gScoreboardOpen"]);
+  const scheduled = [];
+  let observed = {
+    heroes: lineup, allies: ["hero_inferno"], self: "hero_inferno", purchases: [], mine: [],
+    lane: ["hero_haze", "hero_wraith"], clock: 200, souls: 3500, owned: [],
+  };
+  const root = {
+    IsValid: () => true,
+    BHasClass: (name) => modes.has(name),
+    FindChildTraverse: (id) => id === "DCIVisibility" ? root : (nodes[id] ||= {
+      FindChildTraverse: root.FindChildTraverse,
+      SetHasClass(name, active) { this[name] = active; },
+      SetPanelEvent(event, handler) { (this.events ||= {})[event] = handler; },
+    }),
+  };
+  const filename = path.resolve(__dirname, "../src/hud.js");
+  vm.runInNewContext(fs.readFileSync(filename, "utf8"), {
+    $: { GetContextPanel: () => root, Schedule: (delay, callback) => scheduled.push(callback), Msg: (line) => assert.fail(line) },
+    DCIEngine: {create, formatImpact, formatStats, formatNotes},
+    DCI_CATALOG: catalog,
+    DCI_COUNTERS: counters,
+    DCI_STATS: fixture,
+    DCIObserver: {observe: () => observed},
+  }, {filename});
+  const step = () => scheduled.shift()();
+  const names = () => [0, 1, 2, 3].map((i) => nodes[`DCIName${i}`].text);
+
+  step(); // minute 3:20, 3,500 souls
+  assert.equal(nodes.DCISource.text, "Lane phase");
+  assert.deepEqual(names(), ["Metal Skin", "Plated Armor", "Unstoppable", "Reactive Barrier"]);
+  assert.equal(nodes.DCIRow3.DCILanePick, true);
+  assert.equal(nodes.DCIReason3.text, "Lane phase · Barrier when CC'd");
+  assert.equal(nodes.DCIBuy0.visible, true, "Metal Skin costs 3,200");
+  assert.equal(nodes.DCIRow0.DCIBuyNow, true);
+  assert.equal(nodes.DCIRow1.DCIExpensive, true);
+  assert.equal(nodes.DCIBuy1.visible, false);
+
+  observed = {...observed, owned: ["upgrade_metal_skin"]};
+  step();
+  assert.deepEqual(names(), ["Plated Armor", "Unstoppable", "Dispel Magic", "Reactive Barrier"]);
+  assert.equal(nodes.DCIBuy2.visible, true, "Dispel Magic is the first affordable suggestion");
+  assert.equal(nodes.DCIBuy0.visible, false);
+
+  observed = {...observed, clock: 700, owned: []};
+  step(); // laning is over: the fourth row returns to match data; owned items stay hidden this match
+  assert.equal(nodes.DCISource.text, "Enemy lineup");
+  assert.equal(nodes.DCIName3.text, "Glass Cannon");
+  assert.equal(nodes.DCIRow3.DCIDataPick, true);
+  assert.equal(nodes.DCIRow3.DCILanePick, false);
+  assert.equal(nodes.DCIName0.text, "Plated Armor", "Metal Skin was bought earlier in this match");
+
+  observed = {...observed, souls: 7000};
+  step();
+  assert.equal(nodes.DCIBuy0.visible, true, "more souls move the badge to the top pick");
+  assert.equal(nodes.DCIRow0.DCIExpensive, false);
+});
+
+test("HUD flags patched enemies and items and shows what changed on hover", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const vm = require("node:vm");
+  const patches = {reviewed: "2026-10-30", patches: [{
+    title: "Minor Update - 11-04-2026", date: "2026-11-05",
+    heroes: {hero_haze: {lines: ["Sleep Dagger - Cooldown increased from 25s to 30s"], more: 2}},
+    items: {upgrade_metal_skin: {lines: ["Duration reduced from 3.5s to 3s"], more: 0}},
+  }, {
+    title: "an update without patch notes", build: 6864,
+    heroes: {hero_inferno: {lines: ["Afterburn - Damage 10 → 12"], more: 0}}, items: {},
+  }]};
+  const nodes = {};
+  const modes = new Set(["gShopOpen"]);
+  const scheduled = [];
+  let observed = {heroes: lineup, allies: [], self: null, purchases: [], mine: [], lane: [], clock: null, souls: null, owned: []};
+  const root = {
+    IsValid: () => true,
+    BHasClass: (name) => modes.has(name),
+    FindChildTraverse: (id) => id === "DCIVisibility" ? root : (nodes[id] ||= {
+      FindChildTraverse: root.FindChildTraverse,
+      SetHasClass(name, active) { this[name] = active; },
+      SetPanelEvent(event, handler) { (this.events ||= {})[event] = handler; },
+    }),
+  };
+  const filename = path.resolve(__dirname, "../src/hud.js");
+  vm.runInNewContext(fs.readFileSync(filename, "utf8"), {
+    $: { GetContextPanel: () => root, Schedule: (delay, callback) => scheduled.push(callback), Msg: (line) => assert.fail(line) },
+    DCIEngine: {create, formatImpact, formatStats, formatNotes},
+    DCI_CATALOG: catalog, DCI_COUNTERS: counters, DCI_STATS: fixture, DCI_PATCHES: patches,
+    DCIObserver: {observe: () => observed},
+  }, {filename});
+  scheduled.shift()();
+
+  assert.equal(nodes.DCIPatchBadge.visible, true, "Haze was changed after the table was reviewed");
+  assert.equal(nodes.DCIPatchBadge.text, "PATCHED");
+  assert.equal(nodes.DCITip.visible, undefined, "no tooltip until hovered");
+  nodes.DCIPatchBadge.events.onmouseover();
+  assert.equal(nodes.DCITip.visible, true);
+  assert.equal(nodes.DCITipTitle.text, "Changed in Minor Update - 11-04-2026 · counters not reviewed for it yet");
+  assert.equal(nodes.DCITipText.text, "Haze: Sleep Dagger - Cooldown increased from 25s to 30s\n    +2 more changes");
+  nodes.DCIPatchBadge.events.onmouseout();
+  assert.equal(nodes.DCITip.visible, false);
+
+  // A row's icon means the item itself changed: Metal Skin did; Plated Armor, which also counters
+  // the changed Haze, did not, and the badge already covers Haze.
+  assert.equal(nodes.DCIName0.text, "Metal Skin");
+  assert.equal(nodes.DCIPatch0.visible, true);
+  nodes.DCIPatch0.events.onmouseover();
+  assert.equal(nodes.DCITipText.text, "Metal Skin: Duration reduced from 3.5s to 3s");
+  nodes.DCIPatch0.events.onmouseout();
+  assert.equal(nodes.DCIName1.text, "Plated Armor");
+  assert.equal(nodes.DCIPatch1.visible, false);
+
+  observed = {...observed, heroes: ["hero_hornet"]};
+  scheduled.shift()();
+  assert.equal(nodes.DCIPatchBadge.visible, false);
+
+  // Changes the game data shows without patch notes are flagged the same way.
+  observed = {...observed, heroes: ["hero_inferno"]};
+  scheduled.shift()();
+  assert.equal(nodes.DCIPatchBadge.visible, true);
+  nodes.DCIPatchBadge.events.onmouseover();
+  assert.equal(nodes.DCITipTitle.text, "Changed in an update without patch notes · counters not reviewed for it yet");
+  assert.equal(nodes.DCITipText.text, "Infernus: Afterburn - Damage 10 → 12");
 });

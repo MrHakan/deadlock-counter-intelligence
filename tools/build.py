@@ -43,30 +43,40 @@ def patch_hud(stock):
         root.insert(list(root).index(styles[0]) + 1, script_list)
     ET.SubElement(script_list, "include", src=SCRIPT)
 
+    def add(parent, tag, attributes=None, hover=False):
+        """Every panel lets clicks through except the patch icons, which show a tooltip on hover."""
+        return ET.SubElement(parent, tag, {**(attributes or {}), "hittest": "true" if hover else "false"})
+
     listener = ET.SubElement(hud, "GlobalClassListener", id="DCIVisibility",
                              classes="gScoreboardOpen gShopOpen", hittest="false",
-                             hittestchildren="false")
-    alert = ET.SubElement(listener, "Panel", {"id": "DCIAlert", "class": "DCIAlert"})
-    ET.SubElement(alert, "Label", {"id": "DCIAlertTitle", "class": "DCIAlertTitle", "text": "Enemy counter purchase"})
-    ET.SubElement(alert, "Label", {"id": "DCIAlertText", "class": "DCIAlertText"})
-    box = ET.SubElement(listener, "Panel", {"class": "DCIBox"})
-    header = ET.SubElement(box, "Panel", {"class": "DCIHeader"})
-    ET.SubElement(header, "Label", {"class": "DCITitle", "text": "Counter items"})
-    ET.SubElement(header, "Label", {"id": "DCISource", "class": "DCISource", "visible": "false"})
-    ET.SubElement(box, "Label", {"id": "DCIEmpty", "class": "DCIEmpty", "text": "Waiting for enemy lineup."})
+                             hittestchildren="true")
+    alert = add(listener, "Panel", {"id": "DCIAlert", "class": "DCIAlert"})
+    add(alert, "Label", {"id": "DCIAlertTitle", "class": "DCIAlertTitle", "text": "Enemy counter purchase"})
+    add(alert, "Label", {"id": "DCIAlertText", "class": "DCIAlertText"})
+    box = add(listener, "Panel", {"class": "DCIBox"})
+    tip = add(box, "Panel", {"id": "DCITip", "class": "DCITip", "visible": "false"})
+    add(tip, "Label", {"id": "DCITipTitle", "class": "DCITipTitle"})
+    add(tip, "Label", {"id": "DCITipText", "class": "DCITipText"})
+    header = add(box, "Panel", {"class": "DCIHeader"})
+    add(header, "Label", {"class": "DCITitle", "text": "Counter items"})
+    add(header, "Label", {"id": "DCIPatchBadge", "class": "DCIPatchBadge", "text": "PATCHED", "visible": "false"}, hover=True)
+    add(header, "Label", {"id": "DCISource", "class": "DCISource", "visible": "false"})
+    add(box, "Label", {"id": "DCIEmpty", "class": "DCIEmpty", "text": "Waiting for enemy lineup."})
     for index in range(ROWS):
-        row = ET.SubElement(box, "Panel", {"id": f"DCIRow{index}", "class": "DCIRow", "visible": "false"})
-        ET.SubElement(row, "Panel", {"class": "DCICategory"})
-        details = ET.SubElement(row, "Panel", {"class": "DCIDetails"})
-        line = ET.SubElement(details, "Panel", {"class": "DCIItemLine"})
-        ET.SubElement(line, "Label", {"id": f"DCIName{index}", "class": "DCIName"})
-        cost = ET.SubElement(line, "Panel", {"class": "DCICost"})
-        ET.SubElement(cost, "Panel", {"class": "DCISoul"})
-        ET.SubElement(cost, "Label", {"id": f"DCIPrice{index}", "class": "DCIPrice"})
-        ET.SubElement(details, "Label", {"id": f"DCIReason{index}", "class": "DCIReason"})
-        evidence = ET.SubElement(details, "Panel", {"class": "DCIEvidenceLine"})
-        ET.SubElement(evidence, "Label", {"id": f"DCIEvidence{index}", "class": "DCIEvidence"})
-        ET.SubElement(evidence, "Label", {"id": f"DCIImpact{index}", "class": "DCIImpact"})
+        row = add(box, "Panel", {"id": f"DCIRow{index}", "class": "DCIRow", "visible": "false"})
+        add(row, "Panel", {"class": "DCICategory"})
+        details = add(row, "Panel", {"class": "DCIDetails"})
+        line = add(details, "Panel", {"class": "DCIItemLine"})
+        add(line, "Label", {"id": f"DCIName{index}", "class": "DCIName"})
+        add(line, "Label", {"id": f"DCIPatch{index}", "class": "DCIPatch", "text": "!", "visible": "false"}, hover=True)
+        add(line, "Label", {"id": f"DCIBuy{index}", "class": "DCIBuy", "text": "BUY NOW", "visible": "false"})
+        cost = add(line, "Panel", {"class": "DCICost"})
+        add(cost, "Panel", {"class": "DCISoul"})
+        add(cost, "Label", {"id": f"DCIPrice{index}", "class": "DCIPrice"})
+        add(details, "Label", {"id": f"DCIReason{index}", "class": "DCIReason"})
+        evidence = add(details, "Panel", {"class": "DCIEvidenceLine"})
+        add(evidence, "Label", {"id": f"DCIEvidence{index}", "class": "DCIEvidence"})
+        add(evidence, "Label", {"id": f"DCIImpact{index}", "class": "DCIImpact"})
     return ET.tostring(root, encoding="unicode")
 
 
@@ -94,11 +104,12 @@ def pack_vpk(resources):
 
 
 def build(stock, catalog_path, output, counters_path=ROOT / "src" / "counters.json",
-          stats_path=ROOT / "src" / "stats.json"):
+          stats_path=ROOT / "src" / "stats.json", patches_path=ROOT / "src" / "patches.json"):
     src = ROOT / "src"
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     counters = json.loads(counters_path.read_text(encoding="utf-8"))
     stats = json.loads(stats_path.read_text(encoding="utf-8"))
+    patches = json.loads(patches_path.read_text(encoding="utf-8"))
     sources = [
         ("panorama/layout/hud.xml", patch_hud(stock)),
         ("panorama/styles/dci_hud.css", (src / "hud.css").read_text(encoding="utf-8")),
@@ -107,6 +118,7 @@ def build(stock, catalog_path, output, counters_path=ROOT / "src" / "counters.js
     script += f"var DCI_CATALOG = {json.dumps(catalog, separators=(',', ':'), ensure_ascii=True)};\n"
     script += f"var DCI_COUNTERS = {json.dumps(counters, separators=(',', ':'), ensure_ascii=True)};\n"
     script += f"var DCI_STATS = {json.dumps(stats, separators=(',', ':'), ensure_ascii=True)};\n"
+    script += f"var DCI_PATCHES = {json.dumps(patches, separators=(',', ':'), ensure_ascii=True)};\n"
     for filename in ("engine.js", "observer.js", "hud.js"):
         script += (src / filename).read_text(encoding="utf-8") + "\n"
     sources.append(("panorama/scripts/dci_hud.vts", script))

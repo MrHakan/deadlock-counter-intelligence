@@ -2,10 +2,12 @@
 
 (function () {
   var context = $.GetContextPanel();
-  var engine = DCIEngine.create(DCI_CATALOG, DCI_COUNTERS, typeof DCI_STATS === "undefined" ? null : DCI_STATS);
+  var engine = DCIEngine.create(DCI_CATALOG, DCI_COUNTERS, typeof DCI_STATS === "undefined" ? null : DCI_STATS,
+    typeof DCI_PATCHES === "undefined" ? null : DCI_PATCHES);
   var ROWS = 4;
   var text = {
     roster: "Enemy lineup",
+    lane: "Lane phase",
     waiting: "Waiting for enemy lineup.",
     noMatch: "No reference builds for this lineup.",
     error: "Counter item data unavailable.",
@@ -13,12 +15,18 @@
     more: " more",
   };
   var ALERT_SECONDS = 8;
+  var LANE_SECONDS = 600;
   var view = null;
   var previous = "";
   var reportedError = false;
   var match = "";
   var alerted = Object.create(null);
   var alertRemaining = 0;
+  var owned = Object.create(null); // items the local player bought this match
+  var inputs = "";
+  var rows = [];
+  var badgeNotes = DCIEngine.formatNotes([]); // tooltip of the PATCHED badge
+  var rowNotes = [];                          // tooltip of each row's ! icon
 
   function findView() {
     var root = context.FindChildTraverse("DCIVisibility");
@@ -33,44 +41,79 @@
         reason: row.FindChildTraverse("DCIReason" + i),
         evidence: row.FindChildTraverse("DCIEvidence" + i),
         impact: row.FindChildTraverse("DCIImpact" + i),
+        buy: row.FindChildTraverse("DCIBuy" + i),
+        patch: row.FindChildTraverse("DCIPatch" + i),
       });
     }
-    return {
+    var found = {
       root: root, rows: rows, source: root.FindChildTraverse("DCISource"),
       empty: root.FindChildTraverse("DCIEmpty"),
       alert: root.FindChildTraverse("DCIAlert"),
       alertTitle: root.FindChildTraverse("DCIAlertTitle"),
       alertText: root.FindChildTraverse("DCIAlertText"),
+      badge: root.FindChildTraverse("DCIPatchBadge"),
+      tip: root.FindChildTraverse("DCITip"),
+      tipTitle: root.FindChildTraverse("DCITipTitle"),
+      tipText: root.FindChildTraverse("DCITipText"),
     };
+    // Hovering a patch icon shows what changed in a tooltip at the top of the panel.
+    hover(found, found.badge, function () { return badgeNotes; });
+    rows.forEach(function (row, index) {
+      hover(found, row.patch, function () { return rowNotes[index]; });
+    });
+    return found;
+  }
+
+  function hover(found, panel, notes) {
+    if (!panel || !panel.SetPanelEvent) return;
+    panel.SetPanelEvent("onmouseover", function () {
+      var content = notes();
+      if (!content || !content.text) return;
+      found.tipTitle.text = content.title;
+      found.tipText.text = content.text;
+      found.tip.visible = true;
+    });
+    panel.SetPanelEvent("onmouseout", function () { found.tip.visible = false; });
   }
 
   function showEmpty(message) {
     view.source.visible = false;
+    view.badge.visible = false;
+    view.tip.visible = false;
     view.empty.text = message;
     view.empty.visible = true;
     view.rows.forEach(function (row) { row.panel.visible = false; });
   }
 
-  function display(recommendations) {
+  function display(recommendations, laning, buy, souls) {
     view.empty.visible = false;
-    view.source.text = text.roster;
+    view.badge.visible = badgeNotes.text !== "";
+    view.source.text = laning ? text.lane : text.roster;
     view.source.visible = true;
 
     view.rows.forEach(function (row, index) {
       var item = recommendations[index];
       row.panel.visible = !!item;
       if (!item) return;
+      var known = typeof souls === "number";
+      row.panel.SetHasClass("DCIBuyNow", index === buy);
+      row.panel.SetHasClass("DCIExpensive", known && item.cost > souls);
+      row.buy.visible = index === buy;
       ["weapon", "vitality", "spirit"].forEach(function (category) {
         row.panel.SetHasClass("DCI" + category.charAt(0).toUpperCase() + category.slice(1),
           item.category === category);
       });
       row.panel.SetHasClass("DCIShared", item.score > 1);
       row.panel.SetHasClass("DCIDataPick", item.source === "data");
+      row.panel.SetHasClass("DCILanePick", item.source === "lane");
       row.name.text = item.name;
       row.price.text = String(item.cost).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
       row.reason.text = item.reason;
       row.evidence.text = item.evidence;
-      row.impact.text = DCIEngine.formatImpact(item.impact);
+      row.impact.text = DCIEngine.formatStats(item);
+      // The badge covers changed enemy heroes; a row's icon means the item itself changed.
+      rowNotes[index] = DCIEngine.formatNotes(engine.patchNotes([item.key]));
+      row.patch.visible = rowNotes[index].text !== "";
       row.impact.visible = row.impact.text !== "";
       row.impact.SetHasClass("DCIImpactUp", item.impact >= 10);
       row.impact.SetHasClass("DCIImpactDown", item.impact <= -10);
@@ -101,6 +144,7 @@
 
     var shopOpen = view.root.BHasClass("gShopOpen");
     if (!shopOpen && !view.root.BHasClass("gScoreboardOpen")) {
+      view.tip.visible = false;
       if (previous) showEmpty(text.waiting);
       previous = "";
       return 1;
@@ -112,17 +156,36 @@
       if (lineup !== match) {
         match = lineup;
         alerted = Object.create(null);
+        owned = Object.create(null);
       }
       notify(engine.threats(observed.purchases, observed.allies || [], observed.self));
+      (observed.owned || []).concat(observed.mine || []).forEach(function (item) { owned[item] = true; });
     }
 
-    var recommendations = engine.recommend(observed.heroes, ROWS - 1);
-    var extra = engine.dataPick(observed.heroes, recommendations.map(function (item) { return item.key; }));
-    if (extra) recommendations.push(extra);
+    // Suggestions change only with the lineup, the lane phase and owned items; souls only move the
+    // "buy now" badge, so the ranking is not recomputed on every tick.
+    var lane = observed.lane || [];
+    var laning = lane.length > 0 && typeof observed.clock === "number" && observed.clock < LANE_SECONDS;
+    var exclude = Object.keys(owned).sort();
+    var key = observed.heroes.join(",") + "|" + (laning ? lane.join(",") : "") + "|" + exclude.join(",");
+    if (key !== inputs) {
+      inputs = key;
+      var patched = engine.patchedHeroes(observed.heroes);
+      badgeNotes = DCIEngine.formatNotes(engine.patchNotes(patched));
+      if (view.badge) view.badge.text = patched.length > 1 ? patched.length + " PATCHED" : "PATCHED";
+      rows = engine.recommend(observed.heroes, ROWS - 1, exclude);
+      var shown = rows.map(function (item) { return item.key; }).concat(exclude);
+      var extra = laning ? engine.lanePick(lane, shown) : null;
+      if (!extra) extra = engine.dataPick(observed.heroes, shown);
+      if (extra) rows.push(extra);
+    }
+    var souls = typeof observed.souls === "number" ? observed.souls : null;
+    var buy = engine.buyNow(rows, souls);
+    var affordable = rows.map(function (item) { return souls !== null && item.cost <= souls ? 1 : 0; }).join("");
     var emptyMessage = observed.heroes.length ? text.noMatch : text.waiting;
-    var signature = recommendations.length ? JSON.stringify(recommendations) : emptyMessage;
+    var signature = rows.length ? inputs + "|" + laning + "|" + buy + "|" + affordable : emptyMessage;
     if (signature !== previous) {
-      if (recommendations.length) display(recommendations);
+      if (rows.length) display(rows, laning, buy, souls);
       else showEmpty(emptyMessage);
       previous = signature;
     }

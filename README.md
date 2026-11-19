@@ -1,20 +1,30 @@
 # Deadlock Counter Intelligence
 
-An experimental Panorama HUD for Deadlock Mod Manager. Open the scoreboard or shop to see:
+An experimental Panorama HUD for Deadlock. Open the scoreboard or shop to see:
 
-- **Counter items for the enemy lineup.** The three items from the reference counter table that answer the most enemy heroes, with soul price, item category, what the item does against them (for example *Anti-heal* or *CC immunity*), and the enemy heroes it counters.
-- **What match data says.** Each row shows the estimated change in the buyer's win rate against the current lineup, measured from recent matches. A fourth row adds the item with the largest measured gain against the lineup that the table does not already suggest.
+- **Counter items for the enemy lineup.** The three items from the reference counter table that answer the most enemy heroes, with soul price, item category, what the item does against them (for example *Anti-heal* or *CC immunity*), and the enemy heroes it counters. Items you already bought this match are left out.
+- **What to buy now.** A **BUY NOW** badge marks the first suggestion your souls can pay for, and prices you cannot reach yet turn grey.
+- **What match data says.** Each row shows the estimated change in the buyer's win rate against the current lineup and the minute the item is usually bought, for example `+0.6 WR · ~14m`. A fourth row adds the item with the largest measured gain against the lineup that the table does not already suggest.
+- **Lane counters.** For the first ten minutes the fourth row switches to the best early item against the enemies in your lane.
+- **Patch warnings.** When a game patch changes an enemy hero after the counter table was last reviewed, a **PATCHED** badge appears next to the title; when it changes a suggested item, that row gets a **!** mark. Hover either one to see what changed, taken from Valve's patch notes or, when Valve changed values without notes, from the game data. The warnings stay until the counters are reviewed for that patch.
 - **Enemy counter-purchase alerts.** When an enemy buys an item from the counter list of a hero on your team, a banner names the buyer, the item, and the allies it counters. It stays up for 8 seconds and turns red when the item counters your own hero. Each enemy purchase alerts once per match.
 
 ## Reference counter table
 
-`src/counters.json` holds five counter items for each of 42 heroes, taken from the *Counter Eşyalar: kime karşı ne alınır?* series, and a short tag per item written from the in-game item description. Each item counts once for every enemy hero whose list includes it. Ties go to the item with the larger measured win-rate gain against the lineup, then to the item listed earlier, then to the cheaper item. Pocket and Rat King are not in the series. They add nothing to the table or to alerts, but match data still covers them.
+`src/counters.json` holds five counter items for every hero, with a short tag per item written from the in-game item description. For 42 heroes they come from the *Counter Eşyalar: kime karşı ne alınır?* series. Pocket and Rat King are not in the series. Their lists come from [Deadlock Item Builder's counter guides](https://deadlockitembuilder.com/counter/pocket), keeping the picks that match data does not contradict, and `otherSources` in the file records how each was chosen. Each item counts once for every enemy hero whose list includes it. Ties go to the item with the larger measured win-rate gain against the lineup, then to the item listed earlier, then to the cheaper item.
 
 To change the reference, edit the item class names in `src/counters.json`. The tests check that every entry exists in the catalog and has a tag.
 
+`reviewed` in the same file records the date the table was last checked against the game and the game build whose data it was checked against, with a later date and build for heroes checked since. `tools/patch_notes.py` collects two kinds of changes into `src/patches.json`:
+
+- **Patch notes.** Every gameplay patch published after the review date, read from deadlock-api's copy of Valve's posts. The tool keeps the lines of the form `- <Hero or item>: <change>`.
+- **Changes without patch notes.** Valve sometimes changes values without saying so: build 6833, between the 10-30 and 11-04 updates, raised Spiritual Overflow's spirit lifesteal from 13% to 15%, and no post mentions it. The tool compares the hero, ability, weapon and item values of the reviewed build with those of the current build, as deadlock-api reads them from each build's game files. Every hero or item whose values changed and that no patch note already warns about is listed under *an update without patch notes*, with lines such as `Sovereign's Decree - Bullet damage 5.7 → 5.8`. Abilities most heroes share, such as the jump, are left out, and so are weapon values the game computes from others, such as damage per second.
+
+Those heroes and items carry the PATCHED and **!** warnings. After checking a hero's counters against newer notes or data, set its date and build to the current ones and run the tool again, and its warnings disappear. Right now the series' lists are taken to match the 10-30-2026 update, whose data builds 6826 to 6829 carry. The 11-04-2026 changes to Apollo, Baba, Celeste, Deadman Danny, Mo & Krill, Nurse Harrow and Healbane are flagged, and so is Spiritual Overflow's unannounced change. Rat King and Pocket were checked against match data on build 6864. The 11-18-2026 update (builds 6863 and 6864) changed no hero, ability, weapon or item value and no interface file, so it adds no warnings. Its download was large because it rebuilt about 4,600 hero animation files and replaced Baba's ability effects. It also replaced `gameinfo.gi`, which turns mods off until the search paths are added again (`r` in dlmod).
+
 ## Match data
 
-`src/stats.json` is generated by `tools/update_counter_stats.py` from the public [deadlock-api](https://api.deadlock-api.com/docs) item statistics, using its `enemy_hero_ids` filter (ranked and unranked matches at all ranks, last 30 days). For each item and enemy hero it takes the item's win rate against that hero and subtracts:
+`src/stats.json` is generated by `tools/update_counter_stats.py` from the public [deadlock-api](https://api.deadlock-api.com/docs) item statistics, using its `enemy_hero_ids` filter (ranked and unranked matches at all ranks). The window starts at the latest gameplay patch: the tool reads the patch notes and takes the newest post that changes an item or a hero, so the numbers describe the items as they are now. The current window starts with the 11-04-2026 update, which nerfed Healbane a week after the 10-30 update changed 12 of the counter items. For each item and enemy hero it takes the item's win rate against that hero and subtracts:
 
 1. the item's win rate in all matches, which removes buyer bias (late items are bought by players who are already ahead);
 2. the change every buyer sees when that hero is on the enemy team, which removes the hero's overall strength;
@@ -22,7 +32,9 @@ To change the reference, edit the item class names in `src/counters.json`. The t
 
 Changes smaller than two standard errors count as zero, and items need 20,000 purchases against the hero. Steps 1 and 2 reproduce the per-hero numbers published by [Deadlock Academy](https://deadlockacademy.com/counter-items); step 3 is this project's addition. The HUD adds the values over the enemy lineup, which assumes the effects add up.
 
-`docs/counter-data.md` compares the table with the data for every hero. In the current window, 70 of the 210 reference picks raise the buyer's win rate measurably, 65 show no significant change, and 75 lower it. Defensive items bought in reaction to a hero that is already winning look worse than they are, so treat a negative value as "the data does not back this pick", not "the item is useless".
+Lane counters repeat the measurement for players in the same lane as the enemy hero (`same_lane_filter`), counting only items bought in the first ten minutes and costing at most 3,200 souls. The typical buy minute of each item is the average purchase time in the same matches.
+
+`docs/counter-data.md` compares the table with the data for every hero and lists the lane counters. In the current window, 70 of the 220 reference picks raise the buyer's win rate measurably, 92 show no significant change, and 58 lower it. Defensive items bought in reaction to a hero that is already winning look worse than they are, so treat a negative value as "the data does not back this pick", not "the item is useless".
 
 ## Research
 
@@ -33,9 +45,18 @@ Counter sites take one of two approaches, and this mod combines both:
 
 ## How it reads the game
 
-The suggestion panel sits above the minimap on the scoreboard and in the lower-left corner of the shop. Both teams' heroes come from the top bar, and the card marked as the local player identifies your hero. Enemy purchases come from the shop's recent-purchase list, which the mod reads every half second while the shop is open, so alerts appear when you open the shop. Purchases by allied heroes are ignored. When the enemy lineup changes, the mod treats it as a new match and clears its alert history.
+The suggestion panel sits above the minimap on the scoreboard and in the lower-left corner of the shop. Everything comes from what the game already shows you, mostly the top bar (panel names from Valve's interface files, as published by [GameTracking-Deadlock](https://github.com/SteamTracking/GameTracking-Deadlock)):
 
-The recommendation engine, HUD state changes, and archive format are covered by local tests. Loading the VPK in Deadlock Mod Manager and displaying it in Deadlock still require in-game verification. The HUD does not track full inventories or item sales.
+- Both teams' heroes come from the player cards. The card marked `LocalPlayer` is your hero, and enemy cards marked `IsInLocalPlayerLane` are your lane opponents.
+- Your souls come from your card's souls value (`{s:gold}`), and the match time from the top bar clock (`GameTime`).
+- Items you own come from your card's purchased-items panel (`mod_universal`) and from your own rows in the shop's recent-purchase list. The game creates the item icons at run time, so the mod tries the usual item-name properties and ignores anything that is not a known item.
+- Enemy purchases come from the shop's recent-purchase list, which the mod reads every half second while the shop is open, so alerts appear when you open the shop.
+
+The PATCHED badge and the **!** marks are the only parts of the panel that react to the mouse; everything else lets clicks through to the game. Hovering needs a mouse cursor, which the shop always has.
+
+When the enemy lineup changes, the mod treats it as a new match and clears its alert history and owned items. Suggestions are only recomputed when the lineup, the lane phase or your items change; souls only move the badge.
+
+The recommendation engine, HUD state changes, and archive format are covered by local tests. Displaying the HUD in Deadlock still requires in-game verification. If one of the panels above turns out to be named differently in game, its feature switches itself off: no badge without souls, no lane row without lane opponents, and owned items stay listed. The HUD does not track item sales.
 
 ## Install
 
@@ -43,7 +64,7 @@ Close Deadlock first, and use one install method only: two tools editing the sam
 
 ### With dlmod (no mod manager)
 
-`dlmod` is a 3 MB program in [`tools/dlmod`](tools/dlmod). It uses only Go's standard library and has no installer, background service, or network access. It finds Deadlock through Steam, copies mods into `game/citadel/addons` under free `pakNN_dir.vpk` names, and edits `gameinfo.gi` so the game loads that folder. It works with any VPK mod, not just this one.
+`dlmod` is a 3 MB program in [`tools/dlmod`](tools/dlmod). It uses only Go's standard library and has no installer or background service. It finds Deadlock through Steam, copies mods into `game/citadel/addons` under free `pakNN_dir.vpk` names, and edits `gameinfo.gi` so the game loads that folder. It works with any VPK mod, not just this one. Only `dlmod update` goes online; it uses the `curl` that comes with Windows 10 and later, which keeps dlmod half the size it would be with its own HTTPS code.
 
 1. From [GitHub Releases](https://github.com/MrHakan/deadlock-counter-intelligence/releases), download the HUD ZIP and `dlmod-windows-amd64.exe` (on Linux, `dlmod-linux-amd64`).
 2. Drag the ZIP onto `dlmod-windows-amd64.exe`.
@@ -59,7 +80,10 @@ Double-click dlmod to open its full-screen view of every mod, with its slot, fil
 | `Space` or `Enter` | Switch the selected mod on or off. It keeps its place in the list. |
 | Drag a file into the window | Install it straight away. `i` lets you type a path instead. |
 | `d` | Delete the selected mod, after a confirmation |
+| `f` | Profiles: switch to a saved set of mods, save the mods that are on now, or delete a profile |
+| `u` | Download the Counter Intelligence HUD for your game build and replace the old one (asks first) |
 | `r` | Repair `gameinfo.gi` after a game update |
+| `x` | Undo dlmod's `gameinfo.gi` change; mods stay installed but stop loading |
 | `p` | Start Deadlock through Steam |
 | `?` | Help |
 | `q` or `Esc` | Quit |
@@ -76,6 +100,8 @@ The full-screen view needs about 5–8 MB of memory. While it waits it checks fo
 | `dlmod remove <mod>` | Delete a mod. |
 | `dlmod patch` / `dlmod unpatch` | Add or remove dlmod's `gameinfo.gi` lines. `unpatch` restores Valve's file exactly. |
 | `dlmod play` | Patch if needed, then start Deadlock through Steam. |
+| `dlmod update` | Download the Counter Intelligence HUD built for the installed game build from GitHub Releases, check it against GitHub's published SHA-256, and install it in place of the old version. |
+| `dlmod profile save <name>` / `use <name>` / `delete <name>` | Remember which mods are on, switch on exactly that set later (everything else is switched off, not deleted), or forget a profile. `dlmod profile` lists them. |
 
 `<mod>` is a number from `dlmod list`, a slot such as `pak03`, or part of the mod's name. dlmod finds the game through Steam's library folders. If it cannot, pass `-game "D:\SteamLibrary\steamapps\common\Deadlock"`. It keeps its list of mods, switched-off mods, and a copy of the previous `gameinfo.gi` in `game/dlmod`, which the game never reads.
 
@@ -129,6 +155,8 @@ py -3 tools/build.py --deadlock-dir "C:\Program Files (x86)\Steam\steamapps\comm
 
 If you already have the extracted stock layout, use `--hud-xml path/to/hud.xml`. [GameTracking-Deadlock](https://github.com/SteamTracking/GameTracking-Deadlock/blob/master/game/citadel/pak01_dir/panorama/layout/hud.xml) publishes it for the live build. The build produces `dist/deadlock-counter-intelligence-experimental.zip` with one `pak01_dir.vpk` inside.
 
+`.github/workflows/game-update.yml` runs every day. When Deadlock's client build changes, it refreshes the catalog, the match data and the patch warnings (from the notes and from the game data), runs every test, builds the mod against the new stock HUD, commits the update to `main`, and starts the release workflow for the next patch version, so a HUD for the new build is usually available within a day of a game update. If deadlock-api does not have the new build yet, it tries again the next day; if a test or the build fails, nothing is released. It can also be run from the Actions tab.
+
 `.github/workflows/release.yml` publishes releases. It runs when a `v*` tag is pushed, or from the Actions tab: choose **Release → Run workflow** and enter a version such as `v0.2.0`, and it creates the tag on the commit it builds. It runs the tests, builds the ZIP from the GameTracking layout (and stops if that layout is from a different build than the catalog), builds dlmod for Windows and Linux, and publishes a release with the notes in `.github/release-notes/<version>.md`.
 
 ## Catalog and tests
@@ -138,15 +166,16 @@ The bundled catalog targets Deadlock client build **6864** and contains 173 shop
 ```sh
 python tools/update_catalog.py 6864
 python tools/update_counter_stats.py
+python tools/patch_notes.py
 node --test test/intelligence.test.js
 python -m unittest discover -s test -v
 ```
 
-`update_counter_stats.py` makes 45 API requests and takes a few minutes. Pass `--cache DIR` to keep the raw responses and regenerate without downloading again.
+`update_counter_stats.py` makes 90 API requests and takes a few minutes. Pass `--cache DIR` to keep the raw responses and regenerate without downloading again. `patch_notes.py` downloads the hero and item data of the reviewed and the current build, about 17 MB; `--notes-only` skips that comparison.
 
 Ambiguous labels are skipped. During a match, the mod works from the visible HUD and the bundled catalog, counter table, and match data. It makes no network requests.
 
-For in-game verification, use a clean Mod Manager profile and a private lobby. Check that the suggestions match the enemy lineup, that the fourth row shows a match-data pick, that an enemy buying an item from an ally's counter list (for example Healbane against Infernus) shows the banner, that an allied purchase is ignored, and that disabling the mod restores the stock HUD.
+For in-game verification, use a private lobby. Check that the suggestions match the enemy lineup, that the fourth row shows a lane pick before minute 10 and a match-data pick after it, that the BUY NOW badge follows your souls, that an item you buy disappears from the suggestions, that hovering PATCHED (for example with Celeste or Baba on the enemy team) shows their changes and that the panel does not block clicks in the shop, that an enemy buying an item from an ally's counter list (for example Healbane against Infernus) shows the banner, that an allied purchase is ignored, and that disabling the mod restores the stock HUD.
 
 ## References
 

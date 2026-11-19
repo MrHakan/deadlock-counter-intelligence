@@ -50,8 +50,9 @@ type Mod struct {
 }
 
 type Manifest struct {
-	NextID int    `json:"nextId"`
-	Mods   []*Mod `json:"mods"`
+	NextID   int              `json:"nextId"`
+	Mods     []*Mod           `json:"mods"`
+	Profiles map[string][]int `json:"profiles,omitempty"` // profile name -> IDs of the mods it switches on
 }
 
 // Entry is one mod: a filled slot in citadel/addons, or a switched-off mod in dlmod's folder.
@@ -162,6 +163,13 @@ func (s *Store) save() error {
 		}
 	}
 	s.manifest.Mods = kept
+	known := map[int]bool{}
+	for _, mod := range kept {
+		known[mod.ID] = true
+	}
+	for name, ids := range s.manifest.Profiles {
+		s.manifest.Profiles[name] = slices.DeleteFunc(ids, func(id int) bool { return !known[id] })
+	}
 	if err := os.MkdirAll(s.game.StateDir(), 0o755); err != nil {
 		return err
 	}
