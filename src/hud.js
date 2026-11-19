@@ -68,6 +68,13 @@
     return found;
   }
 
+  // A GlobalClassListener puts the global classes it lists on its parent panel, not on itself, so
+  // the shop and scoreboard modes are read from the parent (and from the listener, in case).
+  function mode(name) {
+    var parent = view.root.GetParent && view.root.GetParent();
+    return view.root.BHasClass(name) || !!(parent && parent.IsValid() && parent.BHasClass(name));
+  }
+
   function hover(found, panel, notes) {
     if (!panel || !panel.SetPanelEvent) return;
     panel.SetPanelEvent("onmouseover", function () {
@@ -146,8 +153,8 @@
     }
     if (!view) return 1;
 
-    var shopOpen = view.root.BHasClass("gShopOpen");
-    if (!shopOpen && !view.root.BHasClass("gScoreboardOpen")) {
+    var shopOpen = mode("gShopOpen");
+    if (!shopOpen && !mode("gScoreboardOpen")) {
       setShown(view.tip, false);
       if (previous) showEmpty(text.waiting);
       previous = "";
@@ -217,5 +224,6 @@
     }
   }
 
+  $.Msg("[DCI] Counter items HUD loaded");
   $.Schedule(0, function () { tick(0); });
 })();
