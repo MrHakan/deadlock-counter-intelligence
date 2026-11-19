@@ -1,10 +1,21 @@
 # Deadlock Counter Intelligence
 
-An experimental Panorama HUD for Deadlock Mod Manager. Open the scoreboard or shop to see up to three counter-item suggestions with their soul prices, the effect that makes each item useful, and the enemy hero or purchase that prompted it.
+An experimental Panorama HUD for Deadlock Mod Manager. It does two things:
 
-The panel sits above the minimap on the scoreboard and in the lower-left corner of the shop. It uses Deadlock's category and soul icons. While the shop is open, the mod checks its visible recent-purchase list every half second and matches those entries to the enemy lineup. When purchase evidence is unavailable, suggestions use the visible enemy lineup.
+- **Counter items for the enemy lineup.** Open the scoreboard or shop to see the three counter items that answer the most enemy heroes, with soul price, item category, and the enemy heroes each item counters.
+- **Enemy counter-purchase alerts.** When an enemy buys an item that is on the counter list of a hero on your team, a banner names the buyer, the item, and the allies it counters. It stays up for 8 seconds and turns red when the item counters your own hero. Each enemy purchase alerts once per match.
 
-The recommendation engine, HUD state changes, and archive format are covered by local tests. Loading the VPK in Deadlock Mod Manager and displaying it in Deadlock still require in-game verification. Purchases are observations from the shop list. The HUD does not track full inventories or item sales.
+## Reference counter table
+
+Suggestions come from `src/counters.json`: five counter items for each of 42 heroes, taken from the *Counter Eşyalar: kime karşı ne alınır?* series. Each item counts once for every enemy hero whose list includes it. Ties go to the item listed earlier on those heroes' lists, then to the cheaper item. Pocket and Rat King are not in the series, so they add nothing to suggestions or alerts.
+
+To change the reference, edit the item class names in `src/counters.json`. The tests check that every entry exists in the catalog.
+
+## How it reads the game
+
+The suggestion panel sits above the minimap on the scoreboard and in the lower-left corner of the shop. Both teams' heroes come from the top bar, and the card marked as the local player identifies your hero. Enemy purchases come from the shop's recent-purchase list, which the mod reads every half second while the shop is open, so alerts appear when you open the shop. Purchases by allied heroes are ignored. When the enemy lineup changes, the mod treats it as a new match and clears its alert history.
+
+The recommendation engine, HUD state changes, and archive format are covered by local tests. Loading the VPK in Deadlock Mod Manager and displaying it in Deadlock still require in-game verification. The HUD does not track full inventories or item sales.
 
 ## Install
 
@@ -26,7 +37,7 @@ If you already have the extracted stock layout, use `--hud-xml path/to/hud.xml`.
 
 ## Catalog and tests
 
-The bundled catalog targets Deadlock client build **6861** and contains 173 shop items and 44 hero records. The HUD displays English names. Localized aliases help match item and hero names read from the game client. When targeting a new build, refresh the catalog and use the stock HUD from that build.
+The bundled catalog targets Deadlock client build **6861** and contains 173 shop items, with price and shop category, and 44 hero records. The HUD displays English names. Turkish aliases help match item and hero names read from the game client. When targeting a new build, refresh the catalog and use the stock HUD from that build.
 
 ```sh
 python tools/update_catalog.py 6861
@@ -34,9 +45,9 @@ node --test test/intelligence.test.js
 python -m unittest discover -s test -v
 ```
 
-The initial rules cover healing, bullet damage, spirit damage, and airborne targets. Ambiguous labels are skipped. Shop observations expire when the shop closes. During a match, the mod works from the visible HUD and the bundled catalog.
+Ambiguous labels are skipped. During a match, the mod works from the visible HUD, the bundled catalog, and the counter table.
 
-For in-game verification, use a clean Mod Manager profile and a private lobby. Check that a visible enemy purchase changes a relevant recommendation, an allied purchase is ignored, and disabling the mod restores the stock HUD.
+For in-game verification, use a clean Mod Manager profile and a private lobby. Check that the suggestions match the enemy lineup, that an enemy buying an item from an ally's counter list (for example Healbane against Infernus) shows the banner, that an allied purchase is ignored, and that disabling the mod restores the stock HUD.
 
 ## References
 

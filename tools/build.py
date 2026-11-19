@@ -45,6 +45,9 @@ def patch_hud(stock):
     listener = ET.SubElement(hud, "GlobalClassListener", id="DCIVisibility",
                              classes="gScoreboardOpen gShopOpen", hittest="false",
                              hittestchildren="false")
+    alert = ET.SubElement(listener, "Panel", {"id": "DCIAlert", "class": "DCIAlert"})
+    ET.SubElement(alert, "Label", {"id": "DCIAlertTitle", "class": "DCIAlertTitle", "text": "Enemy counter purchase"})
+    ET.SubElement(alert, "Label", {"id": "DCIAlertText", "class": "DCIAlertText"})
     box = ET.SubElement(listener, "Panel", {"class": "DCIBox"})
     header = ET.SubElement(box, "Panel", {"class": "DCIHeader"})
     ET.SubElement(header, "Label", {"class": "DCITitle", "text": "Counter items"})
@@ -87,15 +90,17 @@ def pack_vpk(resources):
     return struct.pack("<7I", 0x55AA1234, 2, len(tree), len(data), 0, 0, 0) + tree + data
 
 
-def build(stock, catalog_path, output):
+def build(stock, catalog_path, output, counters_path=ROOT / "src" / "counters.json"):
     src = ROOT / "src"
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    counters = json.loads(counters_path.read_text(encoding="utf-8"))
     sources = [
         ("panorama/layout/hud.xml", patch_hud(stock)),
         ("panorama/styles/dci_hud.css", (src / "hud.css").read_text(encoding="utf-8")),
     ]
     script = '"use strict";\n'
     script += f"var DCI_CATALOG = {json.dumps(catalog, separators=(',', ':'), ensure_ascii=True)};\n"
+    script += f"var DCI_COUNTERS = {json.dumps(counters, separators=(',', ':'), ensure_ascii=True)};\n"
     for filename in ("engine.js", "observer.js", "hud.js"):
         script += (src / filename).read_text(encoding="utf-8") + "\n"
     sources.append(("panorama/scripts/dci_hud.vts", script))

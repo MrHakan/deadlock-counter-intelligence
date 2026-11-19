@@ -1,37 +1,6 @@
 "use strict";
 
 var DCIEngine = (function () {
-  var rules = [
-    {
-      counter: "upgrade_healbane",
-      category: "vitality",
-      heroes: ["hero_atlas", "hero_ghost", "hero_kelvin"],
-      items: ["upgrade_healing_booster", "upgrade_health_nova", "upgrade_healbuff", "upgrade_health_stealing_magic"],
-      reason: "Spirit damage reduces incoming healing.",
-    },
-    {
-      counter: "upgrade_metal_skin",
-      category: "vitality",
-      heroes: ["hero_haze", "hero_wraith"],
-      items: ["upgrade_ricochet", "upgrade_glass_cannon", "upgrade_intensifying_clip", "upgrade_burst_fire"],
-      reason: "Briefly blocks bullet damage on use.",
-    },
-    {
-      counter: "upgrade_spirit_bubble",
-      category: "vitality",
-      heroes: ["hero_bebop", "hero_gigawatt"],
-      items: ["upgrade_magic_burst", "upgrade_boundless_spirit", "upgrade_spirit_burn"],
-      reason: "Adds a shield against spirit damage.",
-    },
-    {
-      counter: "upgrade_target_stun",
-      category: "spirit",
-      heroes: ["hero_hornet", "hero_orion"],
-      items: [],
-      reason: "Stuns airborne targets for longer.",
-    },
-  ];
-
   function normalize(text) {
     return typeof text === "string" ? text.trim().toLowerCase().replace(/[’‘]/g, "'") : "";
   }
@@ -52,64 +21,109 @@ var DCIEngine = (function () {
     };
   }
 
-  function create(catalog) {
+  function names(keys, rows) {
+    return keys.map(function (key) { return rows[key][2]; }).join(" · ");
+  }
+
+  function create(catalog, counters) {
     var heroes = index(catalog.heroes);
     var items = index(catalog.items);
+    var table = Object.create(null);
+    Object.keys(counters.heroes).forEach(function (hero) {
+      if (!heroes.keys[hero]) return;
+      table[hero] = counters.heroes[hero].filter(function (item) { return items.keys[item]; });
+    });
 
-    function recommend(enemyHeroes, purchases) {
-      var enemies = Object.create(null);
-      enemyHeroes.forEach(function (hero) {
-        if (heroes.keys[hero]) enemies[hero] = true;
+    function unique(list) {
+      return list.filter(function (hero, position) {
+        return heroes.keys[hero] && list.indexOf(hero) === position;
       });
-
-      return rules.map(function (rule) {
-        var counter = items.keys[rule.counter];
-        if (!counter) return null;
-
-        var threats = rule.heroes.filter(function (hero) { return enemies[hero]; });
-        var signals = Object.create(null);
-        purchases.forEach(function (purchase) {
-          if (enemies[purchase.hero] && items.keys[purchase.item] && rule.items.indexOf(purchase.item) !== -1) {
-            signals[purchase.hero + "/" + purchase.item] = purchase;
-          }
-        });
-        var distinct = Object.keys(signals).sort().map(function (key) { return signals[key]; });
-        var score = threats.length + 3 * distinct.length;
-        if (!score) return null;
-
-        return {
-          key: rule.counter,
-          name: counter[2],
-          cost: counter[4],
-          category: rule.category,
-          purchaseBased: distinct.length > 0,
-          score: score,
-          reason: rule.reason,
-          evidence: distinct.length
-            ? heroes.keys[distinct[0].hero][2] + " · " + items.keys[distinct[0].item][2]
-            : heroes.keys[threats[0]][2],
-        };
-      }).filter(Boolean).sort(function (a, b) {
-        return b.score - a.score || a.cost - b.cost || (a.key < b.key ? -1 : 1);
-      }).slice(0, 3);
     }
 
-    return { heroKey: heroes.lookup, itemKey: items.lookup, recommend: recommend };
+    // Rank the reference counter items by how many enemy heroes they answer.
+    function recommend(enemyHeroes, limit) {
+      var picks = Object.create(null);
+      unique(enemyHeroes).forEach(function (hero) {
+        (table[hero] || []).forEach(function (item, position) {
+          var pick = picks[item] || (picks[item] = { heroes: [], rank: 0 });
+          pick.heroes.push(hero);
+          pick.rank += position;
+        });
+      });
+
+      return Object.keys(picks).map(function (key) {
+        var row = items.keys[key];
+        var pick = picks[key];
+        return {
+          key: key,
+          name: row[2],
+          cost: row[4],
+          category: row[5],
+          score: pick.heroes.length,
+          rank: pick.rank,
+          heroes: pick.heroes,
+          reason: pick.heroes.length === 1 ? "Counters 1 enemy" : "Counters " + pick.heroes.length + " enemies",
+          evidence: names(pick.heroes, heroes.keys),
+        };
+      }).sort(function (a, b) {
+        return b.score - a.score || a.rank - b.rank || a.cost - b.cost || (a.key < b.key ? -1 : 1);
+      }).slice(0, limit || 3);
+    }
+
+    // Enemy purchases that appear in the reference counter list of an allied hero.
+    function threats(purchases, allyHeroes, self) {
+      var allies = unique(allyHeroes);
+      var seen = Object.create(null);
+      var result = [];
+      purchases.forEach(function (purchase) {
+        var buyer = heroes.keys[purchase.hero];
+        var item = items.keys[purchase.item];
+        var key = purchase.hero + "/" + purchase.item;
+        if (!buyer || !item || seen[key] || allies.indexOf(purchase.hero) !== -1) return;
+        seen[key] = true;
+        var targets = allies.filter(function (hero) {
+          return (table[hero] || []).indexOf(purchase.item) !== -1;
+        });
+        if (!targets.length) return;
+        var targetsYou = targets.indexOf(self) !== -1;
+        if (targetsYou) targets = [self].concat(targets.filter(function (hero) { return hero !== self; }));
+        var labels = targets.map(function (hero) { return heroes.keys[hero][2]; });
+        if (targetsYou) labels[0] = "you (" + labels[0] + ")";
+        result.push({
+          key: key,
+          buyer: buyer[2],
+          item: item[2],
+          targets: targets,
+          targetsYou: targetsYou,
+          text: buyer[2] + " bought " + item[2] + " — counters " + labels.join(", "),
+        });
+      });
+      return result.sort(function (a, b) { return b.targetsYou - a.targetsYou; });
+    }
+
+    return {
+      heroKey: heroes.lookup,
+      itemKey: items.lookup,
+      counters: function (hero) { return (table[hero] || []).slice(); },
+      recommend: recommend,
+      threats: threats,
+    };
   }
 
-  function validateRules(catalog) {
+  function validate(catalog, counters) {
     var items = index(catalog.items).keys;
     var heroes = index(catalog.heroes).keys;
-    return rules.reduce(function (missing, rule) {
-      return missing.concat([rule.counter].concat(rule.items).filter(function (key) {
-        return !items[key];
-      }), rule.heroes.filter(function (key) {
-        return !heroes[key];
-      }));
-    }, []);
+    var missing = [];
+    Object.keys(counters.heroes).forEach(function (hero) {
+      if (!heroes[hero]) missing.push(hero);
+      counters.heroes[hero].forEach(function (item) {
+        if (!items[item] && missing.indexOf(item) === -1) missing.push(item);
+      });
+    });
+    return missing;
   }
 
-  return { create: create, validateRules: validateRules };
+  return { create: create, validate: validate };
 })();
 
 if (typeof module !== "undefined") module.exports = DCIEngine;

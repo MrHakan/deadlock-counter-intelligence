@@ -75,6 +75,7 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(root.find(".//*[@class='DCITitle']").get("text"), "Counter items")
         self.assertIsNotNone(root.find(".//*[@id='DCIPrice2']"))
         self.assertEqual(root.find(".//*[@id='DCIRow2']").get("visible"), "false")
+        self.assertIsNotNone(root.find(".//*[@id='DCIAlertText']"))
 
     def test_patch_refuses_an_incompatible_or_already_patched_layout(self):
         with self.assertRaises(ValueError):
@@ -96,16 +97,20 @@ class PackagingTests(unittest.TestCase):
             ])
             self.assertIn("DCIVisibility", read_resource(resources["panorama/layout/hud.vxml_c"]))
             script = read_resource(resources["panorama/scripts/dci_hud.vts_c"])
-            self.assertIn('shop: "Recent purchases"', script)
+            self.assertIn('alertTitle: "Enemy counter purchase"', script)
+            self.assertIn('var DCI_COUNTERS = {"source"', script)
             self.assertNotIn("DCI_LANGUAGE", script)
             self.assertIn(".gShopOpen .DCIBox", read_resource(resources["panorama/styles/dci_hud.vcss_c"]))
 
     def test_catalog_requires_matching_locales_and_rejects_disabled_items(self):
-        english = [{"id": 1, "class_name": "item", "name": "Item", "shopable": True, "cost": 800},
+        english = [{"id": 1, "class_name": "item", "name": "Item", "shopable": True, "cost": 800,
+                    "item_slot_type": "spirit"},
                    {"id": 2, "class_name": "disabled", "name": "Disabled", "shopable": True, "disabled": True}]
         turkish = [dict(english[0], name="Eşya"), english[1]]
         items = merge(english, turkish, shops=True)
-        self.assertEqual(items, [[1, "item", "Item", "Eşya", 800]])
+        self.assertEqual(items, [[1, "item", "Item", "Eşya", 800, "spirit"]])
+        with self.assertRaises(ValueError):
+            merge(english, [dict(turkish[0], item_slot_type="weapon")], shops=True)
         with self.assertRaises(ValueError):
             merge(english, [dict(turkish[0], cost=1600)], shops=True)
         with tempfile.TemporaryDirectory() as tmp:

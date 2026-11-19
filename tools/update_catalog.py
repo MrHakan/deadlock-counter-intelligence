@@ -5,14 +5,16 @@ import json
 from pathlib import Path
 import tempfile
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 API = "https://api.deadlock-api.com/v1/assets"
+CATEGORIES = ("weapon", "vitality", "spirit")
 
 
 def fetch(path, version, language, **params):
     query = urlencode(dict(language=language, client_version=version, **params))
-    with urlopen(f"{API}/{path}?{query}", timeout=30) as response:
+    request = Request(f"{API}/{path}?{query}", headers={"User-Agent": "deadlock-counter-intelligence"})
+    with urlopen(request, timeout=30) as response:
         rows = json.load(response)
     if not isinstance(rows, list) or not rows:
         raise ValueError(f"No rows returned for {path} ({language})")
@@ -39,7 +41,10 @@ def merge(english, turkish, shops=False):
             cost = row["cost"]
             if type(cost) is not int or cost < 0 or cost != translated["cost"]:
                 raise ValueError(f"Invalid cost for {identifier}")
-            entry.append(cost)
+            slot = row.get("item_slot_type")
+            if slot not in CATEGORIES or slot != translated.get("item_slot_type"):
+                raise ValueError(f"Invalid category for {identifier}")
+            entry.extend([cost, slot])
         merged.append(entry)
     return merged
 
