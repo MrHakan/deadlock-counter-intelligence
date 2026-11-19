@@ -21,10 +21,15 @@ jobs:
         with:
           node-version: "22"
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
       - name: Run tests
         run: |
           node --test test/intelligence.test.js
           python -m unittest discover -s test -v
+          (cd tools/dlmod && go vet ./... && go test ./...)
 
       - name: Fetch the stock HUD for the catalog build
         run: |
@@ -42,6 +47,13 @@ jobs:
           python tools/build.py --hud-xml stock-hud.xml \
             --output "dist/deadlock-counter-intelligence-${BUILD}-hud-en.zip"
 
+      - name: Build dlmod
+        working-directory: tools/dlmod
+        run: |
+          flags="-s -w -X main.version=${GITHUB_REF_NAME}"
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$flags" -o ../../dist/dlmod-windows-amd64.exe .
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$flags" -o ../../dist/dlmod-linux-amd64 .
+
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -50,4 +62,4 @@ jobs:
           test -f "$notes" || { echo "::error::Missing $notes"; exit 1; }
           title=$(head -n 1 "$notes" | sed 's/^# //')
           tail -n +3 "$notes" > notes-body.md
-          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "$title" --notes-file notes-body.md
+          gh release create "$GITHUB_REF_NAME" dist/*.zip dist/dlmod-* --title "$title" --notes-file notes-body.md

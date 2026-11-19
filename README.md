@@ -39,11 +39,68 @@ The recommendation engine, HUD state changes, and archive format are covered by 
 
 ## Install
 
-1. Download the HUD ZIP from [GitHub Releases](https://github.com/MrHakan/deadlock-counter-intelligence/releases).
-2. Close Deadlock. In Deadlock Mod Manager v2.3.0, open **Mods Library → Add Local Mod** and import the ZIP.
-3. Enable the mod and launch Deadlock through Mod Manager.
+Close Deadlock first, and use one install method only: two tools editing the same game fight over `gameinfo.gi`.
 
-Use Mod Manager to disable or remove the mod. Other mods that replace `panorama/layout/hud.vxml_c` can conflict with this package.
+### With dlmod (no mod manager)
+
+`dlmod` is a 3 MB program in [`tools/dlmod`](tools/dlmod). It uses only Go's standard library and has no installer, background service, or network access. It finds Deadlock through Steam, copies mods into `game/citadel/addons` under free `pakNN_dir.vpk` names, and edits `gameinfo.gi` so the game loads that folder. It works with any VPK mod, not just this one.
+
+1. From [GitHub Releases](https://github.com/MrHakan/deadlock-counter-intelligence/releases), download the HUD ZIP and `dlmod-windows-amd64.exe` (on Linux, `dlmod-linux-amd64`).
+2. Drag the ZIP onto `dlmod-windows-amd64.exe`.
+3. Start Deadlock.
+
+Double-click dlmod to open its menu: install, switch mods on or off, remove, repair after a game update, and start the game. Deadlock updates and Steam's *Verify integrity of game files* replace `gameinfo.gi`, which turns all mods off. When that happens, choose **Repair** in the menu, or start the game with `dlmod play`, which repairs first.
+
+| Command | What it does |
+| --- | --- |
+| `dlmod <file.zip or .vpk>` | Install mods, including multi-part sets (`pakNN_000.vpk`). If a newer version changes the same files, dlmod offers to replace the old one in its slot. |
+| `dlmod list` | Show mods, conflicts between them, and whether the game loads mods. |
+| `dlmod off <mod>` / `dlmod on <mod>` | Move a mod out of `addons` without deleting it, and back. |
+| `dlmod remove <mod>` | Delete a mod. |
+| `dlmod patch` / `dlmod unpatch` | Add or remove dlmod's `gameinfo.gi` lines. `unpatch` restores Valve's file exactly. |
+| `dlmod play` | Patch if needed, then start Deadlock through Steam. |
+
+`<mod>` is a number from `dlmod list`, a slot such as `pak03`, or part of the mod's name. dlmod finds the game through Steam's library folders. If it cannot, pass `-game "D:\SteamLibrary\steamapps\common\Deadlock"`. It keeps its list of mods, switched-off mods, and a copy of the previous `gameinfo.gi` in `game/dlmod`, which the game never reads.
+
+Windows SmartScreen may warn about the program because it is not signed. Choose **More info → Run anyway**, or build it yourself with `go build` in `tools/dlmod`.
+
+### By hand
+
+1. In Steam, right-click Deadlock and choose **Manage → Browse local files**, then open `game\citadel`.
+2. Back up `gameinfo.gi` and open it in Notepad. In the `SearchPaths` block, add the five marked lines and change nothing else:
+
+   ```
+   SearchPaths
+   {
+       Game_UILanguage     citadel_*LANGUAGE*
+       Game_LowViolence    citadel_lv
+       Game                citadel/addons      <- add
+       Mod                 citadel             <- add
+       Write               citadel             <- add
+       Game                citadel
+       Mod                 core                <- add
+       Write               core                <- add
+       Game                core
+   }
+   ```
+
+   Type only the paths, without the `<- add` notes. The `Game` line makes the game read mods before its own files. Without the `Mod` and `Write` lines, the game would treat `addons` as its settings folder and save keybinds there.
+3. Create a folder named `addons` (lowercase) in `game\citadel` if it does not exist.
+4. Extract `pak01_dir.vpk` from the ZIP into `addons`. If another mod already uses that name, rename this one to a free number between `pak02_dir.vpk` and `pak99_dir.vpk`. Files with other names, or in subfolders, do not load.
+5. Start Deadlock.
+
+After a game update or *Verify integrity*, redo step 2 on the new `gameinfo.gi` instead of copying back an old one, because Valve's other changes would be lost. To remove the mod, delete its VPK. To stop loading all mods, run *Verify integrity*.
+
+### With Deadlock Mod Manager
+
+1. In Deadlock Mod Manager v2.3.0, open **Mods Library → Add Local Mod** and import the ZIP.
+2. Enable the mod and launch Deadlock through Mod Manager.
+
+Use Mod Manager to disable or remove the mod.
+
+### Notes for every method
+
+If two mods change the same file, only one of them takes effect, and guides disagree on whether the lower or the higher `pakNN` number wins. This mod replaces `panorama/layout/hud.vxml_c`, so do not combine it with another HUD mod; `dlmod list` shows such conflicts. A HUD mod built for an older game build can stop Deadlock from starting after a large update (for example with an "Unable to find child" error). Switch it off and use the release built for the new game build.
 
 ## Build the VPK
 
@@ -76,6 +133,7 @@ For in-game verification, use a clean Mod Manager profile and a private lobby. C
 
 ## References
 
+- Manual install and `gameinfo.gi` search paths: [Divine Skins wiki](https://wiki.divineskins.gg/en/docs/deadlock/getting-started/install-by-hand), its [troubleshooting page](https://wiki.divineskins.gg/en/docs/deadlock/errors/mods-not-loading), and the [Deadlock Mod Manager guide](https://deadlockmods.app/how-to-install-deadlock-mods)
 - [Deadlock Mod Manager local mod guide](https://docs.deadlockmods.app/using-mod-manager/library#add-local-mods) and [Live bridge source](https://github.com/deadlock-mod-manager/deadlock-mod-manager/blob/v2.3.0/apps/desktop/src-tauri/src/live_bridge/dmm_live_bridge.js)
 - [Deadlock API](https://api.deadlock-api.com/docs) and [GameTracking-Deadlock HUD layout](https://github.com/SteamTracking/GameTracking-Deadlock/blob/master/game/citadel/pak01_dir/panorama/layout/hud.xml)
 - [Threat HUD shop layout](https://github.com/antonborndev/deadlock-threat-hud/blob/9fc4cbfd7290c834eb81490ecc004c578ae4fbba/threathud/panorama/layout/citadel_hud_hero_shop.xml) and [BiggerIdleMap build example](https://github.com/regulad/BiggerIdleMap)
