@@ -120,8 +120,8 @@
       row.panel.SetHasClass("DCIDataPick", item.source === "data");
       row.panel.SetHasClass("DCILanePick", item.source === "lane");
       row.name.text = item.name;
-      // The icon is drawn as the category square's background, the way the stock category glyphs
-      // are drawn (an Image panel given the same texture stayed blank in game).
+      // The icon is drawn as the category square's background, the same CSS mechanism that draws the
+      // category glyphs, which are confirmed to show in game.
       if (row.category && row.category.style) {
         row.category.style.backgroundImage = item.icon ? 'url("' + item.icon + '")' : null;
       }
