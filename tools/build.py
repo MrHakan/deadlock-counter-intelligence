@@ -68,7 +68,7 @@ def patch_hud(stock):
     add(box, "Label", {"id": "DCIEmpty", "class": "DCIEmpty", "text": "Waiting for enemy lineup."})
     for index in range(ROWS):
         row = add(box, "Panel", {"id": f"DCIRow{index}", "class": "DCIRow"}, hidden=True)
-        add(row, "Panel", {"class": "DCICategory"})
+        add(row, "Panel", {"id": f"DCICategory{index}", "class": "DCICategory"})
         details = add(row, "Panel", {"class": "DCIDetails"})
         line = add(details, "Panel", {"class": "DCIItemLine"})
         add(line, "Label", {"id": f"DCIName{index}", "class": "DCIName"})

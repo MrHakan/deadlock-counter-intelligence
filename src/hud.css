@@ -93,6 +93,12 @@
     wash-color: #e7c8ff;
 }
 
+/* With the item's own icon, the category shows only as the colour of a thin frame around it. */
+.DCIHasIcon .DCICategory {
+    background-size: 30px 30px;
+    wash-color: #ffffff;
+}
+
 .DCIDetails {
     width: fill-parent-flow(1);
     flow-children: down;

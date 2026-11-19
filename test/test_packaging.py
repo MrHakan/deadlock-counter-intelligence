@@ -122,11 +122,14 @@ class PackagingTests(unittest.TestCase):
 
     def test_catalog_requires_matching_locales_and_rejects_disabled_items(self):
         english = [{"id": 1, "class_name": "item", "name": "Item", "shopable": True, "cost": 800,
-                    "item_slot_type": "spirit"},
+                    "item_slot_type": "spirit",
+                    "shop_image": "https://assets-bucket.deadlock-api.com/assets-api-res/images/items/spirit/item.png"},
                    {"id": 2, "class_name": "disabled", "name": "Disabled", "shopable": True, "disabled": True}]
         turkish = [dict(english[0], name="Eşya"), english[1]]
         items = merge(english, turkish, shops=True)
-        self.assertEqual(items, [[1, "item", "Item", "Eşya", 800, "spirit"]])
+        self.assertEqual(items, [[1, "item", "Item", "Eşya", 800, "spirit",
+                                  "s2r://panorama/images/items/spirit/item_psd.vtex"]],
+                         "the icon is the game's own texture, not a download")
         with self.assertRaises(ValueError):
             merge(english, [dict(turkish[0], item_slot_type="weapon")], shops=True)
         with self.assertRaises(ValueError):

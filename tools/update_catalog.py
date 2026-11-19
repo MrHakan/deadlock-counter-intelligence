@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import re
 from pathlib import Path
 import tempfile
 from urllib.parse import urlencode
@@ -19,6 +20,14 @@ def fetch(path, version, language, **params):
     if not isinstance(rows, list) or not rows:
         raise ValueError(f"No rows returned for {path} ({language})")
     return rows
+
+
+def icon_path(url):
+    """The game texture behind deadlock-api's shop image, e.g. .../images/items/vitality/healbane.png
+    -> s2r://panorama/images/items/vitality/healbane_psd.vtex. The HUD loads it from the game files,
+    so it needs no network during a match. Empty when the URL has another shape."""
+    match = re.search(r"/assets-api-res/(images/items/[a-z_]+/[a-z0-9_]+)\.(?:png|webp)$", url or "")
+    return f"s2r://panorama/{match.group(1)}_psd.vtex" if match else ""
 
 
 def merge(english, turkish, shops=False):
@@ -44,7 +53,7 @@ def merge(english, turkish, shops=False):
             slot = row.get("item_slot_type")
             if slot not in CATEGORIES or slot != translated.get("item_slot_type"):
                 raise ValueError(f"Invalid category for {identifier}")
-            entry.extend([cost, slot])
+            entry.extend([cost, slot, icon_path(row.get("shop_image"))])
         merged.append(entry)
     return merged
 

@@ -101,6 +101,7 @@ var DCIEngine = (function () {
         name: row[2],
         cost: row[4],
         category: row[5],
+        icon: row[6] || "", // the game's own item texture
         tag: tags[key] || "",
         impact: impact(key, enemies),
         minute: typeof minutes[key] === "number" ? minutes[key] : null,
