@@ -275,9 +275,10 @@ test("the bundled scripts produce item rows from stock-shaped cards in scoreboar
     children: ["Name", "Price", "Reason", "Evidence", "Impact", "Buy", "Patch"].map((name) =>
       panel({ id: "DCI" + name + i, classes: name === "Buy" || name === "Patch" ? ["DCIHidden"] : [] })),
   }));
-  const view = panel({ id: "DCIVisibility", classes: ["gScoreboardOpen"], children: controls.concat(rows) });
+  const view = panel({ id: "DCIVisibility", children: controls.concat(rows) });
+  const hud = panel({ id: "Hud", classes: ["gScoreboardOpen"], children: [view] });
+  view.parent = hud;
   root.Children().push(view);
-  view.parent = root;
   const scheduled = [];
   const bundle = ["engine.js", "observer.js", "hud.js"]
     .map((name) => fs.readFileSync(path.resolve(__dirname, "../src", name), "utf8")).join("\n");
@@ -288,7 +289,7 @@ test("the bundled scripts produce item rows from stock-shaped cards in scoreboar
         assert.equal(typeof this.Schedule, "function");
         return localize(token, node);
       },
-      Msg: (error) => assert.fail(error),
+      Msg: (line) => { if (!line.endsWith("HUD loaded")) assert.fail(line); },
     },
     DCI_CATALOG: catalog, DCI_COUNTERS: counters, DCI_STATS: fixture,
   });
@@ -299,8 +300,8 @@ test("the bundled scripts produce item rows from stock-shaped cards in scoreboar
   assert.equal(node("DCIName0").text, "Metal Skin");
   assert.equal(node("DCIBuy0").BHasClass("DCIHidden"), true, "scoreboard balance is below 3,200");
 
-  view.SetHasClass("gScoreboardOpen", false);
-  view.SetHasClass("gShopOpen", true);
+  hud.SetHasClass("gScoreboardOpen", false);
+  hud.SetHasClass("gShopOpen", true);
   scheduled.shift()();
   assert.equal(node("DCIName0").text, "Metal Skin");
   assert.equal(node("DCIBuy0").BHasClass("DCIHidden"), false, "shop balance covers the first row");
@@ -323,7 +324,8 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
   let observed = {heroes: ["hero_hornet"], allies, self: "hero_inferno", purchases: []};
   const root = {
     IsValid: () => true,
-    BHasClass: (name) => modes.has(name),
+    BHasClass: () => false, // the game puts the listener's classes on its parent
+    GetParent: () => ({ IsValid: () => true, BHasClass: (name) => modes.has(name) }),
     FindChildTraverse: (id) => id === "DCIVisibility" ? root : (nodes[id] ||= {
       FindChildTraverse: root.FindChildTraverse,
       SetHasClass(name, active) { this[name] = active; },
@@ -335,7 +337,7 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
     $: {
       GetContextPanel: () => root,
       Schedule: (delay, callback) => scheduled.push({delay, callback}),
-      Msg: (line) => assert.fail(line),
+      Msg: (line) => { if (!line.endsWith("HUD loaded")) assert.fail(line); },
     },
     DCIEngine: {create, formatImpact, formatStats, formatNotes},
     DCI_CATALOG: catalog,
@@ -417,7 +419,8 @@ test("HUD marks what to buy now, hides owned items and uses lane counters until 
   };
   const root = {
     IsValid: () => true,
-    BHasClass: (name) => modes.has(name),
+    BHasClass: () => false, // the game puts the listener's classes on its parent
+    GetParent: () => ({ IsValid: () => true, BHasClass: (name) => modes.has(name) }),
     FindChildTraverse: (id) => id === "DCIVisibility" ? root : (nodes[id] ||= {
       FindChildTraverse: root.FindChildTraverse,
       SetHasClass(name, active) { this[name] = active; },
@@ -426,7 +429,7 @@ test("HUD marks what to buy now, hides owned items and uses lane counters until 
   };
   const filename = path.resolve(__dirname, "../src/hud.js");
   vm.runInNewContext(fs.readFileSync(filename, "utf8"), {
-    $: { GetContextPanel: () => root, Schedule: (delay, callback) => scheduled.push(callback), Msg: (line) => assert.fail(line) },
+    $: { GetContextPanel: () => root, Schedule: (delay, callback) => scheduled.push(callback), Msg: (line) => { if (!line.endsWith("HUD loaded")) assert.fail(line); } },
     DCIEngine: {create, formatImpact, formatStats, formatNotes},
     DCI_CATALOG: catalog,
     DCI_COUNTERS: counters,
@@ -484,7 +487,8 @@ test("HUD flags patched enemies and items and shows what changed on hover", () =
   let observed = {heroes: lineup, allies: [], self: null, purchases: [], mine: [], lane: [], clock: null, souls: null, owned: []};
   const root = {
     IsValid: () => true,
-    BHasClass: (name) => modes.has(name),
+    BHasClass: () => false, // the game puts the listener's classes on its parent
+    GetParent: () => ({ IsValid: () => true, BHasClass: (name) => modes.has(name) }),
     FindChildTraverse: (id) => id === "DCIVisibility" ? root : (nodes[id] ||= {
       FindChildTraverse: root.FindChildTraverse,
       SetHasClass(name, active) { this[name] = active; },
@@ -493,7 +497,7 @@ test("HUD flags patched enemies and items and shows what changed on hover", () =
   };
   const filename = path.resolve(__dirname, "../src/hud.js");
   vm.runInNewContext(fs.readFileSync(filename, "utf8"), {
-    $: { GetContextPanel: () => root, Schedule: (delay, callback) => scheduled.push(callback), Msg: (line) => assert.fail(line) },
+    $: { GetContextPanel: () => root, Schedule: (delay, callback) => scheduled.push(callback), Msg: (line) => { if (!line.endsWith("HUD loaded")) assert.fail(line); } },
     DCIEngine: {create, formatImpact, formatStats, formatNotes},
     DCI_CATALOG: catalog, DCI_COUNTERS: counters, DCI_STATS: fixture, DCI_PATCHES: patches,
     DCIObserver: {observe: () => observed},

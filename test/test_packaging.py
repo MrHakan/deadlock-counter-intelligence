@@ -109,7 +109,7 @@ class PackagingTests(unittest.TestCase):
                 "panorama/styles/dci_hud.vcss_c",
             ])
             layout = ET.fromstring(read_resource(resources["panorama/layout/hud.vxml_c"]))
-            script_path = layout.find("scripts/include").get("src").removeprefix("s2r://")
+            script_path = layout.find("scripts/include").get("src").removeprefix("s2r://") + "_c"
             script = read_resource(resources[script_path])
             self.assertIn('alertTitle: "Enemy counter purchase"', script)
             self.assertIn('var DCI_COUNTERS = {"source"', script)

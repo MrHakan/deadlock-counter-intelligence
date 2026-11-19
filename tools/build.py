@@ -19,7 +19,8 @@ from panorama import compile_text
 STOCK_HUD = "panorama/layout/hud.vxml_c"
 STYLE = "s2r://panorama/styles/dci_hud.vcss"
 SCRIPT_SOURCE = "panorama/scripts/dci_hud.vts"
-SCRIPT = f"s2r://{SCRIPT_SOURCE}_c"
+# Valve's layouts name scripts by source path (s2r://panorama/scripts/async.vts), like styles.
+SCRIPT = f"s2r://{SCRIPT_SOURCE}"
 ROWS = 4
 
 
