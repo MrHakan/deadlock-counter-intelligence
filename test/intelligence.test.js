@@ -272,8 +272,9 @@ test("the bundled scripts produce item rows from stock-shaped cards in scoreboar
   const controls = ["DCISource", "DCIEmpty", "DCIAlert", "DCIAlertTitle", "DCIAlertText",
     "DCIPatchBadge", "DCITip", "DCITipTitle", "DCITipText"].map((id) => panel({ id }));
   const rows = Array.from({ length: 4 }, (_, i) => panel({ id: "DCIRow" + i, classes: ["DCIHidden"],
-    children: ["Name", "Price", "Reason", "Evidence", "Impact", "Buy", "Patch"].map((name) =>
-      panel({ id: "DCI" + name + i, classes: name === "Buy" || name === "Patch" ? ["DCIHidden"] : [] })),
+    children: ["Name", "Price", "Reason", "Evidence", "Impact", "Buy", "Patch", "Icon"].map((name) =>
+      panel({ id: "DCI" + name + i, classes: name === "Buy" || name === "Patch" ? ["DCIHidden"] : [],
+        props: { SetImage(image) { this.image = image; } } })),
   }));
   const view = panel({ id: "DCIVisibility", children: controls.concat(rows) });
   const hud = panel({ id: "Hud", classes: ["gScoreboardOpen"], children: [view] });
@@ -298,6 +299,9 @@ test("the bundled scripts produce item rows from stock-shaped cards in scoreboar
   assert.equal(node("DCIEmpty").BHasClass("DCIHidden"), true);
   assert.equal(node("DCIRow0").BHasClass("DCIHidden"), false);
   assert.equal(node("DCIName0").text, "Metal Skin");
+  assert.equal(node("DCIIcon0").image, "s2r://panorama/images/items/vitality/metal_skin_psd.vtex",
+    "the row shows the game's own item icon");
+  assert.equal(node("DCIRow0").BHasClass("DCIHasIcon"), true);
   assert.equal(node("DCIBuy0").BHasClass("DCIHidden"), true, "scoreboard balance is below 3,200");
 
   hud.SetHasClass("gScoreboardOpen", false);

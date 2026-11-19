@@ -41,6 +41,7 @@
       rows.push({
         panel: row,
         name: row.FindChildTraverse("DCIName" + i),
+        icon: row.FindChildTraverse("DCIIcon" + i),
         price: row.FindChildTraverse("DCIPrice" + i),
         reason: row.FindChildTraverse("DCIReason" + i),
         evidence: row.FindChildTraverse("DCIEvidence" + i),
@@ -118,6 +119,8 @@
       row.panel.SetHasClass("DCIDataPick", item.source === "data");
       row.panel.SetHasClass("DCILanePick", item.source === "lane");
       row.name.text = item.name;
+      if (row.icon && row.icon.SetImage && item.icon) row.icon.SetImage(item.icon);
+      if (row.icon) row.panel.SetHasClass("DCIHasIcon", !!item.icon);
       row.price.text = String(item.cost).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
       row.reason.text = item.reason;
       row.evidence.text = item.evidence;
