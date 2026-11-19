@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run tests
+        run: |
+          node --test test/intelligence.test.js
+          python -m unittest discover -s test -v
+
+      - name: Fetch the stock HUD for the catalog build
+        run: |
+          base=https://raw.githubusercontent.com/SteamTracking/GameTracking-Deadlock/master/game/citadel
+          curl -fsSL "$base/steam.inf" -o steam.inf
+          curl -fsSL "$base/pak01_dir/panorama/layout/hud.xml" -o stock-hud.xml
+          live=$(sed -n 's/^ClientVersion=\([0-9]*\).*/\1/p' steam.inf)
+          catalog=$(python -c "import json; print(json.load(open('src/catalog.json'))['clientVersion'])")
+          echo "Live build $live, catalog build $catalog"
+          test "$live" = "$catalog" || { echo "::error::Stock HUD is build $live but the catalog is $catalog"; exit 1; }
+          echo "BUILD=$catalog" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: |
+          python tools/build.py --hud-xml stock-hud.xml \
+            --output "dist/deadlock-counter-intelligence-${BUILD}-hud-en.zip"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes=".github/release-notes/${GITHUB_REF_NAME}.md"
+          test -f "$notes" || { echo "::error::Missing $notes"; exit 1; }
+          title=$(head -n 1 "$notes" | sed 's/^# //')
+          tail -n +3 "$notes" > notes-body.md
+          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "$title" --notes-file notes-body.md

@@ -37,10 +37,10 @@ If you already have the extracted stock layout, use `--hud-xml path/to/hud.xml`.
 
 ## Catalog and tests
 
-The bundled catalog targets Deadlock client build **6861** and contains 173 shop items, with price and shop category, and 44 hero records. The HUD displays English names. Turkish aliases help match item and hero names read from the game client. When targeting a new build, refresh the catalog and use the stock HUD from that build.
+The bundled catalog targets Deadlock client build **6864** and contains 173 shop items, with price and shop category, and 44 hero records. The HUD displays English names. Turkish aliases help match item and hero names read from the game client. When targeting a new build, refresh the catalog and use the stock HUD from that build.
 
 ```sh
-python tools/update_catalog.py 6861
+python tools/update_catalog.py 6864
 node --test test/intelligence.test.js
 python -m unittest discover -s test -v
 ```

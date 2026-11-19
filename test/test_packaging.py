@@ -86,7 +86,7 @@ class PackagingTests(unittest.TestCase):
     def test_zip_contains_a_self_contained_vpk_with_real_source2_resources(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "dci.zip"
-            self.assertEqual(build(STOCK, ROOT / "src/catalog.json", output), 6861)
+            self.assertEqual(build(STOCK, ROOT / "src/catalog.json", output), 6864)
             with ZipFile(output) as archive:
                 self.assertEqual(archive.namelist(), ["pak01_dir.vpk"])
                 self.assertIsNone(archive.testzip())
