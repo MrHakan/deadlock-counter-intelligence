@@ -9,6 +9,7 @@ from zlib import crc32
 
 from tools.build import ROOT, SCRIPT, STYLE, build, patch_hud
 from tools.update_catalog import merge, write_catalog
+from tools.update_counter_stats import compute, report
 
 STOCK = """
 <root><styles><include src="stock.vcss"/></styles><CitadelHud>
@@ -75,6 +76,9 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(root.find(".//*[@class='DCITitle']").get("text"), "Counter items")
         self.assertIsNotNone(root.find(".//*[@id='DCIPrice2']"))
         self.assertEqual(root.find(".//*[@id='DCIRow2']").get("visible"), "false")
+        self.assertIsNotNone(root.find(".//*[@id='DCIAlertText']"))
+        self.assertIsNotNone(root.find(".//*[@id='DCIImpact3']"))
+        self.assertIsNone(root.find(".//*[@id='DCIRow4']"))
 
     def test_patch_refuses_an_incompatible_or_already_patched_layout(self):
         with self.assertRaises(ValueError):
@@ -85,7 +89,7 @@ class PackagingTests(unittest.TestCase):
     def test_zip_contains_a_self_contained_vpk_with_real_source2_resources(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "dci.zip"
-            self.assertEqual(build(STOCK, ROOT / "src/catalog.json", output), 6861)
+            self.assertEqual(build(STOCK, ROOT / "src/catalog.json", output), 6864)
             with ZipFile(output) as archive:
                 self.assertEqual(archive.namelist(), ["pak01_dir.vpk"])
                 self.assertIsNone(archive.testzip())
@@ -96,22 +100,52 @@ class PackagingTests(unittest.TestCase):
             ])
             self.assertIn("DCIVisibility", read_resource(resources["panorama/layout/hud.vxml_c"]))
             script = read_resource(resources["panorama/scripts/dci_hud.vts_c"])
-            self.assertIn('shop: "Recent purchases"', script)
+            self.assertIn('alertTitle: "Enemy counter purchase"', script)
+            self.assertIn('var DCI_COUNTERS = {"source"', script)
+            self.assertIn('var DCI_STATS = {"source"', script)
             self.assertNotIn("DCI_LANGUAGE", script)
             self.assertIn(".gShopOpen .DCIBox", read_resource(resources["panorama/styles/dci_hud.vcss_c"]))
 
     def test_catalog_requires_matching_locales_and_rejects_disabled_items(self):
-        english = [{"id": 1, "class_name": "item", "name": "Item", "shopable": True, "cost": 800},
+        english = [{"id": 1, "class_name": "item", "name": "Item", "shopable": True, "cost": 800,
+                    "item_slot_type": "spirit"},
                    {"id": 2, "class_name": "disabled", "name": "Disabled", "shopable": True, "disabled": True}]
         turkish = [dict(english[0], name="Eşya"), english[1]]
         items = merge(english, turkish, shops=True)
-        self.assertEqual(items, [[1, "item", "Item", "Eşya", 800]])
+        self.assertEqual(items, [[1, "item", "Item", "Eşya", 800, "spirit"]])
+        with self.assertRaises(ValueError):
+            merge(english, [dict(turkish[0], item_slot_type="weapon")], shops=True)
         with self.assertRaises(ValueError):
             merge(english, [dict(turkish[0], cost=1600)], shops=True)
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "catalog.json"
             write_catalog(output, 6861, items, [])
             self.assertEqual(json.loads(output.read_text())["items"], items)
+
+
+    def test_counter_stats_correct_for_hero_strength_and_item_timing(self):
+        catalog = {"items": [[1, "a", "A", "A", 800, "weapon"], [2, "b", "B", "B", 800, "spirit"],
+                             [3, "c", "C", "C", 6400, "vitality"], [4, "d", "D", "D", 6400, "spirit"],
+                             [5, "rare", "Rare", "Rare", 800, "weapon"]],
+                   "heroes": [[7, "hero_x", "X", "X"]]}
+        counters = {"heroes": {"hero_x": ["a", "c"]}}
+
+        def rows(*values):
+            return [{"item_id": item, "wins": wins, "matches": matches} for item, wins, matches in values]
+
+        base = rows((1, 50000, 100000), (2, 50000, 100000), (3, 60000, 100000), (4, 60000, 100000), (5, 500, 1000))
+        # Facing X lifts every buyer by 1.5 points and lifts late items as a group: neither is a counter.
+        versus = rows((1, 52000, 100000), (2, 48000, 100000), (3, 63000, 100000), (4, 63000, 100000),
+                      (5, 900, 1000))
+        stats, measured = compute(catalog, counters, base, {7: versus}, {"from": "f", "to": "t"})
+        self.assertEqual(measured["hero_x"], {"a": (200, 100000), "b": (-200, 100000),
+                                              "c": (0, 100000), "d": (0, 100000)})
+        self.assertEqual(stats["items"], ["a", "c"])
+        self.assertEqual(stats["heroes"], {"hero_x": [200, 0]})
+        text = report({"items": [row[:5] for row in catalog["items"]], "heroes": catalog["heroes"]},
+                      counters, stats, measured)
+        self.assertIn("Of the 2 reference picks, 1 raise", text)
+        self.assertIn("| X | A +2.00 · C +0.00 | A +2.00 |", text)
 
 
 if __name__ == "__main__":

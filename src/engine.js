@@ -1,36 +1,8 @@
 "use strict";
 
 var DCIEngine = (function () {
-  var rules = [
-    {
-      counter: "upgrade_healbane",
-      category: "vitality",
-      heroes: ["hero_atlas", "hero_ghost", "hero_kelvin"],
-      items: ["upgrade_healing_booster", "upgrade_health_nova", "upgrade_healbuff", "upgrade_health_stealing_magic"],
-      reason: "Spirit damage reduces incoming healing.",
-    },
-    {
-      counter: "upgrade_metal_skin",
-      category: "vitality",
-      heroes: ["hero_haze", "hero_wraith"],
-      items: ["upgrade_ricochet", "upgrade_glass_cannon", "upgrade_intensifying_clip", "upgrade_burst_fire"],
-      reason: "Briefly blocks bullet damage on use.",
-    },
-    {
-      counter: "upgrade_spirit_bubble",
-      category: "vitality",
-      heroes: ["hero_bebop", "hero_gigawatt"],
-      items: ["upgrade_magic_burst", "upgrade_boundless_spirit", "upgrade_spirit_burn"],
-      reason: "Adds a shield against spirit damage.",
-    },
-    {
-      counter: "upgrade_target_stun",
-      category: "spirit",
-      heroes: ["hero_hornet", "hero_orion"],
-      items: [],
-      reason: "Stuns airborne targets for longer.",
-    },
-  ];
+  // A match-data pick must raise the estimated win rate against the lineup by this much (hundredths of a point).
+  var DATA_MIN_IMPACT = 50;
 
   function normalize(text) {
     return typeof text === "string" ? text.trim().toLowerCase().replace(/[’‘]/g, "'") : "";
@@ -52,64 +24,192 @@ var DCIEngine = (function () {
     };
   }
 
-  function create(catalog) {
+  function create(catalog, counters, stats) {
     var heroes = index(catalog.heroes);
     var items = index(catalog.items);
+    var tags = counters.tags || {};
+    var table = Object.create(null);
+    Object.keys(counters.heroes).forEach(function (hero) {
+      if (!heroes.keys[hero]) return;
+      table[hero] = counters.heroes[hero].filter(function (item) { return items.keys[item]; });
+    });
 
-    function recommend(enemyHeroes, purchases) {
-      var enemies = Object.create(null);
-      enemyHeroes.forEach(function (hero) {
-        if (heroes.keys[hero]) enemies[hero] = true;
+    var columns = Object.create(null);
+    var measured = Object.create(null);
+    if (stats) {
+      stats.items.forEach(function (item, position) {
+        if (items.keys[item]) columns[item] = position;
       });
-
-      return rules.map(function (rule) {
-        var counter = items.keys[rule.counter];
-        if (!counter) return null;
-
-        var threats = rule.heroes.filter(function (hero) { return enemies[hero]; });
-        var signals = Object.create(null);
-        purchases.forEach(function (purchase) {
-          if (enemies[purchase.hero] && items.keys[purchase.item] && rule.items.indexOf(purchase.item) !== -1) {
-            signals[purchase.hero + "/" + purchase.item] = purchase;
-          }
-        });
-        var distinct = Object.keys(signals).sort().map(function (key) { return signals[key]; });
-        var score = threats.length + 3 * distinct.length;
-        if (!score) return null;
-
-        return {
-          key: rule.counter,
-          name: counter[2],
-          cost: counter[4],
-          category: rule.category,
-          purchaseBased: distinct.length > 0,
-          score: score,
-          reason: rule.reason,
-          evidence: distinct.length
-            ? heroes.keys[distinct[0].hero][2] + " · " + items.keys[distinct[0].item][2]
-            : heroes.keys[threats[0]][2],
-        };
-      }).filter(Boolean).sort(function (a, b) {
-        return b.score - a.score || a.cost - b.cost || (a.key < b.key ? -1 : 1);
-      }).slice(0, 3);
+      Object.keys(stats.heroes).forEach(function (hero) {
+        if (heroes.keys[hero]) measured[hero] = stats.heroes[hero];
+      });
     }
 
-    return { heroKey: heroes.lookup, itemKey: items.lookup, recommend: recommend };
+    function unique(list) {
+      return list.filter(function (hero, position) {
+        return heroes.keys[hero] && list.indexOf(hero) === position;
+      });
+    }
+
+    function names(keys) {
+      return keys.map(function (key) { return heroes.keys[key][2]; }).join(" · ");
+    }
+
+    function lift(item, hero) {
+      var row = measured[hero];
+      var value = row && item in columns ? row[columns[item]] : null;
+      return typeof value === "number" ? value : null;
+    }
+
+    // Estimated change in the buyer's win rate against the whole lineup, or null without data.
+    function impact(item, enemies) {
+      var total = null;
+      enemies.forEach(function (hero) {
+        var value = lift(item, hero);
+        if (value !== null) total = (total || 0) + value;
+      });
+      return total;
+    }
+
+    function entry(key, enemies, extra) {
+      var row = items.keys[key];
+      var result = {
+        key: key,
+        name: row[2],
+        cost: row[4],
+        category: row[5],
+        tag: tags[key] || "",
+        impact: impact(key, enemies),
+      };
+      Object.keys(extra).forEach(function (field) { result[field] = extra[field]; });
+      return result;
+    }
+
+    // Rank the reference counter items by how many enemy heroes they answer; match data breaks ties.
+    function recommend(enemyHeroes, limit) {
+      var enemies = unique(enemyHeroes);
+      var picks = Object.create(null);
+      enemies.forEach(function (hero) {
+        (table[hero] || []).forEach(function (item, position) {
+          var pick = picks[item] || (picks[item] = { heroes: [], rank: 0 });
+          pick.heroes.push(hero);
+          pick.rank += position;
+        });
+      });
+
+      return Object.keys(picks).map(function (key) {
+        var pick = picks[key];
+        var count = pick.heroes.length;
+        var tag = tags[key];
+        return entry(key, enemies, {
+          source: "reference",
+          score: count,
+          rank: pick.rank,
+          heroes: pick.heroes,
+          reason: (tag ? tag + " · " : "") + (count === 1 ? "counters 1 enemy" : "counters " + count + " enemies"),
+          evidence: names(pick.heroes),
+        });
+      }).sort(function (a, b) {
+        return b.score - a.score || (b.impact || 0) - (a.impact || 0) || a.rank - b.rank ||
+          a.cost - b.cost || (a.key < b.key ? -1 : 1);
+      }).slice(0, limit || 3);
+    }
+
+    // The item with the largest measured win-rate gain against the lineup that is not already shown.
+    function dataPick(enemyHeroes, exclude) {
+      var enemies = unique(enemyHeroes);
+      var best = null;
+      Object.keys(columns).forEach(function (key) {
+        if (exclude && exclude.indexOf(key) !== -1) return;
+        var total = impact(key, enemies);
+        if (total === null || total < DATA_MIN_IMPACT) return;
+        if (best && (total < best.total || (total === best.total && key > best.key))) return;
+        best = { key: key, total: total };
+      });
+      if (!best) return null;
+      var strongest = enemies.filter(function (hero) { return lift(best.key, hero) > 0; })
+        .sort(function (a, b) { return lift(best.key, b) - lift(best.key, a); }).slice(0, 3);
+      var tag = tags[best.key];
+      return entry(best.key, enemies, {
+        source: "data",
+        score: 0,
+        heroes: strongest,
+        reason: "Match data" + (tag ? " · " + tag : ""),
+        evidence: "Strongest vs " + names(strongest),
+      });
+    }
+
+    // Enemy purchases that appear in the reference counter list of an allied hero.
+    function threats(purchases, allyHeroes, self) {
+      var allies = unique(allyHeroes);
+      var seen = Object.create(null);
+      var result = [];
+      purchases.forEach(function (purchase) {
+        var buyer = heroes.keys[purchase.hero];
+        var item = items.keys[purchase.item];
+        var key = purchase.hero + "/" + purchase.item;
+        if (!buyer || !item || seen[key] || allies.indexOf(purchase.hero) !== -1) return;
+        seen[key] = true;
+        var targets = allies.filter(function (hero) {
+          return (table[hero] || []).indexOf(purchase.item) !== -1;
+        });
+        if (!targets.length) return;
+        var targetsYou = targets.indexOf(self) !== -1;
+        if (targetsYou) targets = [self].concat(targets.filter(function (hero) { return hero !== self; }));
+        var labels = targets.map(function (hero) { return heroes.keys[hero][2]; });
+        if (targetsYou) labels[0] = "you (" + labels[0] + ")";
+        result.push({
+          key: key,
+          buyer: buyer[2],
+          item: item[2],
+          targets: targets,
+          targetsYou: targetsYou,
+          text: buyer[2] + " bought " + item[2] + " — counters " + labels.join(", "),
+        });
+      });
+      return result.sort(function (a, b) { return b.targetsYou - a.targetsYou; });
+    }
+
+    return {
+      heroKey: heroes.lookup,
+      itemKey: items.lookup,
+      counters: function (hero) { return (table[hero] || []).slice(); },
+      impact: function (item, enemies) { return impact(item, unique(enemies)); },
+      recommend: recommend,
+      dataPick: dataPick,
+      threats: threats,
+    };
   }
 
-  function validateRules(catalog) {
+  function validate(catalog, counters, stats) {
     var items = index(catalog.items).keys;
     var heroes = index(catalog.heroes).keys;
-    return rules.reduce(function (missing, rule) {
-      return missing.concat([rule.counter].concat(rule.items).filter(function (key) {
-        return !items[key];
-      }), rule.heroes.filter(function (key) {
-        return !heroes[key];
-      }));
-    }, []);
+    var missing = [];
+    function check(key, known) {
+      if (!known[key] && missing.indexOf(key) === -1) missing.push(key);
+    }
+    Object.keys(counters.heroes).forEach(function (hero) {
+      check(hero, heroes);
+      counters.heroes[hero].forEach(function (item) { check(item, items); });
+    });
+    Object.keys(counters.tags || {}).forEach(function (item) { check(item, items); });
+    if (stats) {
+      stats.items.forEach(function (item) { check(item, items); });
+      Object.keys(stats.heroes).forEach(function (hero) {
+        check(hero, heroes);
+        if (stats.heroes[hero].length !== stats.items.length) missing.push(hero + " (row length)");
+      });
+    }
+    return missing;
   }
 
-  return { create: create, validateRules: validateRules };
+  function formatImpact(value) {
+    if (value === null || value === undefined) return "";
+    if (Math.round(Math.abs(value) / 10) === 0) return "±0 WR";
+    return (value > 0 ? "+" : "−") + (Math.abs(value) / 100).toFixed(1) + " WR";
+  }
+
+  return { create: create, validate: validate, formatImpact: formatImpact };
 })();
 
 if (typeof module !== "undefined") module.exports = DCIEngine;

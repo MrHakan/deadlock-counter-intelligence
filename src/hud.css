@@ -72,6 +72,12 @@
     background-repeat: no-repeat;
 }
 
+.DCIWeapon .DCICategory {
+    background-color: #3a2c1c;
+    background-image: url("s2r://panorama/images/shop/catalog/catalog_shop_tab_icon_weapon_psd.vtex");
+    wash-color: #f2b56b;
+}
+
 .DCIVitality .DCICategory {
     background-color: #233020;
     background-image: url("s2r://panorama/images/shop/catalog/catalog_shop_tab_icon_vitality_psd.vtex");
@@ -126,17 +132,85 @@
     font-weight: bold;
 }
 
-.DCIReason, .DCIEvidence {
+.DCIReason {
     width: 100%;
     font-size: 14px;
     text-overflow: ellipsis;
 }
 
-.DCIReason { color: #e6ddc9; }
-
-.DCIEvidence {
+.DCIEvidenceLine {
+    width: 100%;
+    flow-children: right;
     margin-top: 2px;
-    color: #b5b1a4;
 }
 
-.DCIPurchase .DCIEvidence { color: #eed69e; }
+.DCIEvidence {
+    width: fill-parent-flow(1);
+    font-size: 14px;
+    text-overflow: ellipsis;
+    max-height: 18px;
+}
+
+.DCIImpact {
+    margin-left: 8px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #9a968a;
+}
+
+.DCIImpactUp { color: #8fd17a; }
+
+.DCIImpactDown { color: #e07a6a; }
+
+.DCIReason { color: #e6ddc9; }
+
+.DCIEvidence { color: #b5b1a4; }
+
+.DCIShared .DCIReason { color: #eed69e; }
+
+.DCIDataPick {
+    background-color: #182029;
+    border-top: 1px solid #34506a;
+}
+
+.DCIDataPick .DCIReason { color: #9cc9ff; }
+
+.DCIAlert {
+    visibility: collapse;
+    horizontal-align: center;
+    vertical-align: top;
+    margin-top: 132px;
+    max-width: 620px;
+    flow-children: down;
+    padding: 8px 16px 9px 16px;
+    background-color: #1c1210f2;
+    border-top: 2px solid #d8a24a;
+    border-bottom: 1px solid #6e5236;
+}
+
+.DCIAlert.DCIAlertActive { visibility: visible; }
+
+.DCIAlert.DCIAlertYou {
+    background-color: #2a0f0cf4;
+    border-top: 2px solid #e2493b;
+}
+
+.DCIAlertTitle {
+    horizontal-align: center;
+    color: #d8a24a;
+    font-size: 13px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.DCIAlertYou .DCIAlertTitle { color: #ff6b5b; }
+
+.DCIAlertText {
+    horizontal-align: center;
+    margin-top: 2px;
+    color: offWhite;
+    font-size: 17px;
+    font-weight: bold;
+    text-align: center;
+}
