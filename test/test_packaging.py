@@ -79,13 +79,14 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(hoverable, {"DCIPatchBadge", "DCIPatch0", "DCIPatch1", "DCIPatch2", "DCIPatch3"},
                          "only the patch icons may catch the mouse; everything else lets clicks through")
         self.assertTrue(all(panel.get("hittest") in ("true", "false") for panel in listener.iter() if panel is not listener))
-        self.assertEqual(root.find(".//*[@id='DCITip']").get("visible"), "false")
+        hidden = {panel.get("id") for panel in listener.iter() if "DCIHidden" in panel.get("class", "").split()}
+        self.assertEqual(hidden, {"DCITip", "DCIPatchBadge", "DCISource"} | {
+            f"DCI{part}{index}" for part in ("Row", "Patch", "Buy", "Impact") for index in range(4)
+        })
         self.assertEqual(root.find(".//*[@class='DCITitle']").get("text"), "Counter items")
         self.assertIsNotNone(root.find(".//*[@id='DCIPrice2']"))
-        self.assertEqual(root.find(".//*[@id='DCIRow2']").get("visible"), "false")
         self.assertIsNotNone(root.find(".//*[@id='DCIAlertText']"))
         self.assertIsNotNone(root.find(".//*[@id='DCIImpact3']"))
-        self.assertEqual(root.find(".//*[@id='DCIBuy0']").get("visible"), "false")
         self.assertIsNone(root.find(".//*[@id='DCIRow4']"))
 
     def test_patch_refuses_an_incompatible_or_already_patched_layout(self):
@@ -107,14 +108,17 @@ class PackagingTests(unittest.TestCase):
                 "panorama/layout/hud.vxml_c", "panorama/scripts/dci_hud.vts_c",
                 "panorama/styles/dci_hud.vcss_c",
             ])
-            self.assertIn("DCIVisibility", read_resource(resources["panorama/layout/hud.vxml_c"]))
-            script = read_resource(resources["panorama/scripts/dci_hud.vts_c"])
+            layout = ET.fromstring(read_resource(resources["panorama/layout/hud.vxml_c"]))
+            script_path = layout.find("scripts/include").get("src").removeprefix("s2r://")
+            script = read_resource(resources[script_path])
             self.assertIn('alertTitle: "Enemy counter purchase"', script)
             self.assertIn('var DCI_COUNTERS = {"source"', script)
             self.assertIn('var DCI_STATS = {"source"', script)
             self.assertIn('var DCI_PATCHES = {"reviewed"', script)
             self.assertNotIn("DCI_LANGUAGE", script)
-            self.assertIn(".gShopOpen .DCIBox", read_resource(resources["panorama/styles/dci_hud.vcss_c"]))
+            style = read_resource(resources["panorama/styles/dci_hud.vcss_c"])
+            self.assertIn(".gShopOpen .DCIBox", style)
+            self.assertIn(".DCIHidden { visibility: collapse; }", style)
 
     def test_catalog_requires_matching_locales_and_rejects_disabled_items(self):
         english = [{"id": 1, "class_name": "item", "name": "Item", "shopable": True, "cost": 800,

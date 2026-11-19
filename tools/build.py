@@ -18,7 +18,8 @@ from panorama import compile_text
 
 STOCK_HUD = "panorama/layout/hud.vxml_c"
 STYLE = "s2r://panorama/styles/dci_hud.vcss"
-SCRIPT = "s2r://panorama/scripts/dci_hud.vts"
+SCRIPT_SOURCE = "panorama/scripts/dci_hud.vts"
+SCRIPT = f"s2r://{SCRIPT_SOURCE}_c"
 ROWS = 4
 
 
@@ -43,9 +44,11 @@ def patch_hud(stock):
         root.insert(list(root).index(styles[0]) + 1, script_list)
     ET.SubElement(script_list, "include", src=SCRIPT)
 
-    def add(parent, tag, attributes=None, hover=False):
+    def add(parent, tag, attributes, hover=False, hidden=False):
         """Every panel lets clicks through except the patch icons, which show a tooltip on hover."""
-        return ET.SubElement(parent, tag, {**(attributes or {}), "hittest": "true" if hover else "false"})
+        if hidden:
+            attributes = {**attributes, "class": attributes["class"] + " DCIHidden"}
+        return ET.SubElement(parent, tag, {**attributes, "hittest": "true" if hover else "false"})
 
     listener = ET.SubElement(hud, "GlobalClassListener", id="DCIVisibility",
                              classes="gScoreboardOpen gShopOpen", hittest="false",
@@ -54,29 +57,29 @@ def patch_hud(stock):
     add(alert, "Label", {"id": "DCIAlertTitle", "class": "DCIAlertTitle", "text": "Enemy counter purchase"})
     add(alert, "Label", {"id": "DCIAlertText", "class": "DCIAlertText"})
     box = add(listener, "Panel", {"class": "DCIBox"})
-    tip = add(box, "Panel", {"id": "DCITip", "class": "DCITip", "visible": "false"})
+    tip = add(box, "Panel", {"id": "DCITip", "class": "DCITip"}, hidden=True)
     add(tip, "Label", {"id": "DCITipTitle", "class": "DCITipTitle"})
     add(tip, "Label", {"id": "DCITipText", "class": "DCITipText"})
     header = add(box, "Panel", {"class": "DCIHeader"})
     add(header, "Label", {"class": "DCITitle", "text": "Counter items"})
-    add(header, "Label", {"id": "DCIPatchBadge", "class": "DCIPatchBadge", "text": "PATCHED", "visible": "false"}, hover=True)
-    add(header, "Label", {"id": "DCISource", "class": "DCISource", "visible": "false"})
+    add(header, "Label", {"id": "DCIPatchBadge", "class": "DCIPatchBadge", "text": "PATCHED"}, hover=True, hidden=True)
+    add(header, "Label", {"id": "DCISource", "class": "DCISource"}, hidden=True)
     add(box, "Label", {"id": "DCIEmpty", "class": "DCIEmpty", "text": "Waiting for enemy lineup."})
     for index in range(ROWS):
-        row = add(box, "Panel", {"id": f"DCIRow{index}", "class": "DCIRow", "visible": "false"})
+        row = add(box, "Panel", {"id": f"DCIRow{index}", "class": "DCIRow"}, hidden=True)
         add(row, "Panel", {"class": "DCICategory"})
         details = add(row, "Panel", {"class": "DCIDetails"})
         line = add(details, "Panel", {"class": "DCIItemLine"})
         add(line, "Label", {"id": f"DCIName{index}", "class": "DCIName"})
-        add(line, "Label", {"id": f"DCIPatch{index}", "class": "DCIPatch", "text": "!", "visible": "false"}, hover=True)
-        add(line, "Label", {"id": f"DCIBuy{index}", "class": "DCIBuy", "text": "BUY NOW", "visible": "false"})
+        add(line, "Label", {"id": f"DCIPatch{index}", "class": "DCIPatch", "text": "!"}, hover=True, hidden=True)
+        add(line, "Label", {"id": f"DCIBuy{index}", "class": "DCIBuy", "text": "BUY NOW"}, hidden=True)
         cost = add(line, "Panel", {"class": "DCICost"})
         add(cost, "Panel", {"class": "DCISoul"})
         add(cost, "Label", {"id": f"DCIPrice{index}", "class": "DCIPrice"})
         add(details, "Label", {"id": f"DCIReason{index}", "class": "DCIReason"})
         evidence = add(details, "Panel", {"class": "DCIEvidenceLine"})
         add(evidence, "Label", {"id": f"DCIEvidence{index}", "class": "DCIEvidence"})
-        add(evidence, "Label", {"id": f"DCIImpact{index}", "class": "DCIImpact"})
+        add(evidence, "Label", {"id": f"DCIImpact{index}", "class": "DCIImpact"}, hidden=True)
     return ET.tostring(root, encoding="unicode")
 
 
@@ -121,7 +124,7 @@ def build(stock, catalog_path, output, counters_path=ROOT / "src" / "counters.js
     script += f"var DCI_PATCHES = {json.dumps(patches, separators=(',', ':'), ensure_ascii=True)};\n"
     for filename in ("engine.js", "observer.js", "hud.js"):
         script += (src / filename).read_text(encoding="utf-8") + "\n"
-    sources.append(("panorama/scripts/dci_hud.vts", script))
+    sources.append((SCRIPT_SOURCE, script))
     vpk = pack_vpk(dict(compile_text(name, source) for name, source in sources))
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=output.parent) as staging:

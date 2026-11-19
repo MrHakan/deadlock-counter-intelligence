@@ -28,6 +28,10 @@
   var badgeNotes = DCIEngine.formatNotes([]); // tooltip of the PATCHED badge
   var rowNotes = [];                          // tooltip of each row's ! icon
 
+  function setShown(panel, shown) {
+    panel.SetHasClass("DCIHidden", !shown);
+  }
+
   function findView() {
     var root = context.FindChildTraverse("DCIVisibility");
     if (!root) return null;
@@ -71,34 +75,34 @@
       if (!content || !content.text) return;
       found.tipTitle.text = content.title;
       found.tipText.text = content.text;
-      found.tip.visible = true;
+      setShown(found.tip, true);
     });
-    panel.SetPanelEvent("onmouseout", function () { found.tip.visible = false; });
+    panel.SetPanelEvent("onmouseout", function () { setShown(found.tip, false); });
   }
 
   function showEmpty(message) {
-    view.source.visible = false;
-    view.badge.visible = false;
-    view.tip.visible = false;
+    setShown(view.source, false);
+    setShown(view.badge, false);
+    setShown(view.tip, false);
     view.empty.text = message;
-    view.empty.visible = true;
-    view.rows.forEach(function (row) { row.panel.visible = false; });
+    setShown(view.empty, true);
+    view.rows.forEach(function (row) { setShown(row.panel, false); });
   }
 
   function display(recommendations, laning, buy, souls) {
-    view.empty.visible = false;
-    view.badge.visible = badgeNotes.text !== "";
+    setShown(view.empty, false);
+    setShown(view.badge, badgeNotes.text !== "");
     view.source.text = laning ? text.lane : text.roster;
-    view.source.visible = true;
+    setShown(view.source, true);
 
     view.rows.forEach(function (row, index) {
       var item = recommendations[index];
-      row.panel.visible = !!item;
+      setShown(row.panel, !!item);
       if (!item) return;
       var known = typeof souls === "number";
       row.panel.SetHasClass("DCIBuyNow", index === buy);
       row.panel.SetHasClass("DCIExpensive", known && item.cost > souls);
-      row.buy.visible = index === buy;
+      setShown(row.buy, index === buy);
       ["weapon", "vitality", "spirit"].forEach(function (category) {
         row.panel.SetHasClass("DCI" + category.charAt(0).toUpperCase() + category.slice(1),
           item.category === category);
@@ -113,8 +117,8 @@
       row.impact.text = DCIEngine.formatStats(item);
       // The badge covers changed enemy heroes; a row's icon means the item itself changed.
       rowNotes[index] = DCIEngine.formatNotes(engine.patchNotes([item.key]));
-      row.patch.visible = rowNotes[index].text !== "";
-      row.impact.visible = row.impact.text !== "";
+      setShown(row.patch, rowNotes[index].text !== "");
+      setShown(row.impact, row.impact.text !== "");
       row.impact.SetHasClass("DCIImpactUp", item.impact >= 10);
       row.impact.SetHasClass("DCIImpactDown", item.impact <= -10);
     });
@@ -144,13 +148,15 @@
 
     var shopOpen = view.root.BHasClass("gShopOpen");
     if (!shopOpen && !view.root.BHasClass("gScoreboardOpen")) {
-      view.tip.visible = false;
+      setShown(view.tip, false);
       if (previous) showEmpty(text.waiting);
       previous = "";
       return 1;
     }
 
-    var observed = DCIObserver.observe(context, engine, $.Localize, shopOpen);
+    var observed = DCIObserver.observe(context, engine, function (token, panel) {
+      return $.Localize(token, panel);
+    }, shopOpen);
     if (observed.heroes.length) {
       var lineup = observed.heroes.slice().sort().join(",");
       if (lineup !== match) {

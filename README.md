@@ -45,10 +45,10 @@ Counter sites take one of two approaches, and this mod combines both:
 
 ## How it reads the game
 
-The suggestion panel sits above the minimap on the scoreboard and in the lower-left corner of the shop. Everything comes from what the game already shows you, mostly the top bar (panel names from Valve's interface files, as published by [GameTracking-Deadlock](https://github.com/SteamTracking/GameTracking-Deadlock)):
+The suggestion panel sits above the ability bar on the scoreboard and below Quick Buy on the left side of the shop. Everything comes from what the game already shows you, mostly the top bar (panel names from Valve's interface files, as published by [GameTracking-Deadlock](https://github.com/SteamTracking/GameTracking-Deadlock)):
 
-- Both teams' heroes come from the player cards. The card marked `LocalPlayer` is your hero, and enemy cards marked `IsInLocalPlayerLane` are your lane opponents.
-- Your souls come from your card's souls value (`{s:gold}`), and the match time from the top bar clock (`GameTime`).
+- Both teams' heroes come from the player cards, including their rendered hero names. The card marked `LocalPlayer` identifies your side, and enemy cards marked `IsInLocalPlayerLane` are your lane opponents.
+- Your spendable souls come from the shop or HUD balance (`CurrentGoldAmount`), and the match time from the top bar clock (`GameTime`).
 - Items you own come from your card's purchased-items panel (`mod_universal`) and from your own rows in the shop's recent-purchase list. The game creates the item icons at run time, so the mod tries the usual item-name properties and ignores anything that is not a known item.
 - Enemy purchases come from the shop's recent-purchase list, which the mod reads every half second while the shop is open, so alerts appear when you open the shop.
 

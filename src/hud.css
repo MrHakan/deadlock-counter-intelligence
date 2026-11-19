@@ -6,11 +6,10 @@
 
 .DCIBox {
     visibility: collapse;
-    horizontal-align: right;
+    horizontal-align: center;
     vertical-align: bottom;
     width: 354px;
-    margin-right: 30px;
-    margin-bottom: 528px;
+    margin-bottom: 225px;
     flow-children: down;
     background-color: #141610f7;
     border-top: 2px solid #b6a786;
@@ -23,10 +22,14 @@
 
 .gShopOpen .DCIBox {
     horizontal-align: left;
-    margin-right: 0px;
-    margin-left: 62px;
-    margin-bottom: 44px;
+    vertical-align: top;
+    margin-left: 30px;
+    margin-top: 150px;
+    margin-bottom: 0px;
+    max-width: 21%;
 }
+
+.DCIHidden { visibility: collapse; }
 
 .DCIHeader {
     width: 100%;

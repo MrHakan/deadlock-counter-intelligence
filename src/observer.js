@@ -23,7 +23,7 @@ var DCIObserver = (function () {
     }
   }
 
-  // Souls as the top bar shows them: "12,345", "12.345" or "12.3k", possibly inside markup.
+  // Souls as the game shows them: "12,345", "12.345" or "12.3k", possibly inside markup.
   function parseSouls(text) {
     if (typeof text !== "string") return null;
     var plain = text.replace(/<[^>]*>/g, "").replace(/\s/g, "");
@@ -70,21 +70,27 @@ var DCIObserver = (function () {
   }
 
   function readTeam(team, engine, localize) {
-    var result = { heroes: [], self: null, lane: [], card: null };
+    var result = { heroes: [], self: null, lane: [], card: null, localPlayers: 0 };
     var pending = [{ panel: team, depth: 0 }];
     for (var i = 0; i < pending.length && i < 96; i++) {
       var current = pending[i];
       if (current.panel.paneltype === "CitadelHudTopBarPlayer") {
         if (!shown(current.panel)) continue;
+        var local = current.panel.BHasClass("LocalPlayer");
+        if (local) {
+          result.localPlayers++;
+          result.card = current.panel;
+        }
         var id = resolve(localize, "{i:hero_id}", current.panel);
         var name = resolve(localize, "{s:hero_name}", current.panel);
         var hero = engine.heroKey(id) || engine.heroKey(name);
+        if (!hero) {
+          var labels = current.panel.FindChildrenWithClassTraverse("HeroName");
+          if (valid(labels[0])) hero = engine.heroKey(labels[0].text);
+        }
         if (!hero) continue;
         if (result.heroes.indexOf(hero) === -1) result.heroes.push(hero);
-        if (current.panel.BHasClass("LocalPlayer")) {
-          result.self = hero;
-          result.card = current.panel;
-        }
+        if (local) result.self = hero;
         // The game marks the players who share the local player's lane.
         if (current.panel.BHasClass("IsInLocalPlayerLane") && result.lane.indexOf(hero) === -1) result.lane.push(hero);
       } else if (current.depth < 6) {
@@ -103,34 +109,33 @@ var DCIObserver = (function () {
     var friendlyTeam = top.FindChildTraverse("TeamFriendly");
     if (!valid(enemyTeam) || !valid(friendlyTeam)) return none;
 
-    function cards(team) {
-      return team.FindChildrenWithClassTraverse("LocalPlayer").some(function (panel) {
-        return panel.paneltype === "CitadelHudTopBarPlayer" && shown(panel);
-      });
-    }
-    if (!cards(friendlyTeam) || cards(enemyTeam)) return none;
-
-    var enemyInfo = readTeam(enemyTeam, engine, localize);
-    if (!enemyInfo.heroes.length) return none;
-    var friends = readTeam(friendlyTeam, engine, localize);
+    // Resolve sides from the local card even when the native team panels are swapped.
+    var first = readTeam(friendlyTeam, engine, localize);
+    var second = readTeam(enemyTeam, engine, localize);
+    if (first.localPlayers + second.localPlayers !== 1) return none;
+    var friends = first.localPlayers ? first : second;
+    var enemies = first.localPlayers ? second : first;
+    if (!enemies.heroes.length) return none;
     var clockLabel = top.FindChildTraverse("GameTime");
     var clock = parseClock(valid(clockLabel) ? clockLabel.text : "");
     if (clock === null) clock = parseClock(resolve(localize, "{s:game_clock}", top));
-    var souls = null;
-    if (friends.card) {
-      souls = parseSouls(resolve(localize, "{s:gold}", friends.card));
-      var soulsLabel = souls === null && friends.card.FindChildTraverse("SoulsValue");
-      if (valid(soulsLabel)) souls = parseSouls(soulsLabel.text);
-    }
     return {
-      heroes: enemyInfo.heroes,
+      heroes: enemies.heroes,
       allies: friends.heroes,
       self: friends.self,
-      lane: enemyInfo.lane,
-      souls: souls,
+      lane: enemies.lane,
+      souls: null,
       owned: friends.card ? ownedItems(friends.card, engine) : [],
       clock: clock,
     };
+  }
+
+  function spendableSouls(container) {
+    if (!valid(container)) return null;
+    var amount = container.FindChildTraverse("CurrentGoldAmount");
+    var label = valid(amount) && amount.FindChildTraverse("hudCurGoldLabel");
+    // The top bar shows total net worth. Both the HUD and shop have a separate spendable balance.
+    return shown(label) ? parseSouls(label.text) : null;
   }
 
   function observe(root, engine, localize, shopOpen) {
@@ -138,8 +143,10 @@ var DCIObserver = (function () {
     var heroes = teams.heroes;
     var purchases = [];
     var mine = [];
-    if (shopOpen && heroes.length) {
-      var shop = root.FindChildTraverse("CitadelHudHeroShop");
+    if (heroes.length) {
+      var shop = shopOpen && root.FindChildTraverse("CitadelHudHeroShop");
+      if (valid(shop)) teams.souls = spendableSouls(shop.FindChildTraverse("GoldAPContainer"));
+      if (teams.souls === null) teams.souls = spendableSouls(root.FindChildTraverse("gold_and_ap_container"));
       var recent = valid(shop) && shop.FindChildTraverse("RecentPurchasesContainer");
       if (shown(recent)) {
         recent.Children().slice(0, 24).forEach(function (row) {
