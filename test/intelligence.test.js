@@ -233,7 +233,7 @@ test("observer reads only visible enemy purchases and only with the shop open", 
   const hud = buildHud();
   const teams = {
     heroes: ["hero_haze"], allies: ["hero_wraith", "hero_inferno"], self: "hero_wraith",
-    lane: ["hero_haze"], souls: 3400, owned: ["upgrade_healbane"], clock: 252,
+    lane: ["hero_haze"], souls: 3400, owned: ["upgrade_healbane"], clock: 252, enemyItems: [],
   };
   assert.deepEqual(observe(hud, engine, localize, true), {
     ...teams, purchases: [{ hero: "hero_haze", item: "upgrade_glass_cannon" }], mine: ["upgrade_ricochet"],
@@ -243,8 +243,19 @@ test("observer reads only visible enemy purchases and only with the shop open", 
   assert.deepEqual(observe(hud, engine, localize, true), { ...teams, souls: 3100, purchases: [], mine: [] });
 });
 
+test("observer reads the items enemies own from their top-bar cards", () => {
+  const hud = buildHud();
+  const enemy = hud.FindChildTraverse("TeamEnemy").Children()[0];
+  enemy.Children().push(panel({ id: "mod_universal", children: [
+    panel({ props: {abilityname: "upgrade_spirit_sap"} }),
+    panel({ props: {abilityname: "citadel_ability_unknown"} }),
+  ] }));
+  assert.deepEqual(observe(hud, engine, localize, false).enemyItems, [{ hero: "hero_haze", item: "upgrade_spirit_sap" }]);
+});
+
 test("observer requires a visible local player and visible enemy cards", () => {
-  const none = { heroes: [], allies: [], self: null, lane: [], souls: null, owned: [], clock: null, purchases: [], mine: [] };
+  const none = { heroes: [], allies: [], self: null, lane: [], souls: null, owned: [], clock: null, enemyItems: [],
+    purchases: [], mine: [] };
   assert.deepEqual(observe(buildHud({ realLocal: false }), engine, localize, true), none);
   assert.deepEqual(observe(buildHud({ enemyVisible: false }), engine, localize, true), none);
   assert.deepEqual(observe(buildHud({ ambiguous: true }), engine, localize, true), none);
@@ -326,6 +337,7 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
   const scheduled = [];
   const allies = ["hero_inferno", "hero_ghost"];
   let observed = {heroes: ["hero_hornet"], allies, self: "hero_inferno", purchases: []};
+  const dispatched = [];
   const root = {
     IsValid: () => true,
     BHasClass: () => false, // the game puts the listener's classes on its parent
@@ -341,7 +353,8 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
     $: {
       GetContextPanel: () => root,
       Schedule: (delay, callback) => scheduled.push({delay, callback}),
-      Msg: (line) => { if (!line.endsWith("HUD loaded")) assert.fail(line); },
+      Msg: (line) => { if (!line.endsWith("HUD loaded") && !line.startsWith("[DCI] Quick buy: queued")) assert.fail(line); },
+      DispatchEvent: (...args) => dispatched.push(args),
     },
     DCIEngine: {create, formatImpact, formatStats, formatNotes},
     DCI_CATALOG: catalog,
@@ -357,7 +370,15 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
   assert.equal(nodes.DCIRow0.DCISpirit, true);
   assert.equal(nodes.DCIPrice0.text, "3,200");
   assert.equal(nodes.DCIReason0.text, "Stun, grounds flyers · counters 1 enemy");
-  assert.equal(nodes.DCIEvidence0.text, "Vindicta");
+  assert.equal(nodes.DCIEvidence0.text, "vs", "a portrait replaces the hero's name");
+  assert.equal(nodes.DCIFaces0.DCIHidden, false);
+  assert.equal(nodes.DCIFace0_0.DCIHidden, false);
+  assert.equal(nodes.DCIFace0_1.DCIHidden, true, "one hero, one portrait");
+  assert.equal(nodes.DCIRow0.DCIHasFaces, true);
+
+  // The queue button hands the item to the game's quick-buy queue.
+  nodes.DCIQueue0.events.onactivate();
+  assert.deepEqual(dispatched, [["CitadelQuickbuyAddItem", catalog.items.find((row) => row[2] === "Knockdown")[0]]]);
   assert.equal(nodes.DCIImpact0.DCIHidden, true, "no measurement for Knockdown");
   assert.equal(nodes.DCIName3.text, "Glass Cannon");
   assert.equal(nodes.DCIRow3.DCIDataPick, true);
@@ -403,6 +424,14 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
   step();
   assert.equal(nodes.DCIAlert.DCIAlertActive, true, "a new enemy lineup starts a new match");
   assert.equal(nodes.DCIAlertText.text, "Vindicta bought Healbane — counters you (Infernus), Lady Geist");
+
+  // On the scoreboard, items enemies already own count too, and those against you stay listed.
+  observed = {heroes: ["hero_hornet", "hero_haze"], allies, self: "hero_inferno", purchases: [],
+    enemyItems: [{hero: "hero_haze", item: "upgrade_healbane"}, {hero: "hero_haze", item: "upgrade_metal_skin"}]};
+  step();
+  assert.equal(nodes.DCIThreats.text, "Countering you: Healbane (Haze)");
+  assert.equal(nodes.DCIThreats.DCIHidden, false);
+  assert.equal(nodes.DCIAlertText.text, "Haze bought Healbane — counters you (Infernus), Lady Geist");
 
   observed = {heroes: ["hero_unknown"], allies, self: "hero_inferno", purchases: []};
   step();

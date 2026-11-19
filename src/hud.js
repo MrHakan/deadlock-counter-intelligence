@@ -5,6 +5,7 @@
   var engine = DCIEngine.create(DCI_CATALOG, DCI_COUNTERS, typeof DCI_STATS === "undefined" ? null : DCI_STATS,
     typeof DCI_PATCHES === "undefined" ? null : DCI_PATCHES);
   var ROWS = 4;
+  var FACES = 5;
   var text = {
     roster: "Enemy lineup",
     lane: "Lane phase",
@@ -13,6 +14,8 @@
     error: "Counter item data unavailable.",
     alertTitle: "Enemy counter purchase",
     more: " more",
+    against: "Countering you: ",
+    versus: { reference: "vs", data: "Strongest vs", lane: "Early vs" },
   };
   var ALERT_SECONDS = 8;
   var LANE_SECONDS = 600;
@@ -27,6 +30,8 @@
   var rows = [];
   var badgeNotes = DCIEngine.formatNotes([]); // tooltip of the PATCHED badge
   var rowNotes = [];                          // tooltip of each row's ! icon
+  var shownRows = [];                         // the items the rows show, for the queue buttons
+  var against = "";                           // enemy counter items you are facing, as text
 
   function setShown(panel, shown) {
     panel.SetHasClass("DCIHidden", !shown);
@@ -41,7 +46,6 @@
       rows.push({
         panel: row,
         name: row.FindChildTraverse("DCIName" + i),
-        icon: row.FindChildTraverse("DCIIcon" + i),
         category: row.FindChildTraverse("DCICategory" + i),
         price: row.FindChildTraverse("DCIPrice" + i),
         reason: row.FindChildTraverse("DCIReason" + i),
@@ -49,7 +53,11 @@
         impact: row.FindChildTraverse("DCIImpact" + i),
         buy: row.FindChildTraverse("DCIBuy" + i),
         patch: row.FindChildTraverse("DCIPatch" + i),
+        queue: row.FindChildTraverse("DCIQueue" + i),
+        faces: row.FindChildTraverse("DCIFaces" + i),
+        face: [],
       });
+      for (var f = 0; f < FACES; f++) rows[i].face.push(row.FindChildTraverse("DCIFace" + i + "_" + f));
     }
     var found = {
       root: root, rows: rows, source: root.FindChildTraverse("DCISource"),
@@ -61,13 +69,34 @@
       tip: root.FindChildTraverse("DCITip"),
       tipTitle: root.FindChildTraverse("DCITipTitle"),
       tipText: root.FindChildTraverse("DCITipText"),
+      threats: root.FindChildTraverse("DCIThreats"),
     };
     // Hovering a patch icon shows what changed in a tooltip at the top of the panel.
     hover(found, found.badge, function () { return badgeNotes; });
     rows.forEach(function (row, index) {
       hover(found, row.patch, function () { return rowNotes[index]; });
+      if (row.queue && row.queue.SetPanelEvent) {
+        row.queue.SetPanelEvent("onactivate", function () { queueItem(shownRows[index]); });
+      }
     });
     return found;
+  }
+
+  // Adds an item to the game's own quick-buy queue. The event name comes from the game client;
+  // its argument is not documented, so the forms are tried in turn and the console says which
+  // one the game accepted.
+  function queueItem(item) {
+    if (!item) return;
+    var attempts = [[item.id], [context, item.id], [item.key]];
+    for (var i = 0; i < attempts.length; i++) {
+      try {
+        $.DispatchEvent.apply($, ["CitadelQuickbuyAddItem"].concat(attempts[i]));
+        $.Msg("[DCI] Quick buy: queued " + item.name + " (form " + (i + 1) + ")");
+        return;
+      } catch (error) {
+        if (i === attempts.length - 1) $.Msg("[DCI] Quick buy failed for " + item.name + ": " + error);
+      }
+    }
   }
 
   // A GlobalClassListener puts the global classes it lists on its parent panel, not on itself, so
@@ -104,6 +133,8 @@
     view.source.text = laning ? text.lane : text.roster;
     setShown(view.source, true);
 
+    shownRows = recommendations.slice();
+    showAgainst();
     view.rows.forEach(function (row, index) {
       var item = recommendations[index];
       setShown(row.panel, !!item);
@@ -128,7 +159,18 @@
       row.panel.SetHasClass("DCIHasIcon", !!item.icon);
       row.price.text = String(item.cost).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
       row.reason.text = item.reason;
-      row.evidence.text = item.evidence;
+      // Portraits of the heroes the item answers replace their names when every one has a texture.
+      var faces = (item.portraits || []).slice(0, FACES);
+      var portraits = faces.length > 0 && faces.every(function (face) { return !!face; }) && !!row.faces;
+      row.evidence.text = portraits ? text.versus[item.source] || text.versus.reference : item.evidence;
+      if (row.faces) setShown(row.faces, portraits);
+      row.panel.SetHasClass("DCIHasFaces", portraits);
+      row.face.forEach(function (panel, position) {
+        if (!panel) return;
+        var image = portraits ? faces[position] : "";
+        setShown(panel, !!image);
+        if (panel.style) panel.style.backgroundImage = image ? 'url("' + image + '")' : null;
+      });
       row.impact.text = DCIEngine.formatStats(item);
       // The badge covers changed enemy heroes; a row's icon means the item itself changed.
       rowNotes[index] = DCIEngine.formatNotes(engine.patchNotes([item.key]));
@@ -137,6 +179,13 @@
       row.impact.SetHasClass("DCIImpactUp", item.impact >= 10);
       row.impact.SetHasClass("DCIImpactDown", item.impact <= -10);
     });
+  }
+
+  // "Countering you: Spirit Sap (Haze) · ..." from the items enemies already own.
+  function showAgainst() {
+    if (!view.threats) return;
+    view.threats.text = against ? text.against + against : "";
+    setShown(view.threats, !!against);
   }
 
   function setAlert(active) {
@@ -179,7 +228,14 @@
         alerted = Object.create(null);
         owned = Object.create(null);
       }
-      notify(engine.threats(observed.purchases, observed.allies || [], observed.self));
+      // Enemy items come from shop purchases and from the item icons on the enemies' top-bar cards,
+      // which the scoreboard (Tab) shows.
+      var threats = engine.threats((observed.purchases || []).concat(observed.enemyItems || []),
+        observed.allies || [], observed.self);
+      notify(threats);
+      against = threats.filter(function (threat) { return threat.targetsYou; }).map(function (threat) {
+        return threat.item + " (" + threat.buyer + ")";
+      }).join(" · ");
       (observed.owned || []).concat(observed.mine || []).forEach(function (item) { owned[item] = true; });
     }
 
@@ -204,7 +260,7 @@
     var buy = engine.buyNow(rows, souls);
     var affordable = rows.map(function (item) { return souls !== null && item.cost <= souls ? 1 : 0; }).join("");
     var emptyMessage = observed.heroes.length ? text.noMatch : text.waiting;
-    var signature = rows.length ? inputs + "|" + laning + "|" + buy + "|" + affordable : emptyMessage;
+    var signature = rows.length ? inputs + "|" + laning + "|" + buy + "|" + affordable + "|" + against : emptyMessage;
     if (signature !== previous) {
       if (rows.length) display(rows, laning, buy, souls);
       else showEmpty(emptyMessage);

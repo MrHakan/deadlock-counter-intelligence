@@ -70,7 +70,7 @@ var DCIObserver = (function () {
   }
 
   function readTeam(team, engine, localize) {
-    var result = { heroes: [], self: null, lane: [], card: null, localPlayers: 0 };
+    var result = { heroes: [], self: null, lane: [], card: null, localPlayers: 0, cards: [] };
     var pending = [{ panel: team, depth: 0 }];
     for (var i = 0; i < pending.length && i < 96; i++) {
       var current = pending[i];
@@ -91,6 +91,7 @@ var DCIObserver = (function () {
         if (!hero) continue;
         if (result.heroes.indexOf(hero) === -1) result.heroes.push(hero);
         if (local) result.self = hero;
+        result.cards.push({ hero: hero, card: current.panel });
         // The game marks the players who share the local player's lane.
         if (current.panel.BHasClass("IsInLocalPlayerLane") && result.lane.indexOf(hero) === -1) result.lane.push(hero);
       } else if (current.depth < 6) {
@@ -103,7 +104,7 @@ var DCIObserver = (function () {
   }
 
   function lineup(top, engine, localize) {
-    var none = { heroes: [], allies: [], self: null, lane: [], souls: null, owned: [], clock: null };
+    var none = { heroes: [], allies: [], self: null, lane: [], souls: null, owned: [], clock: null, enemyItems: [] };
     if (!shown(top)) return none;
     var enemyTeam = top.FindChildTraverse("TeamEnemy");
     var friendlyTeam = top.FindChildTraverse("TeamFriendly");
@@ -127,6 +128,12 @@ var DCIObserver = (function () {
       souls: null,
       owned: friends.card ? ownedItems(friends.card, engine) : [],
       clock: clock,
+      // What each enemy already owns, from the item icons on their top-bar card (shown on Tab).
+      enemyItems: enemies.cards.reduce(function (list, entry) {
+        return list.concat(ownedItems(entry.card, engine).map(function (item) {
+          return { hero: entry.hero, item: item };
+        }));
+      }, []),
     };
   }
 

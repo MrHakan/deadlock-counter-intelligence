@@ -74,15 +74,20 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(root.find("scripts/include").get("src"), SCRIPT)
         self.assertIsNotNone(root.find("CitadelHud/CitadelHudTopBar"))
         listener = root.find(".//*[@id='DCIVisibility']")
+        # The listener's classes land on its own parent, never on a stock panel such as CitadelHud,
+        # where a second gShopOpen moved the shop's quick-buy list.
+        container = root.find("CitadelHud/Panel[@id='DCIRoot']")
+        self.assertIs(container.find("GlobalClassListener"), listener)
+        self.assertIsNone(root.find("CitadelHud/GlobalClassListener"))
         self.assertEqual((listener.get("hittest"), listener.get("hittestchildren")), ("false", "true"))
         hoverable = {panel.get("id") for panel in listener.iter() if panel.get("hittest") == "true"}
-        self.assertEqual(hoverable, {"DCIPatchBadge", "DCIPatch0", "DCIPatch1", "DCIPatch2", "DCIPatch3"},
-                         "only the patch icons may catch the mouse; everything else lets clicks through")
+        self.assertEqual(hoverable, {"DCIPatchBadge"} | {f"DCI{part}{index}" for part in ("Patch", "Queue") for index in range(4)},
+                         "only the patch icons and queue buttons catch the mouse; everything else lets clicks through")
         self.assertTrue(all(panel.get("hittest") in ("true", "false") for panel in listener.iter() if panel is not listener))
         hidden = {panel.get("id") for panel in listener.iter() if "DCIHidden" in panel.get("class", "").split()}
-        self.assertEqual(hidden, {"DCITip", "DCIPatchBadge", "DCISource"} | {
-            f"DCI{part}{index}" for part in ("Row", "Patch", "Buy", "Impact") for index in range(4)
-        })
+        self.assertEqual(hidden, {"DCITip", "DCIPatchBadge", "DCISource", "DCIThreats"} | {
+            f"DCI{part}{index}" for part in ("Row", "Patch", "Buy", "Impact", "Faces") for index in range(4)
+        } | {f"DCIFace{index}_{face}" for index in range(4) for face in range(5)})
         self.assertEqual(root.find(".//*[@class='DCITitle']").get("text"), "Counter items")
         self.assertIsNotNone(root.find(".//*[@id='DCIPrice2']"))
         self.assertIsNotNone(root.find(".//*[@id='DCIAlertText']"))
