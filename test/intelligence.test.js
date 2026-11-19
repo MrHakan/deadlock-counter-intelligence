@@ -337,7 +337,6 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
   const scheduled = [];
   const allies = ["hero_inferno", "hero_ghost"];
   let observed = {heroes: ["hero_hornet"], allies, self: "hero_inferno", purchases: []};
-  const dispatched = [];
   const root = {
     IsValid: () => true,
     BHasClass: () => false, // the game puts the listener's classes on its parent
@@ -353,8 +352,7 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
     $: {
       GetContextPanel: () => root,
       Schedule: (delay, callback) => scheduled.push({delay, callback}),
-      Msg: (line) => { if (!line.endsWith("HUD loaded") && !line.startsWith("[DCI] Quick buy: queued")) assert.fail(line); },
-      DispatchEvent: (...args) => dispatched.push(args),
+      Msg: (line) => { if (!line.endsWith("HUD loaded")) assert.fail(line); },
     },
     DCIEngine: {create, formatImpact, formatStats, formatNotes},
     DCI_CATALOG: catalog,
@@ -375,10 +373,6 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
   assert.equal(nodes.DCIFace0_0.DCIHidden, false);
   assert.equal(nodes.DCIFace0_1.DCIHidden, true, "one hero, one portrait");
   assert.equal(nodes.DCIRow0.DCIHasFaces, true);
-
-  // The queue button hands the item to the game's quick-buy queue.
-  nodes.DCIQueue0.events.onactivate();
-  assert.deepEqual(dispatched, [["CitadelQuickbuyAddItem", catalog.items.find((row) => row[2] === "Knockdown")[0]]]);
   assert.equal(nodes.DCIImpact0.DCIHidden, true, "no measurement for Knockdown");
   assert.equal(nodes.DCIName3.text, "Glass Cannon");
   assert.equal(nodes.DCIRow3.DCIDataPick, true);
