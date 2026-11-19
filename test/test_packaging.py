@@ -74,6 +74,11 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(root.find("scripts/include").get("src"), SCRIPT)
         self.assertIsNotNone(root.find("CitadelHud/CitadelHudTopBar"))
         listener = root.find(".//*[@id='DCIVisibility']")
+        # The listener's classes land on its own parent, never on a stock panel such as CitadelHud,
+        # where a second gShopOpen moved the shop's quick-buy list.
+        container = root.find("CitadelHud/Panel[@id='DCIRoot']")
+        self.assertIs(container.find("GlobalClassListener"), listener)
+        self.assertIsNone(root.find("CitadelHud/GlobalClassListener"))
         self.assertEqual((listener.get("hittest"), listener.get("hittestchildren")), ("false", "true"))
         hoverable = {panel.get("id") for panel in listener.iter() if panel.get("hittest") == "true"}
         self.assertEqual(hoverable, {"DCIPatchBadge"} | {f"DCI{part}{index}" for part in ("Patch", "Queue") for index in range(4)},

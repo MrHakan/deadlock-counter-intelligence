@@ -52,7 +52,11 @@ def patch_hud(stock):
             attributes = {**attributes, "class": attributes["class"] + " DCIHidden"}
         return ET.SubElement(parent, tag, {**attributes, "hittest": "true" if hover else "false"})
 
-    listener = ET.SubElement(hud, "GlobalClassListener", id="DCIVisibility",
+    # A GlobalClassListener puts its classes on its parent. Under CitadelHud itself, a second
+    # gShopOpen ancestor matched Valve's ".gShopOpen .gShopOpen .QuickbuyQueueOuter" rule and moved the
+    # shop's quick-buy list 540px to the right, so the listener gets a parent of its own.
+    container = ET.SubElement(hud, "Panel", id="DCIRoot", hittest="false", hittestchildren="true")
+    listener = ET.SubElement(container, "GlobalClassListener", id="DCIVisibility",
                              classes="gScoreboardOpen gShopOpen", hittest="false",
                              hittestchildren="true")
     alert = add(listener, "Panel", {"id": "DCIAlert", "class": "DCIAlert"})
