@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -17,7 +18,7 @@ var version = "dev"
 const usage = `dlmod - installs Deadlock mods without a mod manager
 
 Usage:
-  dlmod                        open the menu
+  dlmod                        open the full-screen menu
   dlmod <mod.zip|mod.vpk>...   install mods (on Windows, drag files onto dlmod.exe)
   dlmod install <file> [-name NAME]
   dlmod list                   show mods, conflicts and whether the game loads mods
@@ -32,11 +33,12 @@ Usage:
 
 Options:
   -game DIR   the Deadlock folder (found through Steam when omitted; DEADLOCK_DIR also works)
+  -plain      use the simple numbered menu instead of the full-screen one
 `
 
 type options struct {
-	game, name string
-	help       bool
+	game, name  string
+	help, plain bool
 }
 
 func parseArgs(argv []string) ([]string, options, error) {
@@ -63,6 +65,8 @@ func parseArgs(argv []string) ([]string, options, error) {
 			} else {
 				opts.name = value
 			}
+		case "plain":
+			opts.plain = true
 		case "h", "help":
 			opts.help = true
 		case "v", "version":
@@ -81,23 +85,60 @@ var commands = map[string]bool{
 	"unpatch": true, "play": true, "help": true,
 }
 
-// UI reads answers from the console; without a console every question takes its default.
+// palette holds escape sequences; every field is empty when colours are off (NO_COLOR, old consoles).
+type palette struct {
+	reset, bold, dim, green, red, yellow, cyan, invert, row string
+	okBadge, offBadge, warnBadge, infoBadge                 string
+}
+
+func newPalette(color bool) palette {
+	if !color {
+		return palette{}
+	}
+	return palette{
+		reset: "\x1b[0m", bold: "\x1b[1m", dim: "\x1b[90m", green: "\x1b[32m", red: "\x1b[91m",
+		yellow: "\x1b[33m", cyan: "\x1b[36m", invert: "\x1b[7m", row: "\x1b[48;5;237m",
+		okBadge: "\x1b[30;42m", offBadge: "\x1b[97;41m", warnBadge: "\x1b[30;43m", infoBadge: "\x1b[30;46m",
+	}
+}
+
+func (p palette) paint(style, text string) string {
+	if style == "" || p.reset == "" {
+		return text
+	}
+	return style + text + p.reset
+}
+
+// UI is the plain console interface. Without a console every question takes its default.
 type UI struct {
 	in          *bufio.Reader
 	out         io.Writer
 	interactive bool
 	eof         bool
+	p           palette
+	progressed  bool
 }
 
 func newUI() *UI {
 	info, err := os.Stdin.Stat()
 	interactive := err == nil && info.Mode()&os.ModeCharDevice != 0
-	return &UI{in: bufio.NewReader(os.Stdin), out: os.Stdout, interactive: interactive}
+	return &UI{in: bufio.NewReader(os.Stdin), out: os.Stdout, interactive: interactive, p: newPalette(colorSupported())}
 }
 
-func (u *UI) say(format string, args ...any) { fmt.Fprintf(u.out, format+"\n", args...) }
+func (u *UI) say(format string, args ...any) {
+	u.endProgress()
+	text := fmt.Sprintf(format, args...)
+	switch {
+	case strings.HasPrefix(text, "Conflict") || strings.HasPrefix(text, "Skipped") || strings.HasPrefix(text, "Warning"):
+		text = u.p.paint(u.p.yellow, text)
+	case strings.HasPrefix(text, "Installed") || strings.HasPrefix(text, "Updated"):
+		text = u.p.paint(u.p.green, text)
+	}
+	fmt.Fprintln(u.out, text)
+}
 
 func (u *UI) ask(question string) string {
+	u.endProgress()
 	fmt.Fprint(u.out, question)
 	line, err := u.in.ReadString('\n')
 	if err != nil {
@@ -121,13 +162,52 @@ func (u *UI) confirm(question string, fallback bool) bool {
 	if fallback {
 		hint = " [Y/n] "
 	}
-	switch strings.ToLower(u.ask(question + hint)) {
+	return answerYes(u.ask(question+hint), fallback)
+}
+
+func answerYes(answer string, fallback bool) bool {
+	switch strings.ToLower(strings.TrimSpace(answer)) {
 	case "":
 		return fallback
 	case "y", "yes", "e", "evet":
 		return true
 	default:
 		return false
+	}
+}
+
+func (u *UI) choose(question string, options []string) (int, bool, bool) {
+	if !u.interactive {
+		return 0, true, true
+	}
+	u.say("%s", question)
+	for i, option := range options {
+		u.say("  %d  %s", i+1, option)
+	}
+	answer := u.ask("Enter a number, or \"all\": ")
+	if strings.EqualFold(answer, "all") {
+		return 0, true, true
+	}
+	index, err := strconv.Atoi(answer)
+	if err != nil || index < 1 || index > len(options) {
+		return 0, false, false
+	}
+	return index - 1, false, true
+}
+
+// progress draws one updating line for copies large enough to take a moment.
+func (u *UI) progress(label string, done, total int64) {
+	if !u.interactive || total < 8<<20 {
+		return
+	}
+	u.progressed = true
+	fmt.Fprintf(u.out, "\r  Copying %s  %3d%%  %s / %s ", truncate(label, 40), done*100/total, formatSize(done), formatSize(total))
+}
+
+func (u *UI) endProgress() {
+	if u.progressed {
+		fmt.Fprintln(u.out)
+		u.progressed = false
 	}
 }
 
@@ -169,6 +249,14 @@ func run(ui *UI, args []string, opts options) int {
 		return 1
 	}
 	if len(args) == 0 {
+		if ui.interactive && !opts.plain {
+			if err := runTUI(game); err == nil {
+				return 0
+			} else if !errors.Is(err, errNoTUI) {
+				ui.say("Error: %v", err)
+				return 1
+			}
+		}
 		return menu(ui, game)
 	}
 	command, rest := args[0], args[1:]
@@ -176,20 +264,21 @@ func run(ui *UI, args []string, opts options) int {
 		command, rest = "install", args
 	}
 	if err := execute(ui, game, command, rest, opts); err != nil {
-		ui.say("Error: %v", err)
+		ui.say("%s", ui.p.paint(ui.p.red, "Error: "+err.Error()))
 		return 1
 	}
 	return 0
 }
+
+var errRunning = errors.New("Deadlock is running; close it first")
 
 func execute(ui *UI, game Game, command string, args []string, opts options) error {
 	store, err := openStore(game)
 	if err != nil {
 		return err
 	}
-	changesFiles := command != "list" && command != "status"
-	if changesFiles && gameRunning() {
-		return errors.New("Deadlock is running; close it first")
+	if command != "list" && command != "status" && gameRunning() {
+		return errRunning
 	}
 	switch command {
 	case "list", "status":
@@ -218,7 +307,14 @@ func execute(ui *UI, game Game, command string, args []string, opts options) err
 		}
 		return change(ui, store, entry, command)
 	case "patch", "repair":
-		return ensurePatched(ui, game)
+		changed, err := game.patch()
+		if err == nil && changed {
+			ui.say("Updated gameinfo.gi so the game loads mods from game/citadel/addons " +
+				"(previous copy: game/dlmod/gameinfo.gi.bak).")
+		} else if err == nil {
+			ui.say("The game already loads mods from game/citadel/addons.")
+		}
+		return err
 	case "unpatch":
 		changed, err := game.unpatch()
 		if err == nil {
@@ -239,59 +335,89 @@ func execute(ui *UI, game Game, command string, args []string, opts options) err
 	return fmt.Errorf("unknown command %s", command)
 }
 
-func change(ui *UI, store *Store, entry *Entry, command string) error {
+func change(p prompter, store *Store, entry *Entry, command string) error {
 	name := entry.Name()
 	switch command {
 	case "on", "enable":
 		if err := store.enable(entry); err != nil {
 			return err
 		}
-		ui.say("'%s' is on (pak%02d).", name, entry.Mod.Slot)
-		return ensurePatched(ui, store.game)
+		p.say("'%s' is on (pak%02d).", name, entry.Mod.Slot)
+		return ensurePatched(p, store.game)
 	case "off", "disable":
 		if err := store.disable(entry); err != nil {
 			return err
 		}
-		ui.say("'%s' is off. It stays in dlmod's folder until you switch it on or remove it.", name)
+		p.say("'%s' is off. It stays in dlmod's folder until you switch it on or remove it.", name)
 	default:
 		if err := store.remove(entry); err != nil {
 			return err
 		}
-		ui.say("Removed '%s'.", name)
+		p.say("Removed '%s'.", name)
 	}
 	return nil
 }
 
-func ensurePatched(ui *UI, game Game) error {
+func ensurePatched(p prompter, game Game) error {
 	changed, err := game.patch()
 	if err != nil {
 		return err
 	}
 	if changed {
-		ui.say("Updated gameinfo.gi so the game loads mods from game/citadel/addons " +
+		p.say("Updated gameinfo.gi so the game loads mods from game/citadel/addons " +
 			"(previous copy: game/dlmod/gameinfo.gi.bak).")
-	} else {
-		ui.say("The game already loads mods from game/citadel/addons.")
 	}
 	return nil
 }
 
+// outdated reports whether an interface mod was installed on an earlier game build.
+func outdated(entry *Entry, current int) bool {
+	mod := entry.Mod
+	return mod != nil && entry.Enabled() && mod.GameVersion > 0 && current > 0 &&
+		mod.GameVersion != current && changesInterface(entry.Paths)
+}
+
+func changesInterface(paths []string) bool {
+	for _, path := range paths {
+		if strings.HasPrefix(path, "panorama/") {
+			return true
+		}
+	}
+	return false
+}
+
+func formatSize(bytes int64) string {
+	switch {
+	case bytes >= 1<<30:
+		return fmt.Sprintf("%.1f GB", float64(bytes)/(1<<30))
+	case bytes >= 10<<20:
+		return fmt.Sprintf("%d MB", bytes>>20)
+	case bytes >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/(1<<20))
+	case bytes >= 1<<10:
+		return fmt.Sprintf("%d KB", bytes>>10)
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
 func showStatus(ui *UI, game Game, store *Store) error {
+	p := ui.p
 	build := ""
 	if v := game.Version(); v > 0 {
 		build = fmt.Sprintf(" (build %d)", v)
 	}
 	ui.say("Deadlock: %s%s", game.Root, build)
 	if _, state, err := game.readGameinfo(); err != nil {
-		ui.say("Mods: unknown, %v", err)
+		ui.say("%s %v", p.paint(p.warnBadge, " MODS ? "), err)
 	} else if !state.Loaded {
-		ui.say("Mods: NOT LOADED. gameinfo.gi does not include citadel/addons; game updates and " +
-			"\"Verify integrity\" reset it. Choose Repair in the menu, or run: dlmod patch")
+		ui.say("%s gameinfo.gi does not include citadel/addons; game updates and \"Verify integrity\" reset it. "+
+			"Run: dlmod patch", p.paint(p.offBadge, " MODS OFF "))
 	} else if len(state.Missing) > 0 {
-		ui.say("Mods: loaded, but gameinfo.gi lacks %s, so settings may be saved in addons. "+
-			"Choose Repair in the menu, or run: dlmod patch", strings.Join(state.Missing, ", "))
+		ui.say("%s but gameinfo.gi lacks %s, so settings may be saved in addons. Run: dlmod patch",
+			p.paint(p.warnBadge, " MODS ON "), strings.Join(state.Missing, ", "))
 	} else {
-		ui.say("Mods: loaded from game/citadel/addons")
+		ui.say("%s loaded from game/citadel/addons", p.paint(p.okBadge, " MODS ON "))
 	}
 
 	entries, err := store.entries()
@@ -306,23 +432,22 @@ func showStatus(ui *UI, game Game, store *Store) error {
 	current := game.Version()
 	var warnings []string
 	for i, entry := range entries {
-		slot := fmt.Sprintf("pak%02d", entry.Slot)
+		slot := p.paint(p.green, fmt.Sprintf("pak%02d", entry.Slot))
 		if !entry.Enabled() {
-			slot = "off  "
+			slot = p.paint(p.dim, "off  ")
 		}
 		detail := ""
 		switch {
 		case entry.Err != nil:
-			detail = "  (unreadable: " + entry.Err.Error() + ")"
+			detail = p.paint(p.red, "  (unreadable: "+entry.Err.Error()+")")
 		case len(entry.Paths) > 0:
-			detail = "  changes " + describePaths(entry.Paths)
+			detail = p.paint(p.dim, "  changes "+describePaths(entry.Paths))
 		}
 		ui.say("%3d  %s  %s%s", i+1, slot, entry.Name(), detail)
-		if mod := entry.Mod; mod != nil && entry.Enabled() && mod.GameVersion > 0 && current > 0 &&
-			mod.GameVersion != current && changesInterface(entry.Paths) {
-			warnings = append(warnings, fmt.Sprintf("'%s' was installed on build %d and the game is now on %d. "+
+		if outdated(entry, current) {
+			warnings = append(warnings, fmt.Sprintf("Warning: '%s' was installed on build %d and the game is now on %d. "+
 				"Interface mods can stop the game from starting after an update; if that happens, switch it off "+
-				"and look for a newer version.", entry.Name(), mod.GameVersion, current))
+				"and look for a newer version.", entry.Name(), entry.Mod.GameVersion, current))
 		}
 	}
 	for _, clash := range conflicts(entries) {
@@ -330,20 +455,12 @@ func showStatus(ui *UI, game Game, store *Store) error {
 			clash.A.Slot, clash.A.Name(), clash.B.Slot, clash.B.Name(), describePaths(clash.Paths))
 	}
 	for _, warning := range warnings {
-		ui.say("\nWarning: %s", warning)
+		ui.say("\n%s", warning)
 	}
 	return nil
 }
 
-func changesInterface(paths []string) bool {
-	for _, path := range paths {
-		if strings.HasPrefix(path, "panorama/") {
-			return true
-		}
-	}
-	return false
-}
-
+// menu is the numbered fallback for consoles that cannot show the full-screen interface.
 func menu(ui *UI, game Game) int {
 	for {
 		store, err := openStore(game)
@@ -361,16 +478,16 @@ func menu(ui *UI, game Game) int {
 		if ui.eof {
 			return 0
 		}
-		var err2 error
+		var failure error
 		switch choice {
 		case "1":
 			if file := ui.ask("Drag the mod file into this window, then press Enter: "); file != "" {
-				err2 = execute(ui, game, "install", []string{file}, options{})
+				failure = execute(ui, game, "install", []string{file}, options{})
 			}
 		case "2", "3":
 			entries, err := store.entries()
 			if err != nil {
-				err2 = err
+				failure = err
 				break
 			}
 			if len(entries) == 0 {
@@ -383,7 +500,7 @@ func menu(ui *UI, game Game) int {
 			}
 			entry, err := resolve(entries, answer)
 			if err != nil {
-				err2 = err
+				failure = err
 				break
 			}
 			command := "remove"
@@ -396,19 +513,19 @@ func menu(ui *UI, game Game) int {
 				break
 			}
 			if gameRunning() {
-				err2 = errors.New("Deadlock is running; close it first")
+				failure = errRunning
 				break
 			}
-			err2 = change(ui, store, entry, command)
+			failure = change(ui, store, entry, command)
 		case "4":
-			err2 = execute(ui, game, "patch", nil, options{})
+			failure = execute(ui, game, "patch", nil, options{})
 		case "5":
-			err2 = execute(ui, game, "play", nil, options{})
+			failure = execute(ui, game, "play", nil, options{})
 		case "0", "q", "exit":
 			return 0
 		}
-		if err2 != nil {
-			ui.say("Error: %v", err2)
+		if failure != nil {
+			ui.say("%s", ui.p.paint(ui.p.red, "Error: "+failure.Error()))
 		}
 	}
 }

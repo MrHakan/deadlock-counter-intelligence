@@ -101,12 +101,12 @@ func steamRoots() []string {
 	switch runtime.GOOS {
 	case "windows":
 		var roots []string
-		for _, key := range [][2]string{
-			{`HKCU\Software\Valve\Steam`, "SteamPath"},
-			{`HKLM\SOFTWARE\WOW6432Node\Valve\Steam`, "InstallPath"},
-			{`HKLM\SOFTWARE\Valve\Steam`, "InstallPath"},
+		for _, key := range [][3]string{
+			{"HKCU", `Software\Valve\Steam`, "SteamPath"},
+			{"HKLM", `SOFTWARE\WOW6432Node\Valve\Steam`, "InstallPath"},
+			{"HKLM", `SOFTWARE\Valve\Steam`, "InstallPath"},
 		} {
-			if value := registryValue(key[0], key[1]); value != "" {
+			if value := registryValue(key[0], key[1], key[2]); value != "" {
 				roots = append(roots, filepath.FromSlash(value))
 			}
 		}
@@ -122,20 +122,6 @@ func steamRoots() []string {
 			filepath.Join(home, "snap", "steam", "common", ".local", "share", "Steam"),
 		}
 	}
-}
-
-func registryValue(key, name string) string {
-	output, err := exec.Command("reg", "query", key, "/v", name).Output()
-	if err != nil {
-		return ""
-	}
-	for _, line := range strings.Split(string(output), "\n") {
-		line = strings.TrimSpace(line)
-		if _, value, ok := strings.Cut(line, "REG_SZ"); ok && strings.HasPrefix(line, name) {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
 }
 
 var (
@@ -171,15 +157,6 @@ func deadlockIn(library string) string {
 	return ""
 }
 
-// gameRunning reports whether Deadlock is running; Windows locks files the game has open.
-func gameRunning() bool {
-	if runtime.GOOS != "windows" {
-		return false
-	}
-	output, err := exec.Command("tasklist", "/FI", "IMAGENAME eq deadlock.exe", "/NH").Output()
-	return err == nil && strings.Contains(strings.ToLower(string(output)), "deadlock.exe")
-}
-
 func launchGame() error {
 	url := "steam://rungameid/" + appID
 	switch runtime.GOOS {
@@ -190,4 +167,22 @@ func launchGame() error {
 	default:
 		return exec.Command("xdg-open", url).Start()
 	}
+}
+
+// exeNameIs compares a NUL-terminated UTF-16 process name with a lowercase ASCII name without
+// converting it, so checking every running process allocates nothing.
+func exeNameIs(name []uint16, want string) bool {
+	if len(name) <= len(want) || name[len(want)] != 0 {
+		return false
+	}
+	for i := 0; i < len(want); i++ {
+		char := name[i]
+		if char >= 'A' && char <= 'Z' {
+			char += 'a' - 'A'
+		}
+		if char != uint16(want[i]) {
+			return false
+		}
+	}
+	return true
 }

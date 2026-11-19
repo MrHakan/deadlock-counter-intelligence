@@ -49,7 +49,24 @@ Close Deadlock first, and use one install method only: two tools editing the sam
 2. Drag the ZIP onto `dlmod-windows-amd64.exe`.
 3. Start Deadlock.
 
-Double-click dlmod to open its menu: install, switch mods on or off, remove, repair after a game update, and start the game. Deadlock updates and Steam's *Verify integrity of game files* replace `gameinfo.gi`, which turns all mods off. When that happens, choose **Repair** in the menu, or start the game with `dlmod play`, which repairs first.
+Double-click dlmod to open its full-screen view of every mod, with its slot, file count, size, and conflicts or update warnings. It updates by itself when something changes outside it: a game update, a mod added by hand, or Deadlock starting.
+
+![dlmod showing five mods, one conflict and its explanation](docs/images/dlmod.png)
+
+| Key | Action |
+| --- | --- |
+| `↑` `↓` (or `j` `k`) | Select a mod |
+| `Space` or `Enter` | Switch the selected mod on or off. It keeps its place in the list. |
+| Drag a file into the window | Install it straight away. `i` lets you type a path instead. |
+| `d` | Delete the selected mod, after a confirmation |
+| `r` | Repair `gameinfo.gi` after a game update |
+| `p` | Start Deadlock through Steam |
+| `?` | Help |
+| `q` or `Esc` | Quit |
+
+Deadlock updates and Steam's *Verify integrity of game files* replace `gameinfo.gi`, which turns all mods off. The screen then shows **MODS OFF**: press `r`, or start the game with `dlmod play`, which repairs first. Consoles older than Windows 10 get a numbered menu instead, which `-plain` also selects.
+
+The full-screen view needs about 5–8 MB of memory. While it waits it checks four file timestamps (and whether the game is running) once a second, and redraws only when something changed. Key presses take under a millisecond to show. On Windows, dlmod reads Steam's location from the registry and checks for the game through the system API, without starting other programs. Listing 40 mods, two of them with 6,000 files each, takes about 5 ms.
 
 | Command | What it does |
 | --- | --- |

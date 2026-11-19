@@ -28,6 +28,16 @@ var (
 	riskyFile   = regexp.MustCompile(`(?i)\.(exe|dll|bat|cmd|ps1|scr|vbs|js|msi|com)$`)
 )
 
+// prompter is how installing and switching mods talks to the person: the plain console
+// interface and the full-screen one both implement it.
+type prompter interface {
+	say(format string, args ...any)
+	confirm(question string, fallback bool) bool
+	// choose returns the chosen option, or all=true for every option, or ok=false to cancel.
+	choose(question string, options []string) (index int, all, ok bool)
+	progress(label string, done, total int64)
+}
+
 type Mod struct {
 	ID          int    `json:"id"`
 	Name        string `json:"name"`
@@ -50,6 +60,7 @@ type Entry struct {
 	Slot  int
 	Files []string // full paths, pakNN_dir.vpk first
 	Paths []string // game files the mod changes
+	Size  int64    // bytes on disk, all parts together
 	Err   error    // the VPK could not be read
 }
 
@@ -62,12 +73,52 @@ func (e *Entry) Name() string {
 	return fmt.Sprintf("pak%02d (added outside dlmod)", e.Slot)
 }
 
+func isDirFile(file string) bool { return strings.HasSuffix(strings.ToLower(file), "_dir.vpk") }
+
+// parsed remembers VPK directories between refreshes. A file is read again only when its size
+// or modification time changes, so redrawing the screen costs a few stat calls.
+type parsedVPK struct {
+	size    int64
+	modTime time.Time
+	paths   []string
+	err     error
+}
+
+var vpkCache = map[string]parsedVPK{}
+
 func (e *Entry) load() {
-	if len(e.Files) == 0 || !strings.HasSuffix(strings.ToLower(e.Files[0]), "_dir.vpk") {
+	e.Size = 0
+	var dirInfo os.FileInfo
+	for i, file := range e.Files {
+		if info, err := os.Stat(file); err == nil {
+			e.Size += info.Size()
+			if i == 0 {
+				dirInfo = info
+			}
+		}
+	}
+	if len(e.Files) == 0 || !isDirFile(e.Files[0]) || dirInfo == nil {
 		e.Err = errors.New("its pakNN_dir.vpk file is missing")
 		return
 	}
+	if cached, ok := vpkCache[e.Files[0]]; ok && cached.size == dirInfo.Size() && cached.modTime.Equal(dirInfo.ModTime()) {
+		e.Paths, e.Err = cached.paths, cached.err
+		return
+	}
 	e.Paths, e.Err = vpkFiles(e.Files[0])
+	vpkCache[e.Files[0]] = parsedVPK{dirInfo.Size(), dirInfo.ModTime(), e.Paths, e.Err}
+}
+
+// moveFile renames a mod file and carries its parsed directory along (renames keep the timestamp).
+func moveFile(from, to string) error {
+	if err := os.Rename(from, to); err != nil {
+		return err
+	}
+	if cached, ok := vpkCache[from]; ok {
+		delete(vpkCache, from)
+		vpkCache[to] = cached
+	}
+	return nil
 }
 
 type Store struct {
@@ -149,11 +200,10 @@ func (s *Store) slots() (map[int][]string, error) {
 
 func sortParts(files []string) {
 	sort.Slice(files, func(i, j int) bool {
-		a, b := strings.ToLower(files[i]), strings.ToLower(files[j])
-		if strings.HasSuffix(a, "_dir.vpk") != strings.HasSuffix(b, "_dir.vpk") {
-			return strings.HasSuffix(a, "_dir.vpk")
+		if isDirFile(files[i]) != isDirFile(files[j]) {
+			return isDirFile(files[i])
 		}
-		return a < b
+		return strings.ToLower(files[i]) < strings.ToLower(files[j])
 	})
 }
 
@@ -170,7 +220,7 @@ func (s *Store) freeSlot() (int, error) {
 	return 0, errors.New("all 99 mod slots are in use; remove a mod first")
 }
 
-// entries lists switched-on mods by slot, then switched-off mods.
+// entries lists every mod by slot; switched-off mods keep the slot they had.
 func (s *Store) entries() ([]*Entry, error) {
 	used, err := s.slots()
 	if err != nil {
@@ -187,11 +237,9 @@ func (s *Store) entries() ([]*Entry, error) {
 		numbers = append(numbers, slot)
 	}
 	sort.Ints(numbers)
-	var list []*Entry
+	list := make([]*Entry, 0, len(numbers)+len(s.manifest.Mods))
 	for _, slot := range numbers {
-		entry := &Entry{Mod: bySlot[slot], Slot: slot, Files: used[slot]}
-		entry.load()
-		list = append(list, entry)
+		list = append(list, &Entry{Mod: bySlot[slot], Slot: slot, Files: used[slot]})
 	}
 	for _, mod := range s.manifest.Mods {
 		if mod.Enabled {
@@ -204,8 +252,26 @@ func (s *Store) entries() ([]*Entry, error) {
 			}
 			sortParts(entry.Files)
 		}
-		entry.load()
 		list = append(list, entry)
+	}
+	// A stable order by slot: switching a mod off must not move it in the list.
+	sort.SliceStable(list, func(i, j int) bool {
+		if list[i].Slot != list[j].Slot {
+			return list[i].Slot < list[j].Slot
+		}
+		return list[i].Enabled() && !list[j].Enabled()
+	})
+	seen := make(map[string]bool, len(list))
+	for _, entry := range list {
+		entry.load()
+		if len(entry.Files) > 0 {
+			seen[entry.Files[0]] = true
+		}
+	}
+	for file := range vpkCache {
+		if !seen[file] {
+			delete(vpkCache, file)
+		}
 	}
 	return list, nil
 }
@@ -217,7 +283,7 @@ type Conflict struct {
 }
 
 func overlap(a, b []string) []string {
-	seen := map[string]bool{}
+	seen := make(map[string]bool, len(a))
 	for _, path := range a {
 		seen[path] = true
 	}
@@ -231,17 +297,52 @@ func overlap(a, b []string) []string {
 	return shared
 }
 
+// conflicts indexes every changed file once, so the cost grows with the number of files rather
+// than with the number of mod pairs.
 func conflicts(entries []*Entry) []Conflict {
-	var result []Conflict
-	for i, a := range entries {
-		for _, b := range entries[i+1:] {
-			if a.Enabled() && b.Enabled() {
-				if shared := overlap(a.Paths, b.Paths); len(shared) > 0 {
-					result = append(result, Conflict{a, b, shared})
-				}
+	total := 0
+	for _, entry := range entries {
+		total += len(entry.Paths)
+	}
+	// Most files belong to one mod: they cost a map slot and nothing else. Only files that a
+	// second mod also changes get a list of further owners.
+	first := make(map[string]int, total)
+	more := map[string][]int{}
+	shared := map[[2]int][]string{}
+	for i, entry := range entries {
+		if !entry.Enabled() {
+			continue
+		}
+		for _, path := range entry.Paths {
+			owner, seen := first[path]
+			if !seen {
+				first[path] = i
+				continue
 			}
+			others := more[path]
+			if owner == i || (len(others) > 0 && others[len(others)-1] == i) {
+				continue // listed twice in the same mod
+			}
+			pair := [2]int{owner, i}
+			shared[pair] = append(shared[pair], path)
+			for _, earlier := range others {
+				pair = [2]int{earlier, i}
+				shared[pair] = append(shared[pair], path)
+			}
+			more[path] = append(others, i)
 		}
 	}
+	result := make([]Conflict, 0, len(shared))
+	for pair, paths := range shared {
+		sort.Strings(paths)
+		result = append(result, Conflict{entries[pair[0]], entries[pair[1]], paths})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].A.Slot != result[j].A.Slot {
+			return result[i].A.Slot < result[j].A.Slot
+		}
+		return result[i].B.Slot < result[j].B.Slot
+	})
 	return result
 }
 
@@ -250,6 +351,7 @@ func conflicts(entries []*Entry) []Conflict {
 type sourceFile struct {
 	name string
 	open func() (io.ReadCloser, error)
+	size int64
 }
 
 // source is one mod inside a download: a directory file and its numbered archive parts.
@@ -278,8 +380,7 @@ func readSources(file string) ([]*source, []string, func(), error) {
 				}
 				continue
 			}
-			entry := entry
-			files = append(files, &sourceFile{entry.Name, entry.Open})
+			files = append(files, &sourceFile{entry.Name, entry.Open, int64(entry.UncompressedSize64)})
 		}
 		sources, err := groupSources(files)
 		return sources, skipped, func() { archive.Close() }, err
@@ -294,16 +395,17 @@ func readSources(file string) ([]*source, []string, func(), error) {
 	folder := filepath.Dir(file)
 	base := filepath.Base(file)
 	prefix := ""
-	if strings.HasSuffix(strings.ToLower(base), "_dir.vpk") {
+	if isDirFile(base) {
 		prefix = base[:len(base)-len("_dir.vpk")]
 	} else if match := archivePart.FindStringSubmatch(base); match != nil {
 		prefix = match[1]
 	}
-	open := func(name string) *sourceFile {
+	open := func(name string, size int64) *sourceFile {
 		full := filepath.Join(folder, name)
-		return &sourceFile{name, func() (io.ReadCloser, error) { return os.Open(full) }}
+		return &sourceFile{name, func() (io.ReadCloser, error) { return os.Open(full) }, size}
 	}
-	files := []*sourceFile{open(base)}
+	info, _ := os.Stat(file)
+	files := []*sourceFile{open(base, info.Size())}
 	if prefix != "" {
 		listing, err := os.ReadDir(folder)
 		if err != nil {
@@ -316,7 +418,11 @@ func readSources(file string) ([]*source, []string, func(), error) {
 			}
 			if match := archivePart.FindStringSubmatch(name); (match != nil && strings.EqualFold(match[1], prefix)) ||
 				strings.EqualFold(name, prefix+"_dir.vpk") {
-				files = append(files, open(name))
+				size := int64(0)
+				if info, err := item.Info(); err == nil {
+					size = info.Size()
+				}
+				files = append(files, open(name, size))
 			}
 		}
 	}
@@ -359,7 +465,25 @@ func groupSources(files []*sourceFile) ([]*source, error) {
 	return result, nil
 }
 
-func copyTo(file *sourceFile, target string) (string, error) {
+// progressWriter reports copied bytes at most ten times a second.
+type progressWriter struct {
+	label       string
+	done, total int64
+	last        time.Time
+	report      prompter
+}
+
+func (w *progressWriter) Write(data []byte) (int, error) {
+	w.done += int64(len(data))
+	if now := time.Now(); w.done >= w.total || now.Sub(w.last) >= 100*time.Millisecond {
+		w.last = now
+		w.report.progress(w.label, w.done, w.total)
+	}
+	return len(data), nil
+}
+
+// copyTo streams a file through one buffer, so memory use does not grow with the mod's size.
+func copyTo(file *sourceFile, target string, progress io.Writer, buffer []byte) (string, error) {
 	reader, err := file.open()
 	if err != nil {
 		return "", err
@@ -370,7 +494,11 @@ func copyTo(file *sourceFile, target string) (string, error) {
 		return "", err
 	}
 	hash := sha256.New()
-	_, err = io.Copy(io.MultiWriter(writer, hash), reader)
+	sinks := []io.Writer{writer, hash}
+	if progress != nil {
+		sinks = append(sinks, progress)
+	}
+	_, err = io.CopyBuffer(io.MultiWriter(sinks...), reader, buffer)
 	if closeErr := writer.Close(); err == nil {
 		err = closeErr
 	}
@@ -381,51 +509,52 @@ func modName(file string) string {
 	return strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
 }
 
-// install copies the mods in file into free slots. With several mods in one archive (often colour
-// variants of one mod) it asks which to install when it can ask; otherwise it installs all of them.
-func (s *Store) install(ui *UI, file, name string) error {
+// install copies the mods in file into free slots. When an archive holds several mods (often
+// colour variants of one mod) it asks which to install; without a console it installs all.
+func (s *Store) install(p prompter, file, name string) error {
 	sources, skipped, closeSources, err := readSources(file)
 	if err != nil {
 		return err
 	}
 	defer closeSources()
 	for _, risky := range skipped {
-		ui.say("Skipped %s: mods never need program files.", risky)
+		p.say("Skipped %s: mods never need program files.", risky)
 	}
 	if len(sources) == 0 {
 		return fmt.Errorf("%s contains no .vpk file", filepath.Base(file))
 	}
 	chosen := sources
-	if len(sources) > 1 && ui.interactive {
-		ui.say("%s contains %d mods, often colour or style variants of the same mod:", filepath.Base(file), len(sources))
+	if len(sources) > 1 {
+		labels := make([]string, len(sources))
 		for i, src := range sources {
-			ui.say("  %d  %s", i+1, src.label)
+			labels[i] = src.label
 		}
-		answer := ui.ask("Install which one? Enter a number, or \"all\": ")
-		if !strings.EqualFold(answer, "all") {
-			index, err := strconv.Atoi(answer)
-			if err != nil || index < 1 || index > len(sources) {
-				return errors.New("nothing installed")
-			}
-			chosen = sources[index-1 : index]
+		index, all, ok := p.choose(fmt.Sprintf("%s contains %d mods, often colour or style variants of the same mod. "+
+			"Install which one?", filepath.Base(file), len(sources)), labels)
+		if !ok {
+			return errors.New("nothing installed")
+		}
+		if !all {
+			chosen = sources[index : index+1]
 		}
 	}
 	if name == "" {
 		name = modName(file)
 	}
+	buffer := make([]byte, 1<<20)
 	for _, src := range chosen {
 		label := name
 		if len(sources) > 1 {
 			label = fmt.Sprintf("%s (%s)", name, src.label)
 		}
-		if err := s.installOne(ui, src, label, filepath.Base(file)); err != nil {
+		if err := s.installOne(p, src, label, filepath.Base(file), buffer); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *Store) installOne(ui *UI, src *source, name, origin string) error {
+func (s *Store) installOne(p prompter, src *source, name, origin string, buffer []byte) error {
 	if err := os.MkdirAll(s.game.StateDir(), 0o755); err != nil {
 		return err
 	}
@@ -435,8 +564,19 @@ func (s *Store) installOne(ui *UI, src *source, name, origin string) error {
 	}
 	defer os.RemoveAll(staging)
 
+	parts := make([]string, 0, len(src.parts))
+	total := src.dir.size
+	for part, file := range src.parts {
+		parts = append(parts, part)
+		total += file.size
+	}
+	sort.Strings(parts)
+	var progress io.Writer
+	if total > 0 {
+		progress = &progressWriter{label: name, total: total, report: p}
+	}
 	dirFile := filepath.Join(staging, "dir.vpk")
-	sum, err := copyTo(src.dir, dirFile)
+	sum, err := copyTo(src.dir, dirFile, progress, buffer)
 	if err != nil {
 		return err
 	}
@@ -444,13 +584,8 @@ func (s *Store) installOne(ui *UI, src *source, name, origin string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %v", src.label, err)
 	}
-	parts := make([]string, 0, len(src.parts))
-	for part := range src.parts {
-		parts = append(parts, part)
-	}
-	sort.Strings(parts)
 	for _, part := range parts {
-		if _, err := copyTo(src.parts[part], filepath.Join(staging, part+".vpk")); err != nil {
+		if _, err := copyTo(src.parts[part], filepath.Join(staging, part+".vpk"), progress, buffer); err != nil {
 			return err
 		}
 	}
@@ -462,9 +597,9 @@ func (s *Store) installOne(ui *UI, src *source, name, origin string) error {
 	for _, entry := range entries {
 		if entry.Mod != nil && entry.Mod.SHA256 == sum {
 			if entry.Enabled() {
-				ui.say("'%s' is already installed as pak%02d.", entry.Name(), entry.Slot)
+				p.say("'%s' is already installed as pak%02d.", entry.Name(), entry.Slot)
 			} else {
-				ui.say("'%s' is already installed but switched off; switch it on instead.", entry.Name())
+				p.say("'%s' is already installed but switched off; switch it on instead.", entry.Name())
 			}
 			return nil
 		}
@@ -481,13 +616,13 @@ func (s *Store) installOne(ui *UI, src *source, name, origin string) error {
 			continue
 		}
 		sameFiles := len(shared) == len(paths) && len(shared) == len(entry.Paths)
-		if slot == 0 && sameFiles && ui.confirm(fmt.Sprintf(
+		if slot == 0 && sameFiles && p.confirm(fmt.Sprintf(
 			"'%s' (pak%02d) changes exactly the same files. Is this a newer version? Replace it?", entry.Name(), entry.Slot), true) {
 			if err := s.remove(entry); err != nil {
 				return err
 			}
 			slot = entry.Slot
-			ui.say("Removed '%s'.", entry.Name())
+			p.say("Removed '%s'.", entry.Name())
 			continue
 		}
 		clashes = append(clashes, Conflict{entry, nil, shared})
@@ -519,9 +654,9 @@ func (s *Store) installOne(ui *UI, src *source, name, origin string) error {
 	if err := s.save(); err != nil {
 		return err
 	}
-	ui.say("Installed '%s' as pak%02d_dir.vpk%s.", name, slot, plural(len(parts), " with %d archive file", " with %d archive files"))
+	p.say("Installed '%s' as pak%02d_dir.vpk%s.", name, slot, plural(len(parts), " with %d archive file", " with %d archive files"))
 	for _, clash := range clashes {
-		ui.say("Conflict: '%s' (pak%02d) also changes %s. Only one of the two can take effect; "+
+		p.say("Conflict: '%s' (pak%02d) also changes %s. Only one of the two can take effect; "+
 			"switch one off if something looks wrong.", clash.A.Name(), clash.A.Slot, describePaths(clash.Paths))
 	}
 	return nil
@@ -558,6 +693,7 @@ func (s *Store) remove(entry *Entry) error {
 		if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
+		delete(vpkCache, file)
 	}
 	if entry.Mod != nil {
 		if !entry.Mod.Enabled {
@@ -583,7 +719,7 @@ func (s *Store) disable(entry *Entry) error {
 		return err
 	}
 	for _, file := range entry.Files {
-		if err := os.Rename(file, filepath.Join(folder, filepath.Base(file))); err != nil {
+		if err := moveFile(file, filepath.Join(folder, filepath.Base(file))); err != nil {
 			return err
 		}
 	}
@@ -615,7 +751,7 @@ func (s *Store) enable(entry *Entry) error {
 			continue
 		}
 		renamed := fmt.Sprintf("pak%02d_%s.vpk", slot, strings.ToLower(match[2]))
-		if err := os.Rename(file, filepath.Join(s.game.Addons(), renamed)); err != nil {
+		if err := moveFile(file, filepath.Join(s.game.Addons(), renamed)); err != nil {
 			return err
 		}
 	}
