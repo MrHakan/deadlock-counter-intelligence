@@ -22,6 +22,7 @@ SCRIPT_SOURCE = "panorama/scripts/dci_hud.vts"
 # Valve's layouts name scripts by source path (s2r://panorama/scripts/async.vts), like styles.
 SCRIPT = f"s2r://{SCRIPT_SOURCE}"
 ROWS = 4
+FACES = 5  # hero portraits per row
 
 
 def patch_hud(stock):
@@ -65,6 +66,7 @@ def patch_hud(stock):
     add(header, "Label", {"class": "DCITitle", "text": "Counter items"})
     add(header, "Label", {"id": "DCIPatchBadge", "class": "DCIPatchBadge", "text": "PATCHED"}, hover=True, hidden=True)
     add(header, "Label", {"id": "DCISource", "class": "DCISource"}, hidden=True)
+    add(box, "Label", {"id": "DCIThreats", "class": "DCIThreats"}, hidden=True)
     add(box, "Label", {"id": "DCIEmpty", "class": "DCIEmpty", "text": "Waiting for enemy lineup."})
     for index in range(ROWS):
         row = add(box, "Panel", {"id": f"DCIRow{index}", "class": "DCIRow"}, hidden=True)
@@ -74,12 +76,16 @@ def patch_hud(stock):
         add(line, "Label", {"id": f"DCIName{index}", "class": "DCIName"})
         add(line, "Label", {"id": f"DCIPatch{index}", "class": "DCIPatch", "text": "!"}, hover=True, hidden=True)
         add(line, "Label", {"id": f"DCIBuy{index}", "class": "DCIBuy", "text": "BUY NOW"}, hidden=True)
+        add(line, "Label", {"id": f"DCIQueue{index}", "class": "DCIQueue", "text": "+ QUEUE"}, hover=True)
         cost = add(line, "Panel", {"class": "DCICost"})
         add(cost, "Panel", {"class": "DCISoul"})
         add(cost, "Label", {"id": f"DCIPrice{index}", "class": "DCIPrice"})
         add(details, "Label", {"id": f"DCIReason{index}", "class": "DCIReason"})
         evidence = add(details, "Panel", {"class": "DCIEvidenceLine"})
         add(evidence, "Label", {"id": f"DCIEvidence{index}", "class": "DCIEvidence"})
+        faces = add(evidence, "Panel", {"id": f"DCIFaces{index}", "class": "DCIFaces"}, hidden=True)
+        for face in range(FACES):
+            add(faces, "Panel", {"id": f"DCIFace{index}_{face}", "class": "DCIFace"}, hidden=True)
         add(evidence, "Label", {"id": f"DCIImpact{index}", "class": "DCIImpact"}, hidden=True)
     return ET.tostring(root, encoding="unicode")
 

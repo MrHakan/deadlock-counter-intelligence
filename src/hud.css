@@ -295,3 +295,52 @@
     color: #eadfc8;
     font-size: 13px;
 }
+
+/* Portraits of the heroes an item answers, in place of their names. */
+.DCIHasFaces .DCIEvidence { width: fit-children; margin-right: 5px; }
+
+.DCIFaces {
+    width: fill-parent-flow(1);
+    flow-children: right;
+    vertical-align: center;
+}
+
+.DCIFace {
+    width: 20px;
+    height: 20px;
+    margin-right: 3px;
+    background-size: 20px 20px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: 1px solid #5a5446;
+    border-radius: 3px;
+}
+
+/* Adds the item to the game's quick-buy queue. */
+.DCIQueue {
+    margin-left: 6px;
+    padding: 1px 5px 0px 5px;
+    vertical-align: center;
+    background-color: #2f3a48;
+    border: 1px solid #56708c;
+    color: #d6e6f7;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.DCIQueue:hover {
+    background-color: #46607c;
+    color: #ffffff;
+}
+
+/* Enemy items, seen on the scoreboard or in the shop, that counter your own hero. */
+.DCIThreats {
+    width: 100%;
+    padding: 6px 11px 6px 11px;
+    background-color: #4a1d1a;
+    border-top: 1px solid #b04a3c;
+    color: #ffd2c8;
+    font-size: 14px;
+    font-weight: bold;
+}

@@ -30,6 +30,17 @@ def icon_path(url):
     return f"s2r://panorama/{match.group(1)}_psd.vtex" if match else ""
 
 
+def portrait_path(url):
+    """The game texture behind a hero's small portrait: .../images/heroes/bull_sm.png ->
+    s2r://panorama/images/heroes/bull_sm_psd.vtex. Empty when the URL has another shape."""
+    match = re.search(r"/assets-api-res/(images/heroes/[a-z0-9_]+_sm)\.(?:png|webp)$", url or "")
+    if not match:
+        return ""
+    # Vindicta's portrait was compiled from a PNG, so its texture name ends in _png (build 6864).
+    suffix = "_png" if match.group(1).endswith("/hornet_sm") else "_psd"
+    return f"s2r://panorama/{match.group(1)}{suffix}.vtex"
+
+
 def merge(english, turkish, shops=False):
     if shops:
         def eligible(row):
@@ -54,6 +65,8 @@ def merge(english, turkish, shops=False):
             if slot not in CATEGORIES or slot != translated.get("item_slot_type"):
                 raise ValueError(f"Invalid category for {identifier}")
             entry.extend([cost, slot, icon_path(row.get("shop_image"))])
+        else:
+            entry.append(portrait_path((row.get("images") or {}).get("icon_image_small")))
         merged.append(entry)
     return merged
 

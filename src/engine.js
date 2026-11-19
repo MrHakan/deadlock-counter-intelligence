@@ -98,6 +98,7 @@ var DCIEngine = (function () {
       var row = items.keys[key];
       var result = {
         key: key,
+        id: row[0],
         name: row[2],
         cost: row[4],
         category: row[5],
@@ -107,6 +108,10 @@ var DCIEngine = (function () {
         minute: typeof minutes[key] === "number" ? minutes[key] : null,
       };
       Object.keys(extra).forEach(function (field) { result[field] = extra[field]; });
+      // Portraits of the heroes the row names, from the game's own textures.
+      result.portraits = (result.heroes || []).map(function (hero) {
+        return (heroes.keys[hero] && heroes.keys[hero][4]) || "";
+      });
       return result;
     }
 
