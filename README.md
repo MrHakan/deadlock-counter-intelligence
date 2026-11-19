@@ -129,7 +129,7 @@ py -3 tools/build.py --deadlock-dir "C:\Program Files (x86)\Steam\steamapps\comm
 
 If you already have the extracted stock layout, use `--hud-xml path/to/hud.xml`. [GameTracking-Deadlock](https://github.com/SteamTracking/GameTracking-Deadlock/blob/master/game/citadel/pak01_dir/panorama/layout/hud.xml) publishes it for the live build. The build produces `dist/deadlock-counter-intelligence-experimental.zip` with one `pak01_dir.vpk` inside.
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`: it runs the tests, builds the ZIP from the GameTracking layout (and stops if that layout is from a different build than the catalog), and publishes a release with the notes in `.github/release-notes/<tag>.md`.
+`.github/workflows/release.yml` publishes releases. It runs when a `v*` tag is pushed, or from the Actions tab: choose **Release → Run workflow** and enter a version such as `v0.2.0`, and it creates the tag on the commit it builds. It runs the tests, builds the ZIP from the GameTracking layout (and stops if that layout is from a different build than the catalog), builds dlmod for Windows and Linux, and publishes a release with the notes in `.github/release-notes/<version>.md`.
 
 ## Catalog and tests
 
