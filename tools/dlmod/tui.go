@@ -259,6 +259,8 @@ type tui struct {
 
 	selected, top int
 	mode          int
+	purpose       string // what the text prompt is for: "install" or "profile"
+	profile       string // the profile whose mods are exactly the ones switched on
 	input         []rune
 	question      string
 	options       []string
@@ -386,6 +388,10 @@ func (t *tui) handle(data []byte) bool {
 
 // paste installs dropped mod files straight away; anything else lands in the path prompt.
 func (t *tui) paste(text string) {
+	if t.mode == modePrompt && t.purpose == "profile" {
+		t.input = append(t.input, []rune(strings.TrimSpace(text))...)
+		return
+	}
 	if t.mode != modeList && t.mode != modePrompt {
 		return
 	}
@@ -399,7 +405,7 @@ func (t *tui) paste(text string) {
 		t.install(files)
 		return
 	}
-	t.mode = modePrompt
+	t.mode, t.purpose = modePrompt, "install"
 	t.input = append(t.input, []rune(strings.TrimRight(text, "\r\n"))...)
 }
 
@@ -419,6 +425,20 @@ func (t *tui) press(k key) bool {
 		case "ctrl+u":
 			t.input = nil
 		case "enter":
+			if t.purpose == "profile" {
+				name := strings.TrimSpace(string(t.input))
+				t.mode, t.input = modeList, nil
+				if name != "" {
+					t.act(func() error {
+						count, err := t.store.saveProfile(name)
+						if err == nil {
+							t.note(toneGood, fmt.Sprintf("Saved profile '%s' with %s.", name, plural(count, "%d mod", "%d mods")))
+						}
+						return err
+					})
+				}
+				return false
+			}
 			files := droppedFiles(string(t.input))
 			t.input = nil
 			if len(files) == 0 {
@@ -461,13 +481,17 @@ func (t *tui) press(k key) bool {
 		case ' ':
 			t.toggle()
 		case 'i', '+':
-			t.mode, t.notes = modePrompt, nil
+			t.mode, t.purpose, t.notes = modePrompt, "install", nil
 		case 'd', '-':
 			t.remove()
 		case 'r':
 			t.repair()
 		case 'u':
+			t.update()
+		case 'x':
 			t.unpatch()
+		case 'f':
+			t.profiles()
 		case 'p':
 			t.play()
 		case '?', 'h':
@@ -550,6 +574,74 @@ func (t *tui) unpatch() {
 	})
 }
 
+// update downloads the HUD for the installed game build; it asks first because it goes online.
+func (t *tui) update() {
+	question := "Download the Counter Intelligence HUD for this game build from GitHub and install it?"
+	if t.build > 0 {
+		question = fmt.Sprintf("Download the Counter Intelligence HUD for game build %d from GitHub and install it?", t.build)
+	}
+	if !t.confirm(question, true) {
+		return
+	}
+	t.act(func() error {
+		if err := t.store.updateHUD(t); err != nil {
+			return err
+		}
+		return ensurePatched(t, t.game)
+	})
+}
+
+// profiles lists the saved profiles: Enter switches to one, d deletes it, and the last option
+// saves the mods that are on now under a new name.
+func (t *tui) profiles() {
+	names := t.store.profileNames()
+	options := make([]string, 0, len(names)+1)
+	for _, name := range names {
+		label := fmt.Sprintf("%s  (%s)", name, plural(len(t.store.manifest.Profiles[name]), "%d mod", "%d mods"))
+		if name == t.profile {
+			label += "  · in use"
+		}
+		options = append(options, label)
+	}
+	options = append(options, "Save the mods that are on now as a new profile…")
+	restore := t.ask("Profiles: Enter switches to the selected profile, d deletes it.", options)
+	defer restore()
+	for {
+		t.render()
+		k, ok := t.waitKey()
+		switch {
+		case !ok || k.name == "esc" || k.name == "ctrl+c":
+			return
+		case k.name == "up":
+			t.choice = max(0, t.choice-1)
+		case k.name == "down":
+			t.choice = min(len(t.options)-1, t.choice+1)
+		case k.name == "char" && (k.r == 'd' || k.r == 'D') && t.choice < len(names):
+			name := names[t.choice]
+			restore()
+			if t.confirm(fmt.Sprintf("Delete profile '%s'? Its mods stay installed.", name), false) {
+				t.act(func() error {
+					err := t.store.deleteProfile(name)
+					if err == nil {
+						t.note(toneInfo, fmt.Sprintf("Deleted profile '%s'.", name))
+					}
+					return err
+				})
+			}
+			return
+		case k.name == "enter" && t.choice == len(names):
+			restore()
+			t.mode, t.purpose, t.input, t.notes = modePrompt, "profile", nil, nil
+			return
+		case k.name == "enter":
+			name := names[t.choice]
+			restore()
+			t.act(func() error { return t.store.useProfile(t, name) })
+			return
+		}
+	}
+}
+
 func (t *tui) play() {
 	t.act(func() error {
 		if err := ensurePatched(t, t.game); err != nil {
@@ -612,7 +704,12 @@ func (t *tui) waitKey() (key, bool) {
 func (t *tui) ask(question string, options []string) func() {
 	saved := t.mode
 	t.mode, t.question, t.options, t.choice = modeQuestion, question, options, 0
-	return func() { t.mode, t.question, t.options = saved, "", nil }
+	done := false
+	return func() {
+		if !done {
+			t.mode, t.question, t.options, done = saved, "", nil, true
+		}
+	}
 }
 
 func (t *tui) confirm(question string, fallback bool) bool {
@@ -722,6 +819,7 @@ func (t *tui) reload() {
 		t.clashes[clash.A] = append(t.clashes[clash.A], clash)
 		t.clashes[clash.B] = append(t.clashes[clash.B], clash)
 	}
+	t.profile = store.activeProfile(t.entries)
 	_, t.state, t.stateErr = t.game.readGameinfo()
 	t.build = t.game.Version()
 	t.running = gameRunning()
@@ -855,6 +953,9 @@ func (t *tui) drawList(c *canvas, room int, compact bool) {
 	nameWidth := max(8, c.width-36)
 	summary := fmt.Sprintf("NAME · %d mods, %d on", len(t.entries), enabled)
 	summary += plural(t.pairs, ", %d conflict", ", %d conflicts")
+	if t.profile != "" {
+		summary += " · profile " + t.profile
+	}
 	c.line(seg{fmt.Sprintf("   %-5s %-7s%s  %7s %9s ", "STATE", "SLOT", pad(summary, nameWidth), "FILES", "SIZE"), p.dim})
 	for i := t.top; i < min(len(t.entries), t.top+rows); i++ {
 		entry := t.entries[i]
@@ -975,7 +1076,11 @@ func (t *tui) drawBottom(c *canvas, compact bool) {
 			c.line(seg{fmt.Sprintf("%s%d  %s ", marker, i+1, option), style})
 		}
 	case modePrompt:
-		c.line(seg{" Install a mod: drag a .zip or .vpk file into this window, or type its path.", p.bold})
+		if t.purpose == "profile" {
+			c.line(seg{" Name for the new profile (the mods that are on now):", p.bold})
+		} else {
+			c.line(seg{" Install a mod: drag a .zip or .vpk file into this window, or type its path.", p.bold})
+		}
 		c.line(seg{" > ", p.cyan}, seg{string(t.input), ""}, seg{" ", p.invert})
 	}
 	if t.busy != "" {
@@ -1008,18 +1113,23 @@ func (t *tui) drawBottom(c *canvas, compact bool) {
 	var hints [][2]string
 	switch t.mode {
 	case modeQuestion:
-		if len(t.options) > 0 {
+		if len(t.options) > 0 && strings.HasPrefix(t.question, "Profiles") {
+			hints = [][2]string{{"↑↓", "choose"}, {"Enter", "select"}, {"d", "delete"}, {"Esc", "cancel"}}
+		} else if len(t.options) > 0 {
 			hints = [][2]string{{"↑↓", "choose"}, {"Enter", "install"}, {"a", "all"}, {"Esc", "cancel"}}
 		} else {
 			hints = [][2]string{{"y", "yes"}, {"n", "no"}, {"Esc", "cancel"}}
 		}
 	case modePrompt:
 		hints = [][2]string{{"Enter", "install"}, {"Ctrl+U", "clear"}, {"Esc", "cancel"}}
+		if t.purpose == "profile" {
+			hints[0][1] = "save"
+		}
 	case modeHelp:
 		hints = [][2]string{{"any key", "back"}}
 	default:
 		hints = [][2]string{{"↑↓", "select"}, {"Space", "on/off"}, {"i", "install"}, {"d", "delete"},
-			{"r", "repair"}, {"p", "play"}, {"?", "help"}, {"q", "quit"}}
+			{"f", "profiles"}, {"u", "update HUD"}, {"r", "repair"}, {"p", "play"}, {"?", "help"}, {"q", "quit"}}
 	}
 	full := 0
 	for _, hint := range hints {
@@ -1046,8 +1156,10 @@ func (t *tui) drawHelp(c *canvas) {
 		{"Space  Enter", "switch the selected mod on or off"},
 		{"i", "install a mod; dragging a .zip or .vpk file into the window works too"},
 		{"d  Delete", "delete the selected mod"},
+		{"f", "profiles: switch between saved sets of mods, or save the current one"},
+		{"u", "download the Counter Intelligence HUD for your game build (the only online action)"},
 		{"r", "repair gameinfo.gi after a game update"},
-		{"u", "undo dlmod's gameinfo.gi change; mods stay installed but stop loading"},
+		{"x", "undo dlmod's gameinfo.gi change; mods stay installed but stop loading"},
 		{"p", "start Deadlock through Steam"},
 		{"q  Esc", "quit"},
 	}
