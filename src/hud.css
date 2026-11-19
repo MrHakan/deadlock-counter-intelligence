@@ -132,20 +132,48 @@
     font-weight: bold;
 }
 
-.DCIReason, .DCIEvidence {
+.DCIReason {
     width: 100%;
     font-size: 14px;
     text-overflow: ellipsis;
 }
 
-.DCIReason { color: #e6ddc9; }
-
-.DCIEvidence {
+.DCIEvidenceLine {
+    width: 100%;
+    flow-children: right;
     margin-top: 2px;
-    color: #b5b1a4;
 }
 
+.DCIEvidence {
+    width: fill-parent-flow(1);
+    font-size: 14px;
+    text-overflow: ellipsis;
+    max-height: 18px;
+}
+
+.DCIImpact {
+    margin-left: 8px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #9a968a;
+}
+
+.DCIImpactUp { color: #8fd17a; }
+
+.DCIImpactDown { color: #e07a6a; }
+
+.DCIReason { color: #e6ddc9; }
+
+.DCIEvidence { color: #b5b1a4; }
+
 .DCIShared .DCIReason { color: #eed69e; }
+
+.DCIDataPick {
+    background-color: #182029;
+    border-top: 1px solid #34506a;
+}
+
+.DCIDataPick .DCIReason { color: #9cc9ff; }
 
 .DCIAlert {
     visibility: collapse;

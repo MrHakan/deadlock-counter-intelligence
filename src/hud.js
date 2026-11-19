@@ -2,7 +2,8 @@
 
 (function () {
   var context = $.GetContextPanel();
-  var engine = DCIEngine.create(DCI_CATALOG, DCI_COUNTERS);
+  var engine = DCIEngine.create(DCI_CATALOG, DCI_COUNTERS, typeof DCI_STATS === "undefined" ? null : DCI_STATS);
+  var ROWS = 4;
   var text = {
     roster: "Enemy lineup",
     waiting: "Waiting for enemy lineup.",
@@ -23,7 +24,7 @@
     var root = context.FindChildTraverse("DCIVisibility");
     if (!root) return null;
     var rows = [];
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < ROWS; i++) {
       var row = root.FindChildTraverse("DCIRow" + i);
       rows.push({
         panel: row,
@@ -31,6 +32,7 @@
         price: row.FindChildTraverse("DCIPrice" + i),
         reason: row.FindChildTraverse("DCIReason" + i),
         evidence: row.FindChildTraverse("DCIEvidence" + i),
+        impact: row.FindChildTraverse("DCIImpact" + i),
       });
     }
     return {
@@ -63,10 +65,15 @@
           item.category === category);
       });
       row.panel.SetHasClass("DCIShared", item.score > 1);
+      row.panel.SetHasClass("DCIDataPick", item.source === "data");
       row.name.text = item.name;
       row.price.text = String(item.cost).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
       row.reason.text = item.reason;
       row.evidence.text = item.evidence;
+      row.impact.text = DCIEngine.formatImpact(item.impact);
+      row.impact.visible = row.impact.text !== "";
+      row.impact.SetHasClass("DCIImpactUp", item.impact >= 10);
+      row.impact.SetHasClass("DCIImpactDown", item.impact <= -10);
     });
   }
 
@@ -109,7 +116,9 @@
       notify(engine.threats(observed.purchases, observed.allies || [], observed.self));
     }
 
-    var recommendations = engine.recommend(observed.heroes);
+    var recommendations = engine.recommend(observed.heroes, ROWS - 1);
+    var extra = engine.dataPick(observed.heroes, recommendations.map(function (item) { return item.key; }));
+    if (extra) recommendations.push(extra);
     var emptyMessage = observed.heroes.length ? text.noMatch : text.waiting;
     var signature = recommendations.length ? JSON.stringify(recommendations) : emptyMessage;
     if (signature !== previous) {

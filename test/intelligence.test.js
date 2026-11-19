@@ -4,14 +4,20 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const catalog = require("../src/catalog.json");
 const counters = require("../src/counters.json");
-const { create, validate } = require("../src/engine");
+const stats = require("../src/stats.json");
+const { create, validate, formatImpact } = require("../src/engine");
 const { observe } = require("../src/observer");
 
 test("reference counter table resolves against the pinned catalog and accepts localized input", () => {
-  assert.deepEqual(validate(catalog, counters), []);
+  assert.deepEqual(validate(catalog, counters, stats), []);
   const heroes = Object.keys(counters.heroes);
   assert.equal(heroes.length, 42);
-  for (const hero of heroes) assert.equal(new Set(counters.heroes[hero]).size, 5, hero);
+  for (const hero of heroes) {
+    assert.equal(new Set(counters.heroes[hero]).size, 5, hero);
+    for (const item of counters.heroes[hero]) assert.ok(counters.tags[item], `${item} has a tag`);
+  }
+  assert.equal(Object.keys(stats.heroes).length, catalog.heroes.length, "match data covers every hero");
+  assert.match(stats.window.from, /^\d{4}-\d{2}-\d{2}$/);
   const lookup = create(catalog, counters);
   assert.equal(lookup.itemKey("Şifakıran"), "upgrade_healbane");
   assert.equal(lookup.itemKey("2603935618"), "upgrade_healbane");
@@ -22,15 +28,58 @@ test("reference counter table resolves against the pinned catalog and accepts lo
   ]);
 });
 
+// Synthetic match data, in hundredths of a win-rate point.
+const fixture = {
+  window: {from: "2026-10-20", to: "2026-11-19"},
+  items: ["upgrade_metal_skin", "upgrade_glass_cannon", "upgrade_deflecting_armor", "upgrade_hollow_point_rounds"],
+  heroes: {
+    hero_haze: [120, 40, -10, null],
+    hero_wraith: [30, 20, 0, 30],
+    hero_hornet: [null, 64, null, 0],
+  },
+};
+const lineup = ["hero_haze", "hero_wraith", "hero_warden"];
+
 test("items that answer more of the enemy lineup rank first and name the heroes they counter", () => {
   const engine = create(catalog, counters);
-  const top = engine.recommend(["hero_haze", "hero_wraith", "hero_warden"]);
+  const top = engine.recommend(lineup);
   assert.deepEqual(top.map((item) => item.name), ["Plated Armor", "Metal Skin", "Unstoppable"]);
-  assert.equal(top[0].reason, "Counters 3 enemies");
+  assert.equal(top[0].reason, "Deflects bullets · counters 3 enemies");
   assert.equal(top[0].evidence, "Haze · Wraith · Warden");
   assert.equal(top[0].category, "vitality");
+  assert.equal(top[0].impact, null);
   assert.equal(top[2].evidence, "Wraith · Warden");
   assert.equal(engine.recommend(["hero_haze"], 5).length, 5);
+});
+
+test("match data breaks coverage ties and reports the estimated win-rate change", () => {
+  const engine = create(catalog, counters, fixture);
+  const top = engine.recommend(lineup);
+  assert.deepEqual(top.map((item) => item.name), ["Metal Skin", "Plated Armor", "Unstoppable"]);
+  assert.equal(top[0].impact, 150);
+  assert.equal(top[1].impact, -10);
+  assert.equal(engine.impact("upgrade_metal_skin", ["hero_warden"]), null, "no row for Warden");
+});
+
+test("the match-data pick skips shown items and needs a meaningful gain", () => {
+  const engine = create(catalog, counters, fixture);
+  const pick = engine.dataPick(lineup, ["upgrade_metal_skin"]);
+  assert.equal(pick.name, "Glass Cannon");
+  assert.equal(pick.source, "data");
+  assert.equal(pick.impact, 60);
+  assert.equal(pick.reason, "Match data");
+  assert.equal(pick.evidence, "Strongest vs Haze · Wraith");
+  assert.equal(engine.dataPick(lineup, ["upgrade_metal_skin", "upgrade_glass_cannon"]), null);
+  assert.equal(engine.dataPick(["hero_synth"], []), null);
+  assert.equal(create(catalog, counters).dataPick(lineup, []), null, "no data, no pick");
+});
+
+test("win-rate changes are formatted for the HUD", () => {
+  assert.equal(formatImpact(null), "");
+  assert.equal(formatImpact(0), "±0 WR");
+  assert.equal(formatImpact(4), "±0 WR");
+  assert.equal(formatImpact(64), "+0.6 WR");
+  assert.equal(formatImpact(-134), "−1.3 WR");
 });
 
 test("heroes without a reference build and duplicates contribute nothing", () => {
@@ -65,7 +114,7 @@ test("ambiguous labels are skipped and missing items cannot be offered", () => {
   assert.equal(create(fixture, counters).itemKey(a[2]), null);
   fixture.items = fixture.items.filter((row) => row[1] !== "upgrade_auto_cleanse");
   assert.ok(!create(fixture, counters).recommend(["hero_haze"]).some((item) => item.key === "upgrade_auto_cleanse"));
-  assert.deepEqual(validate(fixture, counters), ["upgrade_auto_cleanse"]);
+  assert.deepEqual(validate(fixture, {heroes: counters.heroes}), ["upgrade_auto_cleanse"]);
 });
 
 function panel({id, type = "Panel", classes = [], children = [], visible = true, collapsed = false, tokens = {}, text = ""} = {}) {
@@ -159,9 +208,10 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
       Schedule: (delay, callback) => scheduled.push({delay, callback}),
       Msg: (line) => assert.fail(line),
     },
-    DCIEngine: {create},
+    DCIEngine: {create, formatImpact},
     DCI_CATALOG: catalog,
     DCI_COUNTERS: counters,
+    DCI_STATS: fixture,
     DCIObserver: {observe: () => observed},
   }, {filename});
   const step = () => scheduled.shift().callback();
@@ -171,9 +221,29 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
   assert.equal(nodes.DCIName0.text, "Knockdown");
   assert.equal(nodes.DCIRow0.DCISpirit, true);
   assert.equal(nodes.DCIPrice0.text, "3,200");
+  assert.equal(nodes.DCIReason0.text, "Stun, grounds flyers · counters 1 enemy");
   assert.equal(nodes.DCIEvidence0.text, "Vindicta");
+  assert.equal(nodes.DCIImpact0.visible, false, "no measurement for Knockdown");
+  assert.equal(nodes.DCIName3.text, "Glass Cannon");
+  assert.equal(nodes.DCIRow3.DCIDataPick, true);
+  assert.equal(nodes.DCIRow3.DCIWeapon, true);
+  assert.equal(nodes.DCIReason3.text, "Match data");
+  assert.equal(nodes.DCIImpact3.text, "+0.6 WR");
+  assert.equal(nodes.DCIImpact3.DCIImpactUp, true);
   assert.equal(nodes.DCIEmpty.visible, false);
   assert.equal(nodes.DCIAlert?.DCIAlertActive, undefined);
+
+  observed = {...observed, heroes: lineup};
+  step();
+  assert.deepEqual([0, 1, 2, 3].map((i) => nodes[`DCIName${i}`].text),
+    ["Metal Skin", "Plated Armor", "Unstoppable", "Glass Cannon"]);
+  assert.equal(nodes.DCIImpact0.text, "+1.5 WR");
+  assert.equal(nodes.DCIImpact1.text, "−0.1 WR");
+  assert.equal(nodes.DCIImpact1.DCIImpactDown, true);
+  assert.equal(nodes.DCIImpact1.DCIImpactUp, false);
+  assert.equal(nodes.DCIRow1.DCIDataPick, false);
+  assert.equal(nodes.DCIImpact2.visible, false);
+  observed = {...observed, heroes: ["hero_hornet"]};
 
   modes.add("gShopOpen");
   const healbane = {hero: "hero_hornet", item: "upgrade_healbane"};

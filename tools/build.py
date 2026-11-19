@@ -19,6 +19,7 @@ from panorama import compile_text
 STOCK_HUD = "panorama/layout/hud.vxml_c"
 STYLE = "s2r://panorama/styles/dci_hud.vcss"
 SCRIPT = "s2r://panorama/scripts/dci_hud.vts"
+ROWS = 4
 
 
 def patch_hud(stock):
@@ -53,7 +54,7 @@ def patch_hud(stock):
     ET.SubElement(header, "Label", {"class": "DCITitle", "text": "Counter items"})
     ET.SubElement(header, "Label", {"id": "DCISource", "class": "DCISource", "visible": "false"})
     ET.SubElement(box, "Label", {"id": "DCIEmpty", "class": "DCIEmpty", "text": "Waiting for enemy lineup."})
-    for index in range(3):
+    for index in range(ROWS):
         row = ET.SubElement(box, "Panel", {"id": f"DCIRow{index}", "class": "DCIRow", "visible": "false"})
         ET.SubElement(row, "Panel", {"class": "DCICategory"})
         details = ET.SubElement(row, "Panel", {"class": "DCIDetails"})
@@ -63,7 +64,9 @@ def patch_hud(stock):
         ET.SubElement(cost, "Panel", {"class": "DCISoul"})
         ET.SubElement(cost, "Label", {"id": f"DCIPrice{index}", "class": "DCIPrice"})
         ET.SubElement(details, "Label", {"id": f"DCIReason{index}", "class": "DCIReason"})
-        ET.SubElement(details, "Label", {"id": f"DCIEvidence{index}", "class": "DCIEvidence"})
+        evidence = ET.SubElement(details, "Panel", {"class": "DCIEvidenceLine"})
+        ET.SubElement(evidence, "Label", {"id": f"DCIEvidence{index}", "class": "DCIEvidence"})
+        ET.SubElement(evidence, "Label", {"id": f"DCIImpact{index}", "class": "DCIImpact"})
     return ET.tostring(root, encoding="unicode")
 
 
@@ -90,10 +93,12 @@ def pack_vpk(resources):
     return struct.pack("<7I", 0x55AA1234, 2, len(tree), len(data), 0, 0, 0) + tree + data
 
 
-def build(stock, catalog_path, output, counters_path=ROOT / "src" / "counters.json"):
+def build(stock, catalog_path, output, counters_path=ROOT / "src" / "counters.json",
+          stats_path=ROOT / "src" / "stats.json"):
     src = ROOT / "src"
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     counters = json.loads(counters_path.read_text(encoding="utf-8"))
+    stats = json.loads(stats_path.read_text(encoding="utf-8"))
     sources = [
         ("panorama/layout/hud.xml", patch_hud(stock)),
         ("panorama/styles/dci_hud.css", (src / "hud.css").read_text(encoding="utf-8")),
@@ -101,6 +106,7 @@ def build(stock, catalog_path, output, counters_path=ROOT / "src" / "counters.js
     script = '"use strict";\n'
     script += f"var DCI_CATALOG = {json.dumps(catalog, separators=(',', ':'), ensure_ascii=True)};\n"
     script += f"var DCI_COUNTERS = {json.dumps(counters, separators=(',', ':'), ensure_ascii=True)};\n"
+    script += f"var DCI_STATS = {json.dumps(stats, separators=(',', ':'), ensure_ascii=True)};\n"
     for filename in ("engine.js", "observer.js", "hud.js"):
         script += (src / filename).read_text(encoding="utf-8") + "\n"
     sources.append(("panorama/scripts/dci_hud.vts", script))

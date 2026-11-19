@@ -1,6 +1,9 @@
 "use strict";
 
 var DCIEngine = (function () {
+  // A match-data pick must raise the estimated win rate against the lineup by this much (hundredths of a point).
+  var DATA_MIN_IMPACT = 50;
+
   function normalize(text) {
     return typeof text === "string" ? text.trim().toLowerCase().replace(/[’‘]/g, "'") : "";
   }
@@ -21,18 +24,26 @@ var DCIEngine = (function () {
     };
   }
 
-  function names(keys, rows) {
-    return keys.map(function (key) { return rows[key][2]; }).join(" · ");
-  }
-
-  function create(catalog, counters) {
+  function create(catalog, counters, stats) {
     var heroes = index(catalog.heroes);
     var items = index(catalog.items);
+    var tags = counters.tags || {};
     var table = Object.create(null);
     Object.keys(counters.heroes).forEach(function (hero) {
       if (!heroes.keys[hero]) return;
       table[hero] = counters.heroes[hero].filter(function (item) { return items.keys[item]; });
     });
+
+    var columns = Object.create(null);
+    var measured = Object.create(null);
+    if (stats) {
+      stats.items.forEach(function (item, position) {
+        if (items.keys[item]) columns[item] = position;
+      });
+      Object.keys(stats.heroes).forEach(function (hero) {
+        if (heroes.keys[hero]) measured[hero] = stats.heroes[hero];
+      });
+    }
 
     function unique(list) {
       return list.filter(function (hero, position) {
@@ -40,10 +51,45 @@ var DCIEngine = (function () {
       });
     }
 
-    // Rank the reference counter items by how many enemy heroes they answer.
+    function names(keys) {
+      return keys.map(function (key) { return heroes.keys[key][2]; }).join(" · ");
+    }
+
+    function lift(item, hero) {
+      var row = measured[hero];
+      var value = row && item in columns ? row[columns[item]] : null;
+      return typeof value === "number" ? value : null;
+    }
+
+    // Estimated change in the buyer's win rate against the whole lineup, or null without data.
+    function impact(item, enemies) {
+      var total = null;
+      enemies.forEach(function (hero) {
+        var value = lift(item, hero);
+        if (value !== null) total = (total || 0) + value;
+      });
+      return total;
+    }
+
+    function entry(key, enemies, extra) {
+      var row = items.keys[key];
+      var result = {
+        key: key,
+        name: row[2],
+        cost: row[4],
+        category: row[5],
+        tag: tags[key] || "",
+        impact: impact(key, enemies),
+      };
+      Object.keys(extra).forEach(function (field) { result[field] = extra[field]; });
+      return result;
+    }
+
+    // Rank the reference counter items by how many enemy heroes they answer; match data breaks ties.
     function recommend(enemyHeroes, limit) {
+      var enemies = unique(enemyHeroes);
       var picks = Object.create(null);
-      unique(enemyHeroes).forEach(function (hero) {
+      enemies.forEach(function (hero) {
         (table[hero] || []).forEach(function (item, position) {
           var pick = picks[item] || (picks[item] = { heroes: [], rank: 0 });
           pick.heroes.push(hero);
@@ -52,22 +98,45 @@ var DCIEngine = (function () {
       });
 
       return Object.keys(picks).map(function (key) {
-        var row = items.keys[key];
         var pick = picks[key];
-        return {
-          key: key,
-          name: row[2],
-          cost: row[4],
-          category: row[5],
-          score: pick.heroes.length,
+        var count = pick.heroes.length;
+        var tag = tags[key];
+        return entry(key, enemies, {
+          source: "reference",
+          score: count,
           rank: pick.rank,
           heroes: pick.heroes,
-          reason: pick.heroes.length === 1 ? "Counters 1 enemy" : "Counters " + pick.heroes.length + " enemies",
-          evidence: names(pick.heroes, heroes.keys),
-        };
+          reason: (tag ? tag + " · " : "") + (count === 1 ? "counters 1 enemy" : "counters " + count + " enemies"),
+          evidence: names(pick.heroes),
+        });
       }).sort(function (a, b) {
-        return b.score - a.score || a.rank - b.rank || a.cost - b.cost || (a.key < b.key ? -1 : 1);
+        return b.score - a.score || (b.impact || 0) - (a.impact || 0) || a.rank - b.rank ||
+          a.cost - b.cost || (a.key < b.key ? -1 : 1);
       }).slice(0, limit || 3);
+    }
+
+    // The item with the largest measured win-rate gain against the lineup that is not already shown.
+    function dataPick(enemyHeroes, exclude) {
+      var enemies = unique(enemyHeroes);
+      var best = null;
+      Object.keys(columns).forEach(function (key) {
+        if (exclude && exclude.indexOf(key) !== -1) return;
+        var total = impact(key, enemies);
+        if (total === null || total < DATA_MIN_IMPACT) return;
+        if (best && (total < best.total || (total === best.total && key > best.key))) return;
+        best = { key: key, total: total };
+      });
+      if (!best) return null;
+      var strongest = enemies.filter(function (hero) { return lift(best.key, hero) > 0; })
+        .sort(function (a, b) { return lift(best.key, b) - lift(best.key, a); }).slice(0, 3);
+      var tag = tags[best.key];
+      return entry(best.key, enemies, {
+        source: "data",
+        score: 0,
+        heroes: strongest,
+        reason: "Match data" + (tag ? " · " + tag : ""),
+        evidence: "Strongest vs " + names(strongest),
+      });
     }
 
     // Enemy purchases that appear in the reference counter list of an allied hero.
@@ -105,25 +174,42 @@ var DCIEngine = (function () {
       heroKey: heroes.lookup,
       itemKey: items.lookup,
       counters: function (hero) { return (table[hero] || []).slice(); },
+      impact: function (item, enemies) { return impact(item, unique(enemies)); },
       recommend: recommend,
+      dataPick: dataPick,
       threats: threats,
     };
   }
 
-  function validate(catalog, counters) {
+  function validate(catalog, counters, stats) {
     var items = index(catalog.items).keys;
     var heroes = index(catalog.heroes).keys;
     var missing = [];
+    function check(key, known) {
+      if (!known[key] && missing.indexOf(key) === -1) missing.push(key);
+    }
     Object.keys(counters.heroes).forEach(function (hero) {
-      if (!heroes[hero]) missing.push(hero);
-      counters.heroes[hero].forEach(function (item) {
-        if (!items[item] && missing.indexOf(item) === -1) missing.push(item);
-      });
+      check(hero, heroes);
+      counters.heroes[hero].forEach(function (item) { check(item, items); });
     });
+    Object.keys(counters.tags || {}).forEach(function (item) { check(item, items); });
+    if (stats) {
+      stats.items.forEach(function (item) { check(item, items); });
+      Object.keys(stats.heroes).forEach(function (hero) {
+        check(hero, heroes);
+        if (stats.heroes[hero].length !== stats.items.length) missing.push(hero + " (row length)");
+      });
+    }
     return missing;
   }
 
-  return { create: create, validate: validate };
+  function formatImpact(value) {
+    if (value === null || value === undefined) return "";
+    if (Math.round(Math.abs(value) / 10) === 0) return "±0 WR";
+    return (value > 0 ? "+" : "−") + (Math.abs(value) / 100).toFixed(1) + " WR";
+  }
+
+  return { create: create, validate: validate, formatImpact: formatImpact };
 })();
 
 if (typeof module !== "undefined") module.exports = DCIEngine;
