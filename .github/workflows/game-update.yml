@@ -73,6 +73,7 @@ jobs:
             exit 0
           fi
           python tools/update_counter_stats.py
+          python tools/patch_notes.py
           sed -i -E "s/client build \*\*[0-9]+\*\*/client build **$LIVE**/; s/update_catalog\.py [0-9]+/update_catalog.py $LIVE/" README.md
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
@@ -103,13 +104,14 @@ jobs:
             echo
             echo "- The HUD is built from the build $LIVE stock interface. An interface mod built for an older game build can stop the game from starting, so update the mod after every game update."
             echo "- The item catalog and the match data are refreshed. Match data covers $window (since $patch)."
+            echo "- Heroes and items changed by patches the counter table has not been reviewed for are marked **PATCHED** in the HUD; hover the mark to see what changed."
             echo "- \`dlmod update\` (or \`u\` in dlmod's full-screen view) downloads this HUD for the installed game build and replaces the old one."
             echo
             echo "Every test passed and the mod was built against the new stock HUD before this release was published. Display in Deadlock is not verified automatically."
           } > ".github/release-notes/$next.md"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/catalog.json src/stats.json docs/counter-data.md README.md ".github/release-notes/$next.md"
+          git add src/catalog.json src/stats.json src/patches.json docs/counter-data.md README.md ".github/release-notes/$next.md"
           git commit -m "Update for Deadlock build $LIVE" -m "Refreshed catalog and match data ($window). Release notes for $next."
           git push origin HEAD:main
           echo "version=$next" >> "$GITHUB_OUTPUT"

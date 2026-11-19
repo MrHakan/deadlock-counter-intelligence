@@ -1,5 +1,13 @@
 {
   "source": "Counter Eşyalar: kime karşı ne alınır?",
+  "reviewed": {
+    "date": "2026-10-30",
+    "heroes": {
+      "hero_ratking": "2026-11-19",
+      "hero_synth": "2026-11-19"
+    },
+    "note": "The series' lists are taken to match the 10-30-2026 gameplay update; Pocket and Rat King were checked against match data after the 11-04-2026 update. Move a date forward after checking a hero's counters against a newer patch, and its patch warning disappears."
+  },
   "otherSources": {
     "hero_ratking": "Not in the series. Deadlock Item Builder's counter guide (deadlockitembuilder.com/counter/rat-king); all five picks raise the buyer's win rate in match data since the 11-04-2026 patch.",
     "hero_synth": "Not in the series. Deadlock Item Builder's counter guide (deadlockitembuilder.com/counter/pocket), keeping the picks that match data since the 11-04-2026 patch does not contradict: Debuff Reducer, Spirit Resilience and Cursed Relic measured -0.88, -0.38 and -0.68."

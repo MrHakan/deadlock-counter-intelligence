@@ -2,7 +2,8 @@
 
 (function () {
   var context = $.GetContextPanel();
-  var engine = DCIEngine.create(DCI_CATALOG, DCI_COUNTERS, typeof DCI_STATS === "undefined" ? null : DCI_STATS);
+  var engine = DCIEngine.create(DCI_CATALOG, DCI_COUNTERS, typeof DCI_STATS === "undefined" ? null : DCI_STATS,
+    typeof DCI_PATCHES === "undefined" ? null : DCI_PATCHES);
   var ROWS = 4;
   var text = {
     roster: "Enemy lineup",
@@ -24,6 +25,8 @@
   var owned = Object.create(null); // items the local player bought this match
   var inputs = "";
   var rows = [];
+  var badgeNotes = DCIEngine.formatNotes([]); // tooltip of the PATCHED badge
+  var rowNotes = [];                          // tooltip of each row's ! icon
 
   function findView() {
     var root = context.FindChildTraverse("DCIVisibility");
@@ -39,19 +42,44 @@
         evidence: row.FindChildTraverse("DCIEvidence" + i),
         impact: row.FindChildTraverse("DCIImpact" + i),
         buy: row.FindChildTraverse("DCIBuy" + i),
+        patch: row.FindChildTraverse("DCIPatch" + i),
       });
     }
-    return {
+    var found = {
       root: root, rows: rows, source: root.FindChildTraverse("DCISource"),
       empty: root.FindChildTraverse("DCIEmpty"),
       alert: root.FindChildTraverse("DCIAlert"),
       alertTitle: root.FindChildTraverse("DCIAlertTitle"),
       alertText: root.FindChildTraverse("DCIAlertText"),
+      badge: root.FindChildTraverse("DCIPatchBadge"),
+      tip: root.FindChildTraverse("DCITip"),
+      tipTitle: root.FindChildTraverse("DCITipTitle"),
+      tipText: root.FindChildTraverse("DCITipText"),
     };
+    // Hovering a patch icon shows what changed in a tooltip at the top of the panel.
+    hover(found, found.badge, function () { return badgeNotes; });
+    rows.forEach(function (row, index) {
+      hover(found, row.patch, function () { return rowNotes[index]; });
+    });
+    return found;
+  }
+
+  function hover(found, panel, notes) {
+    if (!panel || !panel.SetPanelEvent) return;
+    panel.SetPanelEvent("onmouseover", function () {
+      var content = notes();
+      if (!content || !content.text) return;
+      found.tipTitle.text = content.title;
+      found.tipText.text = content.text;
+      found.tip.visible = true;
+    });
+    panel.SetPanelEvent("onmouseout", function () { found.tip.visible = false; });
   }
 
   function showEmpty(message) {
     view.source.visible = false;
+    view.badge.visible = false;
+    view.tip.visible = false;
     view.empty.text = message;
     view.empty.visible = true;
     view.rows.forEach(function (row) { row.panel.visible = false; });
@@ -59,6 +87,7 @@
 
   function display(recommendations, laning, buy, souls) {
     view.empty.visible = false;
+    view.badge.visible = badgeNotes.text !== "";
     view.source.text = laning ? text.lane : text.roster;
     view.source.visible = true;
 
@@ -82,6 +111,9 @@
       row.reason.text = item.reason;
       row.evidence.text = item.evidence;
       row.impact.text = DCIEngine.formatStats(item);
+      // The badge covers changed enemy heroes; a row's icon means the item itself changed.
+      rowNotes[index] = DCIEngine.formatNotes(engine.patchNotes([item.key]));
+      row.patch.visible = rowNotes[index].text !== "";
       row.impact.visible = row.impact.text !== "";
       row.impact.SetHasClass("DCIImpactUp", item.impact >= 10);
       row.impact.SetHasClass("DCIImpactDown", item.impact <= -10);
@@ -112,6 +144,7 @@
 
     var shopOpen = view.root.BHasClass("gShopOpen");
     if (!shopOpen && !view.root.BHasClass("gScoreboardOpen")) {
+      view.tip.visible = false;
       if (previous) showEmpty(text.waiting);
       previous = "";
       return 1;
@@ -137,6 +170,9 @@
     var key = observed.heroes.join(",") + "|" + (laning ? lane.join(",") : "") + "|" + exclude.join(",");
     if (key !== inputs) {
       inputs = key;
+      var patched = engine.patchedHeroes(observed.heroes);
+      badgeNotes = DCIEngine.formatNotes(engine.patchNotes(patched));
+      if (view.badge) view.badge.text = patched.length > 1 ? patched.length + " PATCHED" : "PATCHED";
       rows = engine.recommend(observed.heroes, ROWS - 1, exclude);
       var shown = rows.map(function (item) { return item.key; }).concat(exclude);
       var extra = laning ? engine.lanePick(lane, shown) : null;

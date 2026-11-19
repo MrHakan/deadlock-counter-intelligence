@@ -5,7 +5,7 @@ const test = require("node:test");
 const catalog = require("../src/catalog.json");
 const counters = require("../src/counters.json");
 const stats = require("../src/stats.json");
-const { create, validate, formatImpact, formatStats } = require("../src/engine");
+const { create, validate, formatImpact, formatStats, formatNotes } = require("../src/engine");
 const { observe } = require("../src/observer");
 
 test("reference counter table resolves against the pinned catalog and accepts localized input", () => {
@@ -247,6 +247,7 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
     FindChildTraverse: (id) => id === "DCIVisibility" ? root : (nodes[id] ||= {
       FindChildTraverse: root.FindChildTraverse,
       SetHasClass(name, active) { this[name] = active; },
+      SetPanelEvent(event, handler) { (this.events ||= {})[event] = handler; },
     }),
   };
   const filename = path.resolve(__dirname, "../src/hud.js");
@@ -256,7 +257,7 @@ test("HUD shows lineup counters and an alert that expires and fires once per pur
       Schedule: (delay, callback) => scheduled.push({delay, callback}),
       Msg: (line) => assert.fail(line),
     },
-    DCIEngine: {create, formatImpact, formatStats},
+    DCIEngine: {create, formatImpact, formatStats, formatNotes},
     DCI_CATALOG: catalog,
     DCI_COUNTERS: counters,
     DCI_STATS: fixture,
@@ -340,12 +341,13 @@ test("HUD marks what to buy now, hides owned items and uses lane counters until 
     FindChildTraverse: (id) => id === "DCIVisibility" ? root : (nodes[id] ||= {
       FindChildTraverse: root.FindChildTraverse,
       SetHasClass(name, active) { this[name] = active; },
+      SetPanelEvent(event, handler) { (this.events ||= {})[event] = handler; },
     }),
   };
   const filename = path.resolve(__dirname, "../src/hud.js");
   vm.runInNewContext(fs.readFileSync(filename, "utf8"), {
     $: { GetContextPanel: () => root, Schedule: (delay, callback) => scheduled.push(callback), Msg: (line) => assert.fail(line) },
-    DCIEngine: {create, formatImpact, formatStats},
+    DCIEngine: {create, formatImpact, formatStats, formatNotes},
     DCI_CATALOG: catalog,
     DCI_COUNTERS: counters,
     DCI_STATS: fixture,
@@ -382,4 +384,60 @@ test("HUD marks what to buy now, hides owned items and uses lane counters until 
   step();
   assert.equal(nodes.DCIBuy0.visible, true, "more souls move the badge to the top pick");
   assert.equal(nodes.DCIRow0.DCIExpensive, false);
+});
+
+test("HUD flags patched enemies and items and shows what changed on hover", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const vm = require("node:vm");
+  const patches = {reviewed: "2026-10-30", patches: [{
+    title: "Minor Update - 11-04-2026", date: "2026-11-05",
+    heroes: {hero_haze: {lines: ["Sleep Dagger - Cooldown increased from 25s to 30s"], more: 2}},
+    items: {upgrade_metal_skin: {lines: ["Duration reduced from 3.5s to 3s"], more: 0}},
+  }]};
+  const nodes = {};
+  const modes = new Set(["gShopOpen"]);
+  const scheduled = [];
+  let observed = {heroes: lineup, allies: [], self: null, purchases: [], mine: [], lane: [], clock: null, souls: null, owned: []};
+  const root = {
+    IsValid: () => true,
+    BHasClass: (name) => modes.has(name),
+    FindChildTraverse: (id) => id === "DCIVisibility" ? root : (nodes[id] ||= {
+      FindChildTraverse: root.FindChildTraverse,
+      SetHasClass(name, active) { this[name] = active; },
+      SetPanelEvent(event, handler) { (this.events ||= {})[event] = handler; },
+    }),
+  };
+  const filename = path.resolve(__dirname, "../src/hud.js");
+  vm.runInNewContext(fs.readFileSync(filename, "utf8"), {
+    $: { GetContextPanel: () => root, Schedule: (delay, callback) => scheduled.push(callback), Msg: (line) => assert.fail(line) },
+    DCIEngine: {create, formatImpact, formatStats, formatNotes},
+    DCI_CATALOG: catalog, DCI_COUNTERS: counters, DCI_STATS: fixture, DCI_PATCHES: patches,
+    DCIObserver: {observe: () => observed},
+  }, {filename});
+  scheduled.shift()();
+
+  assert.equal(nodes.DCIPatchBadge.visible, true, "Haze was changed after the table was reviewed");
+  assert.equal(nodes.DCIPatchBadge.text, "PATCHED");
+  assert.equal(nodes.DCITip.visible, undefined, "no tooltip until hovered");
+  nodes.DCIPatchBadge.events.onmouseover();
+  assert.equal(nodes.DCITip.visible, true);
+  assert.equal(nodes.DCITipTitle.text, "Changed in Minor Update - 11-04-2026 · counters not reviewed for it yet");
+  assert.equal(nodes.DCITipText.text, "Haze: Sleep Dagger - Cooldown increased from 25s to 30s\n    +2 more changes");
+  nodes.DCIPatchBadge.events.onmouseout();
+  assert.equal(nodes.DCITip.visible, false);
+
+  // A row's icon means the item itself changed: Metal Skin did; Plated Armor, which also counters
+  // the changed Haze, did not, and the badge already covers Haze.
+  assert.equal(nodes.DCIName0.text, "Metal Skin");
+  assert.equal(nodes.DCIPatch0.visible, true);
+  nodes.DCIPatch0.events.onmouseover();
+  assert.equal(nodes.DCITipText.text, "Metal Skin: Duration reduced from 3.5s to 3s");
+  nodes.DCIPatch0.events.onmouseout();
+  assert.equal(nodes.DCIName1.text, "Plated Armor");
+  assert.equal(nodes.DCIPatch1.visible, false);
+
+  observed = {...observed, heroes: ["hero_hornet"]};
+  scheduled.shift()();
+  assert.equal(nodes.DCIPatchBadge.visible, false);
 });

@@ -9,6 +9,7 @@ from zlib import crc32
 
 from tools.build import ROOT, SCRIPT, STYLE, build, patch_hud
 from tools.update_catalog import merge, write_catalog
+from tools.patch_notes import collect, format_notes
 from tools.update_counter_stats import compute, format_stats, latest_gameplay_patch, report
 
 STOCK = """
@@ -72,7 +73,13 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(root.findall("styles/include")[-1].get("src"), STYLE)
         self.assertEqual(root.find("scripts/include").get("src"), SCRIPT)
         self.assertIsNotNone(root.find("CitadelHud/CitadelHudTopBar"))
-        self.assertEqual(root.find(".//*[@id='DCIVisibility']").get("hittestchildren"), "false")
+        listener = root.find(".//*[@id='DCIVisibility']")
+        self.assertEqual((listener.get("hittest"), listener.get("hittestchildren")), ("false", "true"))
+        hoverable = {panel.get("id") for panel in listener.iter() if panel.get("hittest") == "true"}
+        self.assertEqual(hoverable, {"DCIPatchBadge", "DCIPatch0", "DCIPatch1", "DCIPatch2", "DCIPatch3"},
+                         "only the patch icons may catch the mouse; everything else lets clicks through")
+        self.assertTrue(all(panel.get("hittest") in ("true", "false") for panel in listener.iter() if panel is not listener))
+        self.assertEqual(root.find(".//*[@id='DCITip']").get("visible"), "false")
         self.assertEqual(root.find(".//*[@class='DCITitle']").get("text"), "Counter items")
         self.assertIsNotNone(root.find(".//*[@id='DCIPrice2']"))
         self.assertEqual(root.find(".//*[@id='DCIRow2']").get("visible"), "false")
@@ -105,6 +112,7 @@ class PackagingTests(unittest.TestCase):
             self.assertIn('alertTitle: "Enemy counter purchase"', script)
             self.assertIn('var DCI_COUNTERS = {"source"', script)
             self.assertIn('var DCI_STATS = {"source"', script)
+            self.assertIn('var DCI_PATCHES = {"reviewed"', script)
             self.assertNotIn("DCI_LANGUAGE", script)
             self.assertIn(".gShopOpen .DCIBox", read_resource(resources["panorama/styles/dci_hud.vcss_c"]))
 
@@ -184,6 +192,35 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(stats["minutes"], {"a": 5})
         self.assertEqual(stats["patch"], {"title": "Minor Update", "date": "2026-11-05"})
         self.assertEqual(json.loads(format_stats(stats)), stats)
+
+
+    def test_patch_notes_cover_changes_after_the_review_date(self):
+        catalog = {"items": [[1, "upgrade_healbane", "Healbane", "Şifakıran", 1600, "vitality"]],
+                   "heroes": [[6, "hero_atlas", "Abrams", "Abrams"], [69, "hero_doorman", "The Doorman", "Kapıcı"],
+                              [84, "hero_ratking", "Rat King", "Fare Kral"]]}
+        counters = {"reviewed": {"date": "2026-10-30", "heroes": {"hero_ratking": "2026-11-19"}}}
+        long_line = "Shoulder Charge - " + "much longer stun " * 10
+        patches = [
+            {"title": "Gameplay Update", "pub_date": "2026-10-30T20:51:49Z", "content": "<p>- Abrams: Old change</p>"},
+            {"title": " Minor Update - 11-04-2026", "pub_date": "2026-11-05T05:02:30Z", "content": (
+                "<p>- Healbane: Stacks now diminish 20% more aggressively</p><p>- Abrams: Base health increased</p>"
+                "<p>- Abrams: " + long_line + "</p><p>- Abrams: Siphon Life radius increased</p>"
+                "<p>- Abrams: Infernal Resilience regen increased</p><p>- Doorman: Hotel Guest duration reduced</p>"
+                "<p>- Rat King: Ammo increased from 24 to 26</p>")},
+            {"title": "Ranked - Beta Season 2", "pub_date": "2026-11-05T19:58:14Z", "content": "<p>Season two</p>"},
+        ]
+        notes = collect(catalog, counters, patches)
+        self.assertEqual(notes["reviewed"], "2026-10-30")
+        self.assertEqual(len(notes["patches"]), 1, "the reviewed patch and the non-gameplay post are left out")
+        patch = notes["patches"][0]
+        self.assertEqual((patch["title"], patch["date"]), ("Minor Update - 11-04-2026", "2026-11-05"))
+        self.assertEqual(set(patch["heroes"]), {"hero_atlas", "hero_doorman"}, "Rat King was reviewed after the patch")
+        abrams = patch["heroes"]["hero_atlas"]
+        self.assertEqual(abrams["more"], 1)
+        self.assertEqual(abrams["lines"][0], "Base health increased")
+        self.assertTrue(abrams["lines"][1].endswith("…") and len(abrams["lines"][1]) == 110)
+        self.assertEqual(patch["items"], {"upgrade_healbane": {"lines": ["Stacks now diminish 20% more aggressively"], "more": 0}})
+        self.assertEqual(json.loads(format_notes(notes)), notes)
 
 
 if __name__ == "__main__":

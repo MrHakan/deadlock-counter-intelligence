@@ -24,7 +24,7 @@ var DCIEngine = (function () {
     };
   }
 
-  function create(catalog, counters, stats) {
+  function create(catalog, counters, stats, patches) {
     var heroes = index(catalog.heroes);
     var items = index(catalog.items);
     var tags = counters.tags || {};
@@ -37,6 +37,20 @@ var DCIEngine = (function () {
     var columns = Object.create(null);
     var measured = Object.create(null);
     var minutes = (stats && stats.minutes) || {};
+    // Changes from patches the counter table has not been reviewed for, per hero and per item.
+    var changed = Object.create(null);
+    ((patches && patches.patches) || []).forEach(function (patch) {
+      ["heroes", "items"].forEach(function (group) {
+        Object.keys(patch[group] || {}).forEach(function (key) {
+          var row = group === "heroes" ? heroes.keys[key] : items.keys[key];
+          if (!row) return;
+          (changed[key] = changed[key] || []).push({
+            name: row[2], patch: patch.title, date: patch.date,
+            lines: patch[group][key].lines || [], more: patch[group][key].more || 0,
+          });
+        });
+      });
+    });
     var lane = Object.create(null);
     if (stats && stats.lane) {
       Object.keys(stats.lane).forEach(function (hero) {
@@ -181,6 +195,19 @@ var DCIEngine = (function () {
       return result;
     }
 
+    // Patch changes for these heroes and items, heroes first, each key once.
+    function patchNotes(keys) {
+      var notes = [];
+      keys.filter(function (key, position) { return keys.indexOf(key) === position; }).forEach(function (key) {
+        (changed[key] || []).forEach(function (note) { notes.push(note); });
+      });
+      return notes;
+    }
+
+    function patchedHeroes(enemyHeroes) {
+      return unique(enemyHeroes).filter(function (hero) { return !!changed[hero]; });
+    }
+
     // The first suggestion the player can pay for now, or -1.
     function buyNow(rows, souls) {
       if (typeof souls !== "number" || !(souls >= 0)) return -1;
@@ -230,6 +257,8 @@ var DCIEngine = (function () {
       dataPick: dataPick,
       lanePick: lanePick,
       buyNow: buyNow,
+      patchNotes: patchNotes,
+      patchedHeroes: patchedHeroes,
       threats: threats,
     };
   }
@@ -275,7 +304,28 @@ var DCIEngine = (function () {
     return parts.join(" · ");
   }
 
-  return { create: create, validate: validate, formatImpact: formatImpact, formatStats: formatStats };
+  // Tooltip text for patch changes: a title naming the patch, then up to three changes per hero
+  // or item and how many more the notes list.
+  function formatNotes(notes) {
+    if (!notes.length) return { title: "", text: "" };
+    var patches = [];
+    notes.forEach(function (note) {
+      if (patches.indexOf(note.patch) === -1) patches.push(note.patch);
+    });
+    var title = (patches.length === 1 ? "Changed in " + patches[0] : "Changed in " + patches.length + " patches") +
+      " · counters not reviewed for it yet";
+    var lines = [];
+    notes.forEach(function (note) {
+      note.lines.forEach(function (line, index) {
+        lines.push((index === 0 ? note.name + ": " : "    ") + line);
+      });
+      if (note.more) lines.push("    +" + note.more + (note.more === 1 ? " more change" : " more changes"));
+    });
+    return { title: title, text: lines.join("\n") };
+  }
+
+  return { create: create, validate: validate, formatImpact: formatImpact, formatStats: formatStats,
+    formatNotes: formatNotes };
 })();
 
 if (typeof module !== "undefined") module.exports = DCIEngine;

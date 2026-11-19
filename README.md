@@ -6,6 +6,7 @@ An experimental Panorama HUD for Deadlock. Open the scoreboard or shop to see:
 - **What to buy now.** A **BUY NOW** badge marks the first suggestion your souls can pay for, and prices you cannot reach yet turn grey.
 - **What match data says.** Each row shows the estimated change in the buyer's win rate against the current lineup and the minute the item is usually bought, for example `+0.6 WR · ~14m`. A fourth row adds the item with the largest measured gain against the lineup that the table does not already suggest.
 - **Lane counters.** For the first ten minutes the fourth row switches to the best early item against the enemies in your lane.
+- **Patch warnings.** When a game patch changes an enemy hero after the counter table was last reviewed, a **PATCHED** badge appears next to the title; when it changes a suggested item, that row gets a **!** mark. Hover either one to see what changed, taken from Valve's patch notes. The warnings stay until the counters are reviewed for that patch.
 - **Enemy counter-purchase alerts.** When an enemy buys an item from the counter list of a hero on your team, a banner names the buyer, the item, and the allies it counters. It stays up for 8 seconds and turns red when the item counters your own hero. Each enemy purchase alerts once per match.
 
 ## Reference counter table
@@ -13,6 +14,8 @@ An experimental Panorama HUD for Deadlock. Open the scoreboard or shop to see:
 `src/counters.json` holds five counter items for every hero, with a short tag per item written from the in-game item description. For 42 heroes they come from the *Counter Eşyalar: kime karşı ne alınır?* series. Pocket and Rat King are not in the series. Their lists come from [Deadlock Item Builder's counter guides](https://deadlockitembuilder.com/counter/pocket), keeping the picks that match data does not contradict, and `otherSources` in the file records how each was chosen. Each item counts once for every enemy hero whose list includes it. Ties go to the item with the larger measured win-rate gain against the lineup, then to the item listed earlier, then to the cheaper item.
 
 To change the reference, edit the item class names in `src/counters.json`. The tests check that every entry exists in the catalog and has a tag.
+
+`reviewed` in the same file records the date the table was last checked against the game, with later dates for heroes checked since. `tools/patch_notes.py` reads every gameplay patch published after it from the patch notes (through deadlock-api's copy of Valve's posts) and keeps the lines of the form `- <Hero or item>: <change>` in `src/patches.json`. Those heroes and items carry the PATCHED and **!** warnings. After checking a hero's counters against a new patch, move its date forward and run the tool again, and its warning disappears. Right now the series' lists are taken to match the 10-30-2026 update, so the 11-04-2026 changes to Apollo, Baba, Celeste, Deadman Danny, Mo & Krill, Nurse Harrow and Healbane are flagged. Rat King and Pocket were checked against match data after that patch.
 
 ## Match data
 
@@ -43,6 +46,8 @@ The suggestion panel sits above the minimap on the scoreboard and in the lower-l
 - Your souls come from your card's souls value (`{s:gold}`), and the match time from the top bar clock (`GameTime`).
 - Items you own come from your card's purchased-items panel (`mod_universal`) and from your own rows in the shop's recent-purchase list. The game creates the item icons at run time, so the mod tries the usual item-name properties and ignores anything that is not a known item.
 - Enemy purchases come from the shop's recent-purchase list, which the mod reads every half second while the shop is open, so alerts appear when you open the shop.
+
+The PATCHED badge and the **!** marks are the only parts of the panel that react to the mouse; everything else lets clicks through to the game. Hovering needs a mouse cursor, which the shop always has.
 
 When the enemy lineup changes, the mod treats it as a new match and clears its alert history and owned items. Suggestions are only recomputed when the lineup, the lane phase or your items change; souls only move the badge.
 
@@ -145,7 +150,7 @@ py -3 tools/build.py --deadlock-dir "C:\Program Files (x86)\Steam\steamapps\comm
 
 If you already have the extracted stock layout, use `--hud-xml path/to/hud.xml`. [GameTracking-Deadlock](https://github.com/SteamTracking/GameTracking-Deadlock/blob/master/game/citadel/pak01_dir/panorama/layout/hud.xml) publishes it for the live build. The build produces `dist/deadlock-counter-intelligence-experimental.zip` with one `pak01_dir.vpk` inside.
 
-`.github/workflows/game-update.yml` runs every day. When Deadlock's client build changes, it refreshes the catalog and the match data, runs every test, builds the mod against the new stock HUD, commits the update to `main`, and starts the release workflow for the next patch version, so a HUD for the new build is usually available within a day of a game update. If deadlock-api does not have the new build yet, it tries again the next day; if a test or the build fails, nothing is released. It can also be run from the Actions tab.
+`.github/workflows/game-update.yml` runs every day. When Deadlock's client build changes, it refreshes the catalog, the match data and the patch warnings, runs every test, builds the mod against the new stock HUD, commits the update to `main`, and starts the release workflow for the next patch version, so a HUD for the new build is usually available within a day of a game update. If deadlock-api does not have the new build yet, it tries again the next day; if a test or the build fails, nothing is released. It can also be run from the Actions tab.
 
 `.github/workflows/release.yml` publishes releases. It runs when a `v*` tag is pushed, or from the Actions tab: choose **Release → Run workflow** and enter a version such as `v0.2.0`, and it creates the tag on the commit it builds. It runs the tests, builds the ZIP from the GameTracking layout (and stops if that layout is from a different build than the catalog), builds dlmod for Windows and Linux, and publishes a release with the notes in `.github/release-notes/<version>.md`.
 
@@ -156,6 +161,7 @@ The bundled catalog targets Deadlock client build **6864** and contains 173 shop
 ```sh
 python tools/update_catalog.py 6864
 python tools/update_counter_stats.py
+python tools/patch_notes.py
 node --test test/intelligence.test.js
 python -m unittest discover -s test -v
 ```
@@ -164,7 +170,7 @@ python -m unittest discover -s test -v
 
 Ambiguous labels are skipped. During a match, the mod works from the visible HUD and the bundled catalog, counter table, and match data. It makes no network requests.
 
-For in-game verification, use a private lobby. Check that the suggestions match the enemy lineup, that the fourth row shows a lane pick before minute 10 and a match-data pick after it, that the BUY NOW badge follows your souls, that an item you buy disappears from the suggestions, that an enemy buying an item from an ally's counter list (for example Healbane against Infernus) shows the banner, that an allied purchase is ignored, and that disabling the mod restores the stock HUD.
+For in-game verification, use a private lobby. Check that the suggestions match the enemy lineup, that the fourth row shows a lane pick before minute 10 and a match-data pick after it, that the BUY NOW badge follows your souls, that an item you buy disappears from the suggestions, that hovering PATCHED (for example with Celeste or Baba on the enemy team) shows their changes and that the panel does not block clicks in the shop, that an enemy buying an item from an ally's counter list (for example Healbane against Infernus) shows the banner, that an allied purchase is ignored, and that disabling the mod restores the stock HUD.
 
 ## References
 
