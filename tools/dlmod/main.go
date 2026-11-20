@@ -8,9 +8,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/MrHakan/deadlock-modkit/tools/dlmod/source2"
 )
 
 var version = "dev"
@@ -32,6 +36,9 @@ Usage:
   dlmod search <words> [-hero H] [-category C]
                                search the online mod catalog (deadlockmods.app, from GameBanana)
   dlmod get <id|GameBanana URL>  download and install a mod from GameBanana
+  dlmod extract <path prefix> [folder]
+                               copy files out of the game's archive, for example
+                               dlmod extract models/heroes_staging/haze
   dlmod profile                list profiles (named sets of mods)
   dlmod profile save <name>    remember which mods are on now
   dlmod profile use <name>     switch on exactly the mods in a profile
@@ -101,7 +108,7 @@ var commands = map[string]bool{
 	"install": true, "list": true, "status": true, "on": true, "enable": true, "off": true,
 	"disable": true, "remove": true, "uninstall": true, "patch": true, "repair": true,
 	"unpatch": true, "play": true, "help": true, "update": true, "profile": true, "profiles": true,
-	"search": true, "get": true,
+	"search": true, "get": true, "extract": true,
 }
 
 // palette holds escape sequences; every field is empty when colours are off (NO_COLOR, old consoles).
@@ -370,6 +377,11 @@ func execute(ui *UI, game Game, command string, args []string, opts options) err
 		}
 		ui.say("%s. Install one with: dlmod get <id>", plural(len(found), "%d mod found", "%d mods found"))
 		return nil
+	case "extract":
+		if len(args) < 1 || len(args) > 2 {
+			return errors.New("name what to extract, for example: dlmod extract models/heroes_staging/haze")
+		}
+		return extractGameFiles(ui, game, args)
 	case "get":
 		if len(args) != 1 {
 			return errors.New("name one mod, for example: dlmod get 742960 or its GameBanana address")
@@ -657,4 +669,46 @@ func matchName(mods []RemoteMod, text string, hero bool) string {
 		}
 	}
 	return text
+}
+
+// extractGameFiles copies the game files whose paths start with a prefix into a folder
+// (dlmod-extract next to dlmod by default), keeping their paths.
+func extractGameFiles(ui *UI, game Game, args []string) error {
+	prefix := strings.Trim(strings.ReplaceAll(args[0], "\\", "/"), "/")
+	folder := "dlmod-extract"
+	if len(args) == 2 {
+		folder = args[1]
+	}
+	index, err := source2.OpenVPKFiltered(filepath.Join(game.Citadel(), "pak01_dir.vpk"), func(name string) bool {
+		return name == prefix || strings.HasPrefix(name, prefix+"/")
+	})
+	if err != nil {
+		return err
+	}
+	if len(index.Files) == 0 {
+		return fmt.Errorf("no game file starts with %s", prefix)
+	}
+	names := make([]string, 0, len(index.Files))
+	for name := range index.Files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var total int64
+	for _, name := range names {
+		data, err := index.Read(name)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(folder, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, data, 0o644); err != nil {
+			return err
+		}
+		total += int64(len(data))
+	}
+	abs, _ := filepath.Abs(folder)
+	ui.say("Extracted %s (%s) into %s.", plural(len(names), "%d file", "%d files"), formatSize(total), abs)
+	return nil
 }

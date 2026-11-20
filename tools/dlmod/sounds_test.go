@@ -109,3 +109,26 @@ func mustPlayable(t *testing.T, compiled []byte) []byte {
 	}
 	return audio
 }
+
+func TestExtractGameFiles(t *testing.T) {
+	game := newFakeGame(t)
+	game.write("game/citadel/pak01_dir.vpk", source2.WriteVPK(map[string][]byte{
+		"models/heroes_staging/haze/haze.vmdl_c":                []byte("model"),
+		"models/heroes_staging/haze/materials/haze_body.vmat_c": []byte("material"),
+		"models/heroes_staging/hazel/other.vmdl_c":              []byte("not haze"),
+	}))
+	folder := t.TempDir()
+	var log bytes.Buffer
+	ui := quietUI("")
+	ui.out = &log
+	if err := extractGameFiles(ui, game.Game, []string{"models/heroes_staging/haze/", folder}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(folder, "models", "heroes_staging", "haze", "materials", "haze_body.vmat_c"))
+	if err != nil || string(data) != "material" || !strings.Contains(log.String(), "Extracted 2 files") {
+		t.Fatalf("extract keeps paths and stops at folder boundaries: %v %s", err, log.String())
+	}
+	if err := extractGameFiles(ui, game.Game, []string{"models/nothing"}); err == nil {
+		t.Fatal("a prefix that matches nothing is an error")
+	}
+}
