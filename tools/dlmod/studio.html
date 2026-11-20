@@ -378,8 +378,9 @@ function drawModel(positions, colors) {
   modelGroup.clear();
   const uvs = state.model.uvs;
   state.model.parts.forEach((part, i) => {
-    const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(...part.color.slice(0, 3)), side: THREE.DoubleSide,
-      roughness: 0.8, wireframe: $("wire").checked });
+    // dlmod writes a part's colour into its texture as it is, sRGB, so the preview reads it so too.
+    const material = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(...part.color.slice(0, 3), THREE.SRGBColorSpace),
+      side: THREE.DoubleSide, roughness: 0.8, wireframe: $("wire").checked });
     if (colors) {
       const g = geometryOf(positions, part.indices, uvs);
       g.setAttribute("color", new THREE.BufferAttribute(colors, 3));

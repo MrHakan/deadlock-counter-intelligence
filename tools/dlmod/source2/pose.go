@@ -450,6 +450,41 @@ type Rigged struct {
 	JointMap map[string]string // a rigged model's joints and the hero bones they became
 }
 
+// onHeroBones reports whether a rigged model's joints are the hero's own bones: named like them,
+// limbs among them, and every one within 3% of the hero's height of the bone of its name.
+func onHeroBones(mesh *ImportedMesh, skeleton *Skeleton, height float64) bool {
+	if len(mesh.Joints) != len(mesh.Positions) || len(mesh.JointPositions) != len(mesh.JointNames) || height <= 0 {
+		return false
+	}
+	skinned := map[int]bool{}
+	for _, joints := range mesh.Joints {
+		for _, j := range joints {
+			if j.Weight > 0 {
+				skinned[j.Joint] = true
+			}
+		}
+	}
+	limbs := skeleton.limbs()
+	named, limb := 0, false
+	for joint := range skinned {
+		if joint < 0 || joint >= len(mesh.JointNames) {
+			return false
+		}
+		bone, ok := skeleton.index[mesh.JointNames[joint]]
+		if !ok {
+			return false
+		}
+		p, _ := skeleton.position(mesh.JointNames[joint])
+		q := vec64(mesh.JointPositions[joint])
+		if math.Sqrt(dot(sub(p, q), sub(p, q))) > 0.03*height {
+			return false
+		}
+		named++
+		limb = limb || limbs[bone] != limbNone
+	}
+	return named >= 4 && limb
+}
+
 // PaintStroke sets how much vertices follow a bone, as painted in the studio: weight 1 makes
 // them follow it alone, 0 takes the bone away, and the rest share what is left.
 type PaintStroke struct {
@@ -600,9 +635,13 @@ func (m *Model) AutoRig(fitted *ImportedMesh, opts ImportOptions, pose *Pose, ma
 	var limbs []int
 	if skeleton != nil {
 		limbs = skeleton.limbs()
-		if pose != nil {
+		switch {
+		case pose != nil:
 			chosen = *pose
-		} else {
+		case onHeroBones(fitted, skeleton, hi[2]-lo[2]):
+			// Rigged on the hero's own skeleton, standing where its bones stand: already in the
+			// hero's bind pose, which guessing from the shape could only get wrong.
+		default:
 			chosen = matchPose(samples, skeleton, fitted.Positions, cell)
 		}
 		matrices = skeleton.limbMatrices(chosen)

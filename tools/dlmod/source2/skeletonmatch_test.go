@@ -5,6 +5,37 @@ import (
 	"testing"
 )
 
+// A model rigged on the hero's own bones, where they stand, needs no pose guessed; moved or
+// renamed joints do.
+func TestOnHeroBones(t *testing.T) {
+	model, _ := LoadModel(SampleHero())
+	skeleton, _ := model.Skeleton()
+	build := func(names []string, shift float32) *ImportedMesh {
+		mesh := &ImportedMesh{}
+		for i, name := range names {
+			at := sampleBones[sampleBoneIndex(name)].at
+			if i == len(names)-1 {
+				at[1] += shift
+			}
+			mesh.JointNames = append(mesh.JointNames, name)
+			mesh.JointPositions = append(mesh.JointPositions, at)
+			mesh.Positions = append(mesh.Positions, at)
+			mesh.Joints = append(mesh.Joints, []JointWeight{{i, 1}})
+		}
+		return mesh
+	}
+	names := []string{"pelvis", "spine_3", "head", "hand_L", "hand_R"}
+	if !onHeroBones(build(names, 0), skeleton, 72) {
+		t.Error("joints on the hero's bones")
+	}
+	if onHeroBones(build(names, 6), skeleton, 72) {
+		t.Error("a hand 6 units off is not on the hero's bone")
+	}
+	if onHeroBones(build([]string{"pelvis", "spine_3", "head"}, 0), skeleton, 72) {
+		t.Error("without a limb the pose is not known")
+	}
+}
+
 // The studio's hand edits: a pinned piece follows one bone, painting sets a bone's share and the
 // others share the rest, and painting a bone to nothing hands its share to the others.
 func TestRigEdits(t *testing.T) {

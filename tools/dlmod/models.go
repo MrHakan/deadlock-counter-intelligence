@@ -159,7 +159,10 @@ func heroModelPath(index *source2.VPKIndex, id string) (string, error) {
 // modelModName is the name a hero's custom model mod gets, so a new import replaces the last.
 func modelModName(id string) string { return "Custom model: " + heroDisplayName(id) }
 
-// installModel packs an import's files into a VPK and installs it as the hero's custom model.
+// installModel packs an import's files into a VPK and installs it as the hero's custom model, in
+// place of the hero's previous one. That one is removed by its name, not by its files: a model
+// with other materials has other files, and was left installed beside the new one, the two
+// fighting over the hero's model.
 func installModel(p prompter, store *Store, id string, result *source2.ImportResult) error {
 	folder := filepath.Join(store.game.StateDir(), "models")
 	if err := os.MkdirAll(folder, 0o755); err != nil {
@@ -170,6 +173,18 @@ func installModel(p prompter, store *Store, id string, result *source2.ImportRes
 		return err
 	}
 	defer os.Remove(vpk)
+	entries, err := store.entries()
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.Mod != nil && entry.Mod.Name == modelModName(id) {
+			if err := store.remove(entry); err != nil {
+				return err
+			}
+			p.say("Removed the previous '%s'.", entry.Name())
+		}
+	}
 	return store.install(p, vpk, modelModName(id))
 }
 

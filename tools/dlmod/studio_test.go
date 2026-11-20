@@ -229,6 +229,27 @@ func TestStudioFromTheFullScreenView(t *testing.T) {
 	}
 }
 
+// A hero's new custom model replaces the last one even when its files differ (other materials).
+func TestNewModelReplacesTheLast(t *testing.T) {
+	game := newFakeGame(t)
+	store, err := openStore(game.Game)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, files := range []map[string][]byte{
+		{heroModels["tengu"] + "_c": []byte("one"), "models/dlmod/ivy/material_0.vmat_c": []byte("m")},
+		{heroModels["tengu"] + "_c": []byte("two"), "models/dlmod/ivy/body.vmat_c": []byte("b"), "models/dlmod/ivy/nose.vmat_c": []byte("n")},
+	} {
+		if err := installModel(quietUI(""), store, "tengu", &source2.ImportResult{Files: files}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, _ := store.entries()
+	if len(entries) != 1 || !strings.Contains(strings.Join(entries[0].Paths, " "), "body.vmat_c") {
+		t.Fatalf("one custom model, the new one: %v", entries)
+	}
+}
+
 func TestFindHero(t *testing.T) {
 	for text, want := range map[string]string{"wraith": "wraith", "Lady Geist": "ghost", "abrams": "atlas", "pock": "synth", "geist": "ghost"} {
 		if got, err := findHero(text); got != want {
