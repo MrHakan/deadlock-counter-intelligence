@@ -865,9 +865,10 @@ func rigidParts(mesh *ImportedMesh, skin [][]BoneWeight, labels []int, distances
 }
 
 // mapJoints keeps a rigged model's own weights and only swaps its joints for the hero's bones:
-// each joint becomes the hero bone its vertices voted for most (closer vertices count more), or
-// the bone of the same name when the hero has one. Props stay on the joint the artist put them
-// on, and the weights stay as smooth as the artist painted them.
+// the bone of the same name when the hero has one, else the bone the skeleton's shape puts it on
+// (structuralJoints), else the hero bone its vertices voted for most (closer vertices count
+// more). Props stay on the joint the artist put them on, and the weights stay as smooth as the
+// artist painted them.
 func mapJoints(mesh *ImportedMesh, skin [][]BoneWeight, distances []float64, skeleton *Skeleton, maxBones int, height float64) {
 	votes := map[int]map[string]float64{}
 	for i, joints := range mesh.Joints {
@@ -900,6 +901,19 @@ func mapJoints(mesh *ImportedMesh, skin [][]BoneWeight, distances []float64, ske
 		}
 		return false
 	}
+	// Joints named like the hero's bones (models from Valve's games) map by name. When most are
+	// not, a humanoid skeleton maps by its shape (see structuralJoints), and the joints off its
+	// main chains follow their parent.
+	named := 0
+	for joint := range votes {
+		if _, ok := byName[strings.ToLower(nameOf(joint))]; ok {
+			named++
+		}
+	}
+	var structural map[int]string
+	if named*2 < len(votes) {
+		structural = structuralJoints(mesh, skeleton)
+	}
 	mapping := map[int]string{}
 	var resolve func(joint, depth int) string
 	resolve = func(joint, depth int) string {
@@ -911,6 +925,18 @@ func mapJoints(mesh *ImportedMesh, skin [][]BoneWeight, distances []float64, ske
 		if bone, ok := byName[strings.ToLower(name)]; ok {
 			mapping[joint] = bone
 			return bone
+		}
+		if structural != nil {
+			if bone, ok := structural[joint]; ok {
+				mapping[joint] = bone
+				return bone
+			}
+			if depth < 64 && joint < len(mesh.JointParents) && mesh.JointParents[joint] >= 0 {
+				if bone := resolve(mesh.JointParents[joint], depth+1); bone != "" {
+					mapping[joint] = bone
+					return bone
+				}
+			}
 		}
 		// A weapon or prop joint the hero lacks rides on whatever its parent joint becomes.
 		if isProp(name) && depth < 64 && joint < len(mesh.JointParents) && mesh.JointParents[joint] >= 0 {

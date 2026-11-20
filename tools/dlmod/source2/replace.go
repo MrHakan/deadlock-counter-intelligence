@@ -196,6 +196,15 @@ func (m *Model) Fit(in *ImportedMesh, opts ImportOptions) (*ImportedMesh, error)
 		t := normalize(turn(n))
 		out.Normals[i] = [3]float32{float32(t[0]), float32(t[1]), float32(t[2])}
 	}
+	if in.JointPositions != nil {
+		out.JointPositions = make([][3]float32, len(in.JointPositions))
+		for i, p := range in.JointPositions {
+			t := turn(p)
+			for k := 0; k < 3; k++ {
+				out.JointPositions[i][k] = float32((t[k]-centre[k])*scale + target[k] + opts.Offset[k])
+			}
+		}
+	}
 	return out, nil
 }
 
