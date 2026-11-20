@@ -98,8 +98,53 @@ func (m *Model) Bounds(opts ImportOptions) (lo, hi [3]float64, err error) {
 	return lo, hi, nil
 }
 
+// trimmedCentre is the middle of points across X and Y: the average of each, leaving out the
+// outer 5% on either side, so a gun held out or a cape does not pull a model off its feet.
+func trimmedCentre(points [][3]float64) [2]float64 {
+	var out [2]float64
+	if len(points) == 0 {
+		return out
+	}
+	values := make([]float64, len(points))
+	for k := 0; k < 2; k++ {
+		for i, p := range points {
+			values[i] = p[k]
+		}
+		sort.Float64s(values)
+		cut := len(values) * 5 / 100
+		middle := values[cut : len(values)-cut]
+		sum := 0.0
+		for _, v := range middle {
+			sum += v
+		}
+		out[k] = sum / float64(len(middle))
+	}
+	return out
+}
+
+// Anchor is the point between the hero's feet that a model stands on, across X and Y: the pelvis
+// bone when the skeleton has one, else the middle of the replaced parts.
+func (m *Model) Anchor(opts ImportOptions) ([2]float64, error) {
+	if skeleton, err := m.Skeleton(); err == nil {
+		if p, ok := skeleton.position("pelvis"); ok {
+			return [2]float64{p[0], p[1]}, nil
+		}
+	}
+	var points [][3]float64
+	for _, mesh := range m.replaced(opts) {
+		tris, err := mesh.Triangles()
+		if err != nil {
+			return [2]float64{}, err
+		}
+		for _, p := range tris.Positions {
+			points = append(points, vec64(p))
+		}
+	}
+	return trimmedCentre(points), nil
+}
+
 // Fit turns an imported model into the hero's space: Z up, facing +X, as tall as the parts it
-// replaces and standing where they stand.
+// replaces, its middle over the hero's pelvis and its feet on the hero's floor.
 func (m *Model) Fit(in *ImportedMesh, opts ImportOptions) (*ImportedMesh, error) {
 	lo, hi, err := m.Bounds(opts)
 	if err != nil {
@@ -133,8 +178,13 @@ func (m *Model) Fit(in *ImportedMesh, opts ImportOptions) (*ImportedMesh, error)
 	if opts.Scale > 0 {
 		scale *= opts.Scale
 	}
-	centre := [3]float64{(low[0] + high[0]) / 2, (low[1] + high[1]) / 2, low[2]}
-	target := [3]float64{(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, lo[2]}
+	middle := trimmedCentre(turned)
+	centre := [3]float64{middle[0], middle[1], low[2]}
+	anchor, err := m.Anchor(opts)
+	if err != nil {
+		return nil, err
+	}
+	target := [3]float64{anchor[0], anchor[1], lo[2]}
 	out.Positions = make([][3]float32, len(turned))
 	for i, p := range turned {
 		for k := 0; k < 3; k++ {
@@ -183,35 +233,51 @@ func (g *pointGrid) add(index int, p [3]float32) {
 	g.cells[k] = append(g.cells[k], index)
 }
 
-// nearest finds up to n points closest to p, searching outward ring by ring.
+// nearest finds up to n points closest to p, searching outward ring by ring and keeping only the
+// best n seen so far.
 func (g *pointGrid) nearest(p [3]float32, n int) []gridHit {
 	center := g.key(p)
-	var hits []gridHit
+	best := make([]gridHit, 0, n) // ordered by squared distance until the end
+	consider := func(i int) {
+		q := g.pts[i]
+		d := sq(p[0]-q[0]) + sq(p[1]-q[1]) + sq(p[2]-q[2])
+		if len(best) == n && d >= best[n-1].distance {
+			return
+		}
+		if len(best) < n {
+			best = append(best, gridHit{})
+		}
+		at := len(best) - 1
+		for at > 0 && best[at-1].distance > d {
+			best[at] = best[at-1]
+			at--
+		}
+		best[at] = gridHit{i, d}
+	}
 	for ring := 0; ring < 64; ring++ {
 		for dx := -ring; dx <= ring; dx++ {
 			for dy := -ring; dy <= ring; dy++ {
+				edge := abs(dx) == ring || abs(dy) == ring
 				for dz := -ring; dz <= ring; dz++ {
-					if max(abs(dx), abs(dy), abs(dz)) != ring {
+					if !edge && abs(dz) != ring {
+						dz = ring - 1 // inside the shell: jump to its far face
 						continue
 					}
 					for _, i := range g.cells[[3]int{center[0] + dx, center[1] + dy, center[2] + dz}] {
-						q := g.pts[i]
-						d := math.Sqrt(sq(p[0]-q[0]) + sq(p[1]-q[1]) + sq(p[2]-q[2]))
-						hits = append(hits, gridHit{i, d})
+						consider(i)
 					}
 				}
 			}
 		}
 		// Every point within ring cells has been seen once n points lie within that distance.
-		if len(hits) >= n {
-			sort.Slice(hits, func(a, b int) bool { return hits[a].distance < hits[b].distance })
-			if hits[n-1].distance <= float64(ring)*g.cell {
-				return hits[:n]
-			}
+		if reach := float64(ring) * g.cell; len(best) == n && best[n-1].distance <= reach*reach {
+			break
 		}
 	}
-	sort.Slice(hits, func(a, b int) bool { return hits[a].distance < hits[b].distance })
-	return hits[:min(n, len(hits))]
+	for k := range best {
+		best[k].distance = math.Sqrt(best[k].distance)
+	}
+	return best
 }
 
 func abs(i int) int {
@@ -528,4 +594,30 @@ func (m *Model) writeTarget(mesh *Mesh, fitted *ImportedMesh, skin [][]BoneWeigh
 		}
 	}
 	return nil
+}
+
+// PartGeometry is a part's full-detail triangles, for previews.
+type PartGeometry struct {
+	ModelPart
+	Positions [][3]float32
+	Indices   []uint32
+}
+
+// Geometry returns every part at full detail, in the order Parts lists them.
+func (m *Model) Geometry() ([]PartGeometry, error) {
+	var out []PartGeometry
+	parts := m.Parts()
+	i := 0
+	for _, mesh := range m.Meshes {
+		if m.lodMask(mesh)&1 == 0 {
+			continue
+		}
+		tris, err := mesh.Triangles()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %v", mesh.Name, err)
+		}
+		out = append(out, PartGeometry{ModelPart: parts[i], Positions: tris.Positions, Indices: tris.Indices})
+		i++
+	}
+	return out, nil
 }

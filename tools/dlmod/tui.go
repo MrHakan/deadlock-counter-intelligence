@@ -1285,6 +1285,7 @@ func (t *tui) drawHelp(c *canvas) {
 		"Game updates and Verify integrity reset gameinfo.gi. This screen then shows MODS OFF; press r.",
 		"When two mods change the same file only one of them takes effect, so a ! marks both.",
 		"Interface mods built for an older game build can stop Deadlock from starting after an update.",
+		"To put your own 3D model on a hero, drop a .glb, .gltf or .obj file on dlmod, or run dlmod studio: it opens the model studio in your browser.",
 	} {
 		for _, line := range wrap(text, c.width-4) {
 			c.line(seg{"   " + line, p.dim})

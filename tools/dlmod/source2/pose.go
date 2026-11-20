@@ -130,6 +130,9 @@ func (m *Model) Skeleton() (*Skeleton, error) {
 	return s, nil
 }
 
+// Position is where a bone is in the bind pose.
+func (s *Skeleton) Position(name string) ([3]float64, bool) { return s.position(name) }
+
 func (s *Skeleton) position(name string) ([3]float64, bool) {
 	i, ok := s.index[name]
 	if !ok {
@@ -464,8 +467,15 @@ func (m *Model) AutoRig(fitted *ImportedMesh, opts ImportOptions, pose *Pose, ma
 		for _, w := range s.limb {
 			total += w
 		}
+		// A limb takes points that follow it even partly, so shoulders and hips blend; the body
+		// takes only points that mostly follow it, or the sides of a chest would follow the arms
+		// hanging beside them.
 		for limb, w := range s.limb {
-			if total > 0 && w >= 0.3*total {
+			share := 0.3
+			if limb == limbNone {
+				share = 0.7
+			}
+			if total > 0 && w >= share*total {
 				grids[limb].add(i, p)
 			}
 		}
@@ -473,6 +483,9 @@ func (m *Model) AutoRig(fitted *ImportedMesh, opts ImportOptions, pose *Pose, ma
 	const neighbours = 6
 	out := &Rigged{Pose: chosen, Skin: make([][]BoneWeight, len(fitted.Positions))}
 	labels := make([]int, len(fitted.Positions))
+	if len(segments) > 0 {
+		labels = surfaceLabels(fitted, segments)
+	}
 	distances := make([]float64, len(fitted.Positions))
 	bind := &ImportedMesh{Parts: fitted.Parts, UVs: fitted.UVs,
 		Positions: make([][3]float32, len(fitted.Positions)), Normals: make([][3]float32, len(fitted.Positions))}
@@ -483,7 +496,6 @@ func (m *Model) AutoRig(fitted *ImportedMesh, opts ImportOptions, pose *Pose, ma
 		}
 		grid := all
 		if len(segments) > 0 {
-			labels[i] = nearestLimb(segments, vec64(p))
 			if g := grids[labels[i]]; len(g.pts) > 0 {
 				grid = g
 			}
@@ -534,7 +546,8 @@ func (m *Model) AutoRig(fitted *ImportedMesh, opts ImportOptions, pose *Pose, ma
 	if len(fitted.Joints) == len(fitted.Positions) && skeleton != nil {
 		mapJoints(fitted, out.Skin, distances, skeleton, maxBones, math.Max(hi[2]-lo[2], 1))
 	} else {
-		rigidParts(fitted, out.Skin, labels, distances, math.Max(hi[2]-lo[2], 1))
+		fixed := rigidParts(fitted, out.Skin, labels, distances, math.Max(hi[2]-lo[2], 1), skeleton)
+		smoothWeights(fitted, out.Skin, fixed, 8, maxBones)
 	}
 	for i, p := range fitted.Positions {
 		var normal [3]float64
@@ -566,6 +579,7 @@ func (m *Model) AutoRig(fitted *ImportedMesh, opts ImportOptions, pose *Pose, ma
 type limbSegment struct {
 	from, to [3]float64
 	limb     int
+	seed     bool // a vertex nearest this segment surely lies on its limb (see surfaceLabels)
 }
 
 // segments are the body bones the hero's points follow, as line segments from each bone's
@@ -590,13 +604,24 @@ func (s *Skeleton) segments(samples []heroSample, matrices [limbCount]mat34, lim
 		if !used[i] || parent < 0 || !coreBone(s.Names[i]) || !coreBone(s.Names[parent]) {
 			continue
 		}
-		out = append(out, limbSegment{posed(parent), posed(i), limbs[parent]})
+		// Hands and forearms can rest anywhere (on a hip, across the chest), and the hip joint and
+		// shoulders sit where limbs meet, so only the spine, the upper arms and the legs decide.
+		name := strings.ToLower(s.Names[parent])
+		seed := strings.HasPrefix(name, "spine") || strings.HasPrefix(name, "neck") || strings.HasPrefix(name, "head") ||
+			strings.HasPrefix(name, "arm_upper") || strings.HasPrefix(name, "leg_")
+		out = append(out, limbSegment{posed(parent), posed(i), limbs[parent], seed})
 	}
 	return out
 }
 
-func nearestLimb(segments []limbSegment, p [3]float64) int {
-	best, limb := math.Inf(1), limbNone
+// limbDistances is how far a point is from the nearest bone of each limb, and whether the
+// nearest bone of all is one that decides a limb by itself.
+func limbDistances(segments []limbSegment, p [3]float64) ([limbCount]float64, bool) {
+	var out [limbCount]float64
+	for i := range out {
+		out[i] = math.Inf(1)
+	}
+	nearest, seed := math.Inf(1), false
 	for _, seg := range segments {
 		d := sub(seg.to, seg.from)
 		t := 0.0
@@ -604,17 +629,138 @@ func nearestLimb(segments []limbSegment, p [3]float64) int {
 			t = math.Max(0, math.Min(1, dot(sub(p, seg.from), d)/l))
 		}
 		closest := [3]float64{seg.from[0] + d[0]*t, seg.from[1] + d[1]*t, seg.from[2] + d[2]*t}
-		if dist := dot(sub(p, closest), sub(p, closest)); dist < best {
-			best, limb = dist, seg.limb
+		distance := math.Sqrt(dot(sub(p, closest), sub(p, closest)))
+		out[seg.limb] = math.Min(out[seg.limb], distance)
+		if distance < nearest {
+			nearest, seed = distance, seg.seed
 		}
 	}
-	return limb
+	return out, seed
 }
 
-// rigidParts makes small loose pieces of the model that reach across limbs (a gun held at the
-// hip, a sword along the leg) follow one bone, the one the piece is closest to, instead of being
-// pulled apart between a hand and a thigh. Pieces are triangles sharing vertices or positions.
-func rigidParts(mesh *ImportedMesh, skin [][]BoneWeight, labels []int, distances []float64, height float64) {
+func nearestLimb(segments []limbSegment, p [3]float64) int {
+	distances, _ := limbDistances(segments, p)
+	best := limbNone
+	for limb, d := range distances {
+		if d < distances[best] {
+			best = limb
+		}
+	}
+	return best
+}
+
+// surfaceLabels says which limb each vertex is on. Vertices plainly closer to one limb's bones
+// than to any other's decide for themselves; the rest take the limb of the nearest such vertex
+// along the surface. A hand resting on a hip is close to the hip in space but far from it across
+// the body, so the hip stays with the body. Loose pieces with no plain vertex use the nearest bone.
+func surfaceLabels(mesh *ImportedMesh, segments []limbSegment) []int {
+	n := len(mesh.Positions)
+	labels := make([]int, n)
+	reach := make([]float64, n)
+	var queue labelQueue
+	for i, p := range mesh.Positions {
+		distances, decisive := limbDistances(segments, vec64(p))
+		best, second := limbNone, -1
+		for limb := range distances {
+			if distances[limb] < distances[best] {
+				best = limb
+			}
+		}
+		for limb := range distances {
+			if limb != best && (second < 0 || distances[limb] < distances[second]) {
+				second = limb
+			}
+		}
+		labels[i] = best
+		reach[i] = math.Inf(1)
+		if decisive && (second < 0 || distances[best] < 0.5*distances[second]) {
+			reach[i] = 0
+			queue.push(labelItem{0, i})
+		}
+	}
+	neighbours := surfaceNeighbours(mesh)
+	for queue.Len() > 0 {
+		item := queue.pop()
+		if item.cost > reach[item.vertex] {
+			continue
+		}
+		p := vec64(mesh.Positions[item.vertex])
+		for _, j := range neighbours[item.vertex] {
+			q := vec64(mesh.Positions[j])
+			cost := item.cost + math.Sqrt(dot(sub(p, q), sub(p, q)))
+			if cost < reach[j] {
+				reach[j], labels[j] = cost, labels[item.vertex]
+				queue.push(labelItem{cost, int(j)})
+			}
+		}
+	}
+	return labels
+}
+
+type labelItem struct {
+	cost   float64
+	vertex int
+}
+
+// labelQueue is a binary min-heap of vertices by cost.
+type labelQueue []labelItem
+
+func (q labelQueue) Len() int { return len(q) }
+
+func (q *labelQueue) push(item labelItem) {
+	*q = append(*q, item)
+	for i := len(*q) - 1; i > 0; {
+		parent := (i - 1) / 2
+		if (*q)[parent].cost <= (*q)[i].cost {
+			break
+		}
+		(*q)[parent], (*q)[i] = (*q)[i], (*q)[parent]
+		i = parent
+	}
+}
+
+func (q *labelQueue) pop() labelItem {
+	old := *q
+	top := old[0]
+	last := len(old) - 1
+	old[0] = old[last]
+	*q = old[:last]
+	for i := 0; ; {
+		left, smallest := 2*i+1, i
+		if left < last && (*q)[left].cost < (*q)[smallest].cost {
+			smallest = left
+		}
+		if left+1 < last && (*q)[left+1].cost < (*q)[smallest].cost {
+			smallest = left + 1
+		}
+		if smallest == i {
+			break
+		}
+		(*q)[i], (*q)[smallest] = (*q)[smallest], (*q)[i]
+		i = smallest
+	}
+	return top
+}
+
+// rigidParts makes small loose pieces of the model that reach from a hand into a leg (a gun held
+// at the hip, a sword along the thigh) follow one bone, the one the piece is closest to, instead
+// of being pulled apart between the hand and the thigh. Pieces are triangles sharing vertices or
+// positions.
+func rigidParts(mesh *ImportedMesh, skin [][]BoneWeight, labels []int, distances []float64, height float64, skeleton *Skeleton) []bool {
+	// A held prop rides on the hand, not on the finger that happens to touch it.
+	holder := func(bone string) string {
+		if skeleton == nil {
+			return bone
+		}
+		i, ok := skeleton.index[bone]
+		for depth := 0; ok && i >= 0 && depth < 64 && strings.HasPrefix(strings.ToLower(skeleton.Names[i]), "finger"); depth++ {
+			i = skeleton.Parent[i]
+		}
+		if ok && i >= 0 {
+			return skeleton.Names[i]
+		}
+		return bone
+	}
 	n := len(mesh.Positions)
 	parent := make([]int, n)
 	for i := range parent {
@@ -653,25 +799,24 @@ func rigidParts(mesh *ImportedMesh, skin [][]BoneWeight, labels []int, distances
 	for i := 0; i < n; i++ {
 		groups[find(i)] = append(groups[find(i)], i)
 	}
+	fixed := make([]bool, n)
 	for _, members := range groups {
-		lo := [3]float32{float32(math.Inf(1)), float32(math.Inf(1)), float32(math.Inf(1))}
-		hi := [3]float32{float32(math.Inf(-1)), float32(math.Inf(-1)), float32(math.Inf(-1))}
-		limbsSeen := map[int]bool{}
+		seen := [limbCount]bool{}
 		for _, i := range members {
-			for k := 0; k < 3; k++ {
-				lo[k], hi[k] = min(lo[k], mesh.Positions[i][k]), max(hi[k], mesh.Positions[i][k])
-			}
-			limbsSeen[labels[i]] = true
+			seen[labels[i]] = true
 		}
-		size := math.Sqrt(sq(hi[0]-lo[0]) + sq(hi[1]-lo[1]) + sq(hi[2]-lo[2]))
-		if len(limbsSeen) < 2 || size > 0.35*height {
+		// A held prop reaches from a hand down past a hip. Clothing spans both arms or both legs,
+		// and the body is most of the model; those keep their weights vertex by vertex.
+		arm, leg := seen[limbArmL] || seen[limbArmR], seen[limbLegL] || seen[limbLegR]
+		pair := (seen[limbArmL] && seen[limbArmR]) || (seen[limbLegL] && seen[limbLegR])
+		if !arm || !leg || pair || len(members) > n*15/100 {
 			continue
 		}
 		votes := map[string]float64{}
 		for _, i := range members {
 			closeness := 1 / math.Pow(distances[i]+height*0.002, 2)
 			for _, b := range skin[i] {
-				votes[b.Bone] += closeness * float64(b.Weight)
+				votes[holder(b.Bone)] += closeness * float64(b.Weight)
 			}
 		}
 		best, bestVote := "", -1.0
@@ -682,8 +827,10 @@ func rigidParts(mesh *ImportedMesh, skin [][]BoneWeight, labels []int, distances
 		}
 		for _, i := range members {
 			skin[i] = []BoneWeight{{best, 1}}
+			fixed[i] = true
 		}
 	}
+	return fixed
 }
 
 // mapJoints keeps a rigged model's own weights and only swaps its joints for the hero's bones:
@@ -785,5 +932,144 @@ func mapJoints(mesh *ImportedMesh, skin [][]BoneWeight, distances []float64, ske
 			list[k].Weight /= sum
 		}
 		skin[i] = list
+	}
+}
+
+// Bend moves a rigged model's vertices as the hero's limbs would in a pose, to check the weights
+// before going in game: the arms lifted or lowered, the legs spread or closed.
+func (m *Model) Bend(rigged *Rigged, pose Pose) [][3]float32 {
+	out := make([][3]float32, len(rigged.Mesh.Positions))
+	skeleton, err := m.Skeleton()
+	if err != nil {
+		copy(out, rigged.Mesh.Positions)
+		return out
+	}
+	limbs := skeleton.limbs()
+	matrices := skeleton.limbMatrices(pose)
+	for i, p := range rigged.Mesh.Positions {
+		var follow [limbCount]float64
+		for _, b := range rigged.Skin[i] {
+			if bone, ok := skeleton.index[b.Bone]; ok {
+				follow[limbs[bone]] += float64(b.Weight)
+			}
+		}
+		q := blend(follow, matrices).apply(vec64(p))
+		out[i] = [3]float32{float32(q[0]), float32(q[1]), float32(q[2])}
+	}
+	return out
+}
+
+// surfaceNeighbours lists the vertices each vertex shares an edge with, counting vertices split
+// along texture seams (at the same spot) as one.
+func surfaceNeighbours(mesh *ImportedMesh) [][]int32 {
+	neighbours := make([][]int32, len(mesh.Positions))
+	link := func(a, b uint32) {
+		neighbours[a] = append(neighbours[a], int32(b))
+		neighbours[b] = append(neighbours[b], int32(a))
+	}
+	for _, part := range mesh.Parts {
+		for t := 0; t+2 < len(part.Indices); t += 3 {
+			a, b, c := part.Indices[t], part.Indices[t+1], part.Indices[t+2]
+			link(a, b)
+			link(b, c)
+			link(c, a)
+		}
+	}
+	at := map[[3]int32]int{}
+	for i, p := range mesh.Positions {
+		key := [3]int32{int32(math.Round(float64(p[0]) * 1000)), int32(math.Round(float64(p[1]) * 1000)), int32(math.Round(float64(p[2]) * 1000))}
+		if j, ok := at[key]; ok {
+			link(uint32(i), uint32(j))
+		} else {
+			at[key] = i
+		}
+	}
+	return neighbours
+}
+
+// smoothWeights blends each vertex's bone weights with its neighbours' a few times, so weights
+// fade across a joint instead of jumping where one bone's area ends. Vertices in fixed (rigid
+// pieces) keep theirs.
+func smoothWeights(mesh *ImportedMesh, skin [][]BoneWeight, fixed []bool, rounds, maxBones int) {
+	neighbours := surfaceNeighbours(mesh)
+	ids := map[string]int{}
+	var names []string
+	type weight struct {
+		bone int
+		w    float32
+	}
+	current := make([][]weight, len(skin))
+	for i, list := range skin {
+		for _, b := range list {
+			id, ok := ids[b.Bone]
+			if !ok {
+				id = len(names)
+				ids[b.Bone] = id
+				names = append(names, b.Bone)
+			}
+			current[i] = append(current[i], weight{id, b.Weight})
+		}
+	}
+	sum := make([]float32, len(names))
+	var touched []int
+	for round := 0; round < rounds; round++ {
+		next := make([][]weight, len(current))
+		for i := range current {
+			if fixed[i] || len(neighbours[i]) == 0 {
+				next[i] = current[i]
+				continue
+			}
+			touched = touched[:0]
+			add := func(list []weight, scale float32) {
+				for _, w := range list {
+					if sum[w.bone] == 0 {
+						touched = append(touched, w.bone)
+					}
+					sum[w.bone] += w.w * scale
+				}
+			}
+			add(current[i], 0.5)
+			share := 0.5 / float32(len(neighbours[i]))
+			for _, j := range neighbours[i] {
+				add(current[j], share)
+			}
+			list := make([]weight, 0, len(touched))
+			for _, bone := range touched {
+				list = append(list, weight{bone, sum[bone]})
+				sum[bone] = 0
+			}
+			next[i] = list
+		}
+		current = next
+	}
+	for i, list := range current {
+		if fixed[i] {
+			continue
+		}
+		sort.Slice(list, func(a, b int) bool {
+			if list[a].w != list[b].w {
+				return list[a].w > list[b].w
+			}
+			return list[a].bone < list[b].bone
+		})
+		list = list[:min(len(list), maxBones)]
+		var total float32
+		for _, w := range list {
+			total += w.w
+		}
+		out := make([]BoneWeight, 0, len(list))
+		for _, w := range list {
+			if share := w.w / total; share >= 0.02 || len(out) == 0 {
+				out = append(out, BoneWeight{names[w.bone], share})
+			}
+		}
+		var kept float32
+		for _, b := range out {
+			kept += b.Weight
+		}
+		for k := range out {
+			out[k].Weight /= kept
+		}
+		skin[i] = out
 	}
 }

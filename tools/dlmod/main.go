@@ -39,6 +39,10 @@ Usage:
   dlmod extract <path prefix> [folder]
                                copy files out of the game's archive, for example
                                dlmod extract models/heroes_staging/haze
+  dlmod studio                 open the model studio in your browser: drop a .glb, .gltf or .obj
+                               on a hero, check the fit and the rig, install
+  dlmod model <hero> <file> [-keep gun] [-scale 1] [-yaw 0] [-zup]
+                               put a model on a hero without the studio
   dlmod profile                list profiles (named sets of mods)
   dlmod profile save <name>    remember which mods are on now
   dlmod profile use <name>     switch on exactly the mods in a profile
@@ -53,12 +57,19 @@ tar.exe or 7-Zip.
 Options:
   -game DIR   the Deadlock folder (found through Steam when omitted; DEADLOCK_DIR also works)
   -plain      use the simple numbered menu instead of the full-screen one
+  -keep LIST  for model: hero parts to keep, by part of their names (default: weapons)
+  -scale N    for model: size on top of fitting the hero's height
+  -yaw DEG    for model: turn the model around before fitting it
+  -zup        for model: the file is Z-up (as Blender's .obj exports can be)
 `
 
 type options struct {
 	game, name     string
 	hero, category string
 	help, plain    bool
+	keep           string
+	scale, yaw     float64
+	zup            bool
 }
 
 func parseArgs(argv []string) ([]string, options, error) {
@@ -72,7 +83,7 @@ func parseArgs(argv []string) ([]string, options, error) {
 		}
 		key, value, hasValue := strings.Cut(strings.TrimLeft(arg, "-"), "=")
 		switch key {
-		case "game", "name", "hero", "category":
+		case "game", "name", "hero", "category", "keep", "scale", "yaw":
 			if !hasValue {
 				if i+1 >= len(argv) {
 					return nil, opts, fmt.Errorf("%s needs a value", arg)
@@ -87,11 +98,25 @@ func parseArgs(argv []string) ([]string, options, error) {
 				opts.name = value
 			case "hero":
 				opts.hero = value
+			case "keep":
+				opts.keep = value
+			case "scale", "yaw":
+				number, err := strconv.ParseFloat(value, 64)
+				if err != nil {
+					return nil, opts, fmt.Errorf("%s needs a number", arg)
+				}
+				if key == "scale" {
+					opts.scale = number
+				} else {
+					opts.yaw = number
+				}
 			default:
 				opts.category = value
 			}
 		case "plain":
 			opts.plain = true
+		case "zup":
+			opts.zup = true
 		case "h", "help":
 			opts.help = true
 		case "v", "version":
@@ -108,7 +133,7 @@ var commands = map[string]bool{
 	"install": true, "list": true, "status": true, "on": true, "enable": true, "off": true,
 	"disable": true, "remove": true, "uninstall": true, "patch": true, "repair": true,
 	"unpatch": true, "play": true, "help": true, "update": true, "profile": true, "profiles": true,
-	"search": true, "get": true, "extract": true,
+	"search": true, "get": true, "extract": true, "model": true, "studio": true,
 }
 
 // palette holds escape sequences; every field is empty when colours are off (NO_COLOR, old consoles).
@@ -288,6 +313,9 @@ func run(ui *UI, args []string, opts options) int {
 	command, rest := args[0], args[1:]
 	if !commands[command] {
 		command, rest = "install", args
+		if len(args) == 1 && isModelFile(args[0]) { // a model dropped on dlmod opens the studio with it
+			command = "studio"
+		}
 	}
 	if err := execute(ui, game, command, rest, opts); err != nil {
 		ui.say("%s", ui.p.paint(ui.p.red, "Error: "+err.Error()))
@@ -303,7 +331,7 @@ func execute(ui *UI, game Game, command string, args []string, opts options) err
 	if err != nil {
 		return err
 	}
-	if command != "list" && command != "status" && gameRunning() {
+	if command != "list" && command != "status" && command != "studio" && gameRunning() {
 		return errRunning
 	}
 	switch command {
@@ -377,6 +405,10 @@ func execute(ui *UI, game Game, command string, args []string, opts options) err
 		}
 		ui.say("%s. Install one with: dlmod get <id>", plural(len(found), "%d mod found", "%d mods found"))
 		return nil
+	case "model":
+		return modelCommand(ui, store, game, args, opts)
+	case "studio":
+		return runStudio(ui, store, game, args...)
 	case "extract":
 		if len(args) < 1 || len(args) > 2 {
 			return errors.New("name what to extract, for example: dlmod extract models/heroes_staging/haze")
