@@ -393,9 +393,16 @@ func readSources(file string) ([]*source, []string, func(), error) {
 		sources, err := groupSources(files)
 		return sources, skipped, func() { archive.Close() }, err
 	}
+	if ext := strings.ToLower(filepath.Ext(file)); ext == ".rar" || ext == ".7z" {
+		folder, err := extractArchive(file, os.TempDir())
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		sources, skipped, err := folderSources(folder)
+		return sources, skipped, func() { os.RemoveAll(folder) }, err
+	}
 	if !strings.EqualFold(filepath.Ext(file), ".vpk") {
-		return nil, nil, nil, errors.New("dlmod installs .zip and .vpk files; extract other archives " +
-			"(.rar, .7z) first and install the .vpk inside")
+		return nil, nil, nil, errors.New("dlmod installs .zip, .rar, .7z and .vpk files")
 	}
 	if !isFile(file) {
 		return nil, nil, nil, fmt.Errorf("%s was not found", file)

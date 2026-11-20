@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"os"
 	"path/filepath"
@@ -232,6 +233,7 @@ const (
 	modePrompt
 	modeHelp
 	modeQuestion
+	modeBrowse
 )
 
 const (
@@ -271,6 +273,12 @@ type tui struct {
 	size          func() (int, int)
 	stamp         [4]fileStamp
 	ticks         int
+
+	browse      *browser
+	previewDone chan previewResult
+	loadImage   func(string) (image.Image, error) // tests replace the download
+	imageAt     imageArea
+	under       int // the mode a question or the help screen covers
 
 	keys  <-chan []byte
 	out   *bufio.Writer
@@ -314,6 +322,7 @@ func runTUI(game Game) error {
 		t.out.WriteString("\x1b[?2004l\x1b[?25h\x1b[?1049l")
 		t.out.Flush()
 	}()
+	t.previewDone = make(chan previewResult, 4)
 	t.reload()
 	t.render()
 	ticker := time.NewTicker(time.Second)
@@ -327,6 +336,8 @@ func runTUI(game Game) error {
 			if !ok || t.handle(data) {
 				return nil
 			}
+		case result := <-t.previewDone:
+			t.receivePreview(result)
 		case <-ticker.C:
 			if !t.refresh() {
 				continue
@@ -371,6 +382,9 @@ func (t *tui) gather(data []byte) []byte {
 }
 
 func (t *tui) handle(data []byte) bool {
+	if data = t.takeCellSize(data); len(data) == 0 {
+		return false
+	}
 	typed, pasted, ok := splitPaste(data)
 	if !ok && t.mode == modeList && looksPasted(data) {
 		typed, pasted, ok = nil, string(data), true
@@ -413,7 +427,17 @@ func (t *tui) press(k key) bool {
 	switch t.mode {
 	case modeHelp:
 		t.mode = modeList
+		if t.under == modeBrowse && t.browse != nil {
+			t.mode = modeBrowse
+		}
+		t.under = modeList
 		return false
+	case modeBrowse:
+		if k.name == "char" && (k.r == '?' || k.r == 'h') && !t.browse.typing {
+			t.mode, t.under = modeHelp, modeBrowse
+			return false
+		}
+		return t.pressBrowse(k)
 	case modePrompt:
 		switch k.name {
 		case "char":
@@ -494,8 +518,10 @@ func (t *tui) press(k key) bool {
 			t.profiles()
 		case 'p':
 			t.play()
+		case 'b':
+			t.openBrowser(false)
 		case '?', 'h':
-			t.mode = modeHelp
+			t.mode, t.under = modeHelp, modeList
 		}
 	}
 	return false
@@ -703,6 +729,7 @@ func (t *tui) waitKey() (key, bool) {
 
 func (t *tui) ask(question string, options []string) func() {
 	saved := t.mode
+	t.under = saved
 	t.mode, t.question, t.options, t.choice = modeQuestion, question, options, 0
 	done := false
 	return func() {
@@ -755,7 +782,11 @@ func (t *tui) choose(question string, options []string) (int, bool, bool) {
 func (t *tui) progress(label string, done, total int64) {
 	bar := 24
 	filled := int(done * int64(bar) / max(total, 1))
-	t.busy = fmt.Sprintf("Installing %s  %s%s %3d%%  %s / %s", truncate(label, 32), strings.Repeat("█", filled),
+	prefix := "Installing "
+	if strings.HasPrefix(label, "Downloading ") {
+		prefix = ""
+	}
+	t.busy = fmt.Sprintf("%s%s  %s%s %3d%%  %s / %s", prefix, truncate(label, 44), strings.Repeat("█", filled),
 		strings.Repeat("░", bar-filled), done*100/max(total, 1), formatSize(done), formatSize(total))
 	t.render()
 }
@@ -865,6 +896,9 @@ func (t *tui) render() {
 	}
 	t.shown = append(t.shown[:0], t.frame.Bytes()...)
 	t.out.Write(t.shown)
+	if t.showingBrowser() {
+		t.drawPicture()
+	}
 	t.out.Flush()
 }
 
@@ -879,9 +913,14 @@ func (t *tui) lines() []string {
 	t.drawBottom(bottom, compact)
 	room := height - len(top.lines) - len(bottom.lines)
 	middle := &canvas{width: width, p: t.p}
-	if t.mode == modeHelp {
+	t.imageAt = imageArea{}
+	switch {
+	case t.mode == modeHelp:
 		t.drawHelp(middle)
-	} else {
+	case t.showingBrowser():
+		t.drawBrowse(middle, room)
+		t.imageAt.row += len(top.lines)
+	default:
 		t.drawList(middle, room, compact)
 	}
 	lines := append(top.lines, middle.lines[:min(len(middle.lines), max(room, 0))]...)
@@ -1127,8 +1166,10 @@ func (t *tui) drawBottom(c *canvas, compact bool) {
 		}
 	case modeHelp:
 		hints = [][2]string{{"any key", "back"}}
+	case modeBrowse:
+		hints = t.browseHints()
 	default:
-		hints = [][2]string{{"↑↓", "select"}, {"Space", "on/off"}, {"i", "install"}, {"d", "delete"},
+		hints = [][2]string{{"↑↓", "select"}, {"Space", "on/off"}, {"b", "browse online"}, {"i", "install"}, {"d", "delete"},
 			{"f", "profiles"}, {"u", "update HUD"}, {"r", "repair"}, {"p", "play"}, {"?", "help"}, {"q", "quit"}}
 	}
 	full := 0
@@ -1154,10 +1195,11 @@ func (t *tui) drawHelp(c *canvas) {
 	rows := [][2]string{
 		{"↑ ↓  j k", "move between mods"},
 		{"Space  Enter", "switch the selected mod on or off"},
-		{"i", "install a mod; dragging a .zip or .vpk file into the window works too"},
+		{"b", "browse mods online (the Deadlock Mod Manager catalog, from GameBanana) and install them"},
+		{"i", "install a mod; dragging a .zip, .rar, .7z or .vpk file into the window works too"},
 		{"d  Delete", "delete the selected mod"},
 		{"f", "profiles: switch between saved sets of mods, or save the current one"},
-		{"u", "download the Counter Intelligence HUD for your game build (the only online action)"},
+		{"u", "download the Counter Intelligence HUD for your game build"},
 		{"r", "repair gameinfo.gi after a game update"},
 		{"x", "undo dlmod's gameinfo.gi change; mods stay installed but stop loading"},
 		{"p", "start Deadlock through Steam"},
@@ -1165,6 +1207,17 @@ func (t *tui) drawHelp(c *canvas) {
 	}
 	c.line(seg{" Keys", p.bold})
 	for _, row := range rows {
+		c.line(seg{"   " + pad(row[0], 14), p.cyan}, seg{row[1], ""})
+	}
+	c.blank()
+	c.line(seg{" In the online browser (b)", p.bold})
+	for _, row := range [][2]string{
+		{"← →", "choose a hero; c and C cycle the category (Skins first)"},
+		{"/", "search by name or author; Enter or Esc ends typing"},
+		{"Enter", "download the selected mod, check its MD5 and install it"},
+		{"m", "preview mode: blocks (any terminal), sixel (Windows Terminal 1.22+, WezTerm, foot), kitty, off"},
+		{"n  R", "show NSFW mods; download the catalog again (it is kept for six hours)"},
+	} {
 		c.line(seg{"   " + pad(row[0], 14), p.cyan}, seg{row[1], ""})
 	}
 	c.blank()
@@ -1179,4 +1232,10 @@ func (t *tui) drawHelp(c *canvas) {
 			c.line(seg{"   " + line, p.dim})
 		}
 	}
+}
+
+// showingBrowser reports whether the online browser fills the middle of the screen, also while a
+// question asked from it waits at the bottom.
+func (t *tui) showingBrowser() bool {
+	return t.browse != nil && (t.mode == modeBrowse || (t.mode == modeQuestion && t.under == modeBrowse))
 }

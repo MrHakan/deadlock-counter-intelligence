@@ -64,7 +64,7 @@ Close Deadlock first, and use one install method only: two tools editing the sam
 
 ### With dlmod (no mod manager)
 
-`dlmod` is a 3 MB program in [`tools/dlmod`](tools/dlmod). It uses only Go's standard library and has no installer or background service. It finds Deadlock through Steam, copies mods into `game/citadel/addons` under free `pakNN_dir.vpk` names, and edits `gameinfo.gi` so the game loads that folder. It works with any VPK mod, not just this one. Only `dlmod update` goes online; it uses the `curl` that comes with Windows 10 and later, which keeps dlmod half the size it would be with its own HTTPS code.
+`dlmod` is a 3 MB program in [`tools/dlmod`](tools/dlmod). It uses only Go's standard library and has no installer or background service. It finds Deadlock through Steam, copies mods into `game/citadel/addons` under free `pakNN_dir.vpk` names, and edits `gameinfo.gi` so the game loads that folder. It works with any VPK mod, not just this one, and installs `.zip`, `.rar` and `.7z` downloads. It goes online only when you browse or download mods or update the HUD, through the `curl` that comes with Windows 10 and later, which keeps dlmod half the size it would be with its own HTTPS code. `.rar` and `.7z` archives are opened with the `tar.exe` that also comes with Windows (or 7-Zip, if installed).
 
 1. From [GitHub Releases](https://github.com/MrHakan/deadlock-counter-intelligence/releases), download the HUD ZIP and `dlmod-windows-amd64.exe` (on Linux, `dlmod-linux-amd64`).
 2. Drag the ZIP onto `dlmod-windows-amd64.exe`.
@@ -79,6 +79,7 @@ Double-click dlmod to open its full-screen view of every mod, with its slot, fil
 | `↑` `↓` (or `j` `k`) | Select a mod |
 | `Space` or `Enter` | Switch the selected mod on or off. It keeps its place in the list. |
 | Drag a file into the window | Install it straight away. `i` lets you type a path instead. |
+| `b` | Browse mods online and install them (see below) |
 | `d` | Delete the selected mod, after a confirmation |
 | `f` | Profiles: switch to a saved set of mods, save the mods that are on now, or delete a profile |
 | `u` | Download the Counter Intelligence HUD for your game build and replace the old one (asks first) |
@@ -88,19 +89,37 @@ Double-click dlmod to open its full-screen view of every mod, with its slot, fil
 | `?` | Help |
 | `q` or `Esc` | Quit |
 
+#### Browsing mods online
+
+`b` opens the catalog Deadlock Mod Manager uses: about 12,000 mods mirrored from GameBanana by [deadlockmods.app](https://deadlockmods.app), each with its hero and category. dlmod downloads the list once (about 15 MB) and keeps it for six hours; `R` downloads it again. It opens on skins, most downloaded first. `←` `→` pick a hero, `c` cycles the category, `/` searches names and authors, and `n` shows NSFW mods, which are hidden otherwise. `Enter` downloads the selected mod, checks its published MD5, and installs it like a dropped file, asking which file when a mod has several (often with or without voice lines). The mod's files come from deadlockmods.app, or from GameBanana's own API when the mirror has none.
+
+![dlmod's online browser listing Lash skins with a preview](docs/images/dlmod-browse.png)
+
+The selected mod's preview is drawn in the terminal. dlmod draws pictures itself, with no extra library:
+
+| Preview mode (`m`) | Where it works |
+| --- | --- |
+| blocks | Any terminal with 24-bit colour: Windows Terminal, the Windows 10+ console, macOS and Linux terminals. Each character shows two pixels with `▀`, so pictures are coarse. |
+| sixel | Full resolution in Windows Terminal 1.22 or later, WezTerm, foot, mlterm and xterm (`-ti vt340`). |
+| kitty | Full resolution in kitty, Ghostty and WezTerm. |
+
+dlmod starts with kitty in kitty and Ghostty, sixel in WezTerm and foot, and blocks elsewhere, including Windows Terminal, whose version it cannot see. Set `DLMOD_IMAGES=sixel` (or `blocks`, `kitty`, `off`) to choose. Previews are cached in `game/dlmod/catalog/previews`.
+
 Deadlock updates and Steam's *Verify integrity of game files* replace `gameinfo.gi`, which turns all mods off. The screen then shows **MODS OFF**: press `r`, or start the game with `dlmod play`, which repairs first. Consoles older than Windows 10 get a numbered menu instead, which `-plain` also selects.
 
 The full-screen view needs about 5–8 MB of memory. While it waits it checks four file timestamps (and whether the game is running) once a second, and redraws only when something changed. Key presses take under a millisecond to show. On Windows, dlmod reads Steam's location from the registry and checks for the game through the system API, without starting other programs. Listing 40 mods, two of them with 6,000 files each, takes about 5 ms.
 
 | Command | What it does |
 | --- | --- |
-| `dlmod <file.zip or .vpk>` | Install mods, including multi-part sets (`pakNN_000.vpk`). If a newer version changes the same files, dlmod offers to replace the old one in its slot. |
+| `dlmod <file.zip, .rar, .7z or .vpk>` | Install mods, including multi-part sets (`pakNN_000.vpk`). If a newer version changes the same files, dlmod offers to replace the old one in its slot. |
 | `dlmod list` | Show mods, conflicts between them, and whether the game loads mods. |
 | `dlmod off <mod>` / `dlmod on <mod>` | Move a mod out of `addons` without deleting it, and back. |
 | `dlmod remove <mod>` | Delete a mod. |
 | `dlmod patch` / `dlmod unpatch` | Add or remove dlmod's `gameinfo.gi` lines. `unpatch` restores Valve's file exactly. |
 | `dlmod play` | Patch if needed, then start Deadlock through Steam. |
 | `dlmod update` | Download the Counter Intelligence HUD built for the installed game build from GitHub Releases, check it against GitHub's published SHA-256, and install it in place of the old version. |
+| `dlmod search <words> [-hero H] [-category C]` | Search the online catalog, for example `dlmod search -hero wraith` or `dlmod search catgirl`. |
+| `dlmod get <id or GameBanana address>` | Download and install a mod, for example `dlmod get https://gamebanana.com/mods/634614`. |
 | `dlmod profile save <name>` / `use <name>` / `delete <name>` | Remember which mods are on, switch on exactly that set later (everything else is switched off, not deleted), or forget a profile. `dlmod profile` lists them. |
 
 `<mod>` is a number from `dlmod list`, a slot such as `pak03`, or part of the mod's name. dlmod finds the game through Steam's library folders. If it cannot, pass `-game "D:\SteamLibrary\steamapps\common\Deadlock"`. It keeps its list of mods, switched-off mods, and a copy of the previous `gameinfo.gi` in `game/dlmod`, which the game never reads.

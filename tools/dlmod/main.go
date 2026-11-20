@@ -19,7 +19,7 @@ const usage = `dlmod - installs Deadlock mods without a mod manager
 
 Usage:
   dlmod                        open the full-screen menu
-  dlmod <mod.zip|mod.vpk>...   install mods (on Windows, drag files onto dlmod.exe)
+  dlmod <mod.zip|.rar|.7z|.vpk>  install mods (on Windows, drag files onto dlmod.exe)
   dlmod install <file> [-name NAME]
   dlmod list                   show mods, conflicts and whether the game loads mods
   dlmod off <mod>              keep a mod but stop loading it
@@ -29,12 +29,17 @@ Usage:
   dlmod unpatch                undo dlmod's gameinfo.gi change
   dlmod play                   patch if needed, then start Deadlock through Steam
   dlmod update                 download the Counter Intelligence HUD for your game build (GitHub)
+  dlmod search <words> [-hero H] [-category C]
+                               search the online mod catalog (deadlockmods.app, from GameBanana)
+  dlmod get <id|GameBanana URL>  download and install a mod from GameBanana
   dlmod profile                list profiles (named sets of mods)
   dlmod profile save <name>    remember which mods are on now
   dlmod profile use <name>     switch on exactly the mods in a profile
   dlmod profile delete <name>  forget a profile
 
-Only "dlmod update" uses the network.
+Only "update", "search" and "get" (and b in the full-screen view) use the network, through
+the curl that comes with Windows 10 and later. .rar and .7z archives are opened with Windows'
+tar.exe or 7-Zip.
 
 <mod> is the number shown by "dlmod list", a slot such as pak03, or part of the name.
 
@@ -44,8 +49,9 @@ Options:
 `
 
 type options struct {
-	game, name  string
-	help, plain bool
+	game, name     string
+	hero, category string
+	help, plain    bool
 }
 
 func parseArgs(argv []string) ([]string, options, error) {
@@ -59,7 +65,7 @@ func parseArgs(argv []string) ([]string, options, error) {
 		}
 		key, value, hasValue := strings.Cut(strings.TrimLeft(arg, "-"), "=")
 		switch key {
-		case "game", "name":
+		case "game", "name", "hero", "category":
 			if !hasValue {
 				if i+1 >= len(argv) {
 					return nil, opts, fmt.Errorf("%s needs a value", arg)
@@ -67,10 +73,15 @@ func parseArgs(argv []string) ([]string, options, error) {
 				i++
 				value = argv[i]
 			}
-			if key == "game" {
+			switch key {
+			case "game":
 				opts.game = value
-			} else {
+			case "name":
 				opts.name = value
+			case "hero":
+				opts.hero = value
+			default:
+				opts.category = value
 			}
 		case "plain":
 			opts.plain = true
@@ -90,6 +101,7 @@ var commands = map[string]bool{
 	"install": true, "list": true, "status": true, "on": true, "enable": true, "off": true,
 	"disable": true, "remove": true, "uninstall": true, "patch": true, "repair": true,
 	"unpatch": true, "play": true, "help": true, "update": true, "profile": true, "profiles": true,
+	"search": true, "get": true,
 }
 
 // palette holds escape sequences; every field is empty when colours are off (NO_COLOR, old consoles).
@@ -345,6 +357,39 @@ func execute(ui *UI, game Game, command string, args []string, opts options) err
 		return ensurePatched(ui, game)
 	case "profile", "profiles":
 		return profileCommand(ui, store, args)
+	case "search":
+		mods, _, err := loadCatalog(game, false)
+		if err != nil {
+			return err
+		}
+		found := search(mods, filter{text: strings.Join(args, " "), hero: matchName(mods, opts.hero, true),
+			category: matchName(mods, opts.category, false)})
+		for i, mod := range found[:min(len(found), 25)] {
+			ui.say("%3d. %-48s %-12s %-14s %7s  %s", i+1, truncate(mod.Name, 48), truncate(mod.Hero, 12),
+				truncate(mod.Category, 14), formatCount(mod.Downloads), mod.ID)
+		}
+		ui.say("%s. Install one with: dlmod get <id>", plural(len(found), "%d mod found", "%d mods found"))
+		return nil
+	case "get":
+		if len(args) != 1 {
+			return errors.New("name one mod, for example: dlmod get 742960 or its GameBanana address")
+		}
+		id, ok := parseModID(args[0])
+		if !ok {
+			return fmt.Errorf("%s is not a GameBanana mod number or address", args[0])
+		}
+		mod := RemoteMod{ID: id, Name: "GameBanana mod " + id}
+		if mods, _, err := loadCatalog(game, false); err == nil {
+			for _, candidate := range mods {
+				if candidate.ID == id {
+					mod = candidate
+				}
+			}
+		}
+		if err := store.installRemote(ui, mod); err != nil {
+			return err
+		}
+		return ensurePatched(ui, game)
 	}
 	return fmt.Errorf("unknown command %s", command)
 }
@@ -589,4 +634,27 @@ func menu(ui *UI, game Game) int {
 			ui.say("%s", ui.p.paint(ui.p.red, "Error: "+failure.Error()))
 		}
 	}
+}
+
+// matchName finds the hero or category a user typed, ignoring case; empty when nothing matches.
+func matchName(mods []RemoteMod, text string, hero bool) string {
+	if text == "" {
+		return ""
+	}
+	categories, heroes := facets(mods)
+	names := categories
+	if hero {
+		names = heroes
+	}
+	for _, name := range names {
+		if strings.EqualFold(name, text) {
+			return name
+		}
+	}
+	for _, name := range names {
+		if strings.HasPrefix(strings.ToLower(name), strings.ToLower(text)) {
+			return name
+		}
+	}
+	return text
 }
