@@ -65,6 +65,25 @@ func sampleBody() (positions [][3]float32, bones []int, interior []bool) {
 	return
 }
 
+// SampleInterfaceImage is a compiled texture laid out as the game's interface images (hero cards,
+// portraits, ability icons) are: uncompressed BGRA with mips levels, here all black.
+func SampleInterfaceImage(w, h, mips int) []byte {
+	header := make([]byte, 40)
+	binary.LittleEndian.PutUint16(header, 1)
+	binary.LittleEndian.PutUint16(header[2:], 8)
+	binary.LittleEndian.PutUint16(header[20:], uint16(w))
+	binary.LittleEndian.PutUint16(header[22:], uint16(h))
+	binary.LittleEndian.PutUint16(header[24:], 1)
+	header[26], header[27] = textureBGRA8888, byte(mips)
+	var streaming []byte
+	sizes := mipSizes(w, h, mips)
+	for i := len(sizes) - 1; i >= 0; i-- {
+		streaming = append(streaming, make([]byte, sizes[i][0]*sizes[i][1]*4)...)
+	}
+	editInfo, _ := WriteKV3(NewObject().Set("m_name", NewString("card")), FormatGeneric)
+	return (&Resource{Version: 1, Blocks: []Block{{"RED2", editInfo}, {"DATA", header}}, Streaming: streaming}).Encode()
+}
+
 func SampleHero() []byte {
 	write := func(v *Value) []byte {
 		data, _ := WriteKV3(v, FormatGeneric) // these values always encode

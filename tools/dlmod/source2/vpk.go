@@ -148,6 +148,36 @@ func (v *VPKIndex) Read(name string) ([]byte, error) {
 	return append(data, rest...), nil
 }
 
+// ReadHead returns up to the first n bytes of a file, for its headers: a hero's background
+// image is 37 MB, its size is in the first kilobyte.
+func (v *VPKIndex) ReadHead(name string, n int) ([]byte, error) {
+	entry, ok := v.Files[name]
+	if !ok {
+		return nil, fmt.Errorf("%s is not in %s", name, filepath.Base(v.dir))
+	}
+	data := append([]byte(nil), entry.Preload[:min(len(entry.Preload), n)]...)
+	if entry.Length == 0 || len(data) >= n {
+		return data, nil
+	}
+	archive := v.dir
+	offset := int64(entry.Offset)
+	if entry.Archive == inlineArchive {
+		offset += v.dataEnd
+	} else {
+		archive = strings.TrimSuffix(v.dir, "_dir.vpk") + fmt.Sprintf("_%03d.vpk", entry.Archive)
+	}
+	file, err := os.Open(archive)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	rest := make([]byte, min(int(entry.Length), n-len(data)))
+	if _, err := file.ReadAt(rest, offset); err != nil {
+		return nil, fmt.Errorf("%s: %v", name, err)
+	}
+	return append(data, rest...), nil
+}
+
 // WriteVPK packs files into one VPK version 2 with the data inline, like tools/build.py does.
 func WriteVPK(files map[string][]byte) []byte {
 	type item struct{ extension, directory, stem, name string }

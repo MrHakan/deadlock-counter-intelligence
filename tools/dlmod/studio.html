@@ -72,6 +72,27 @@ input[type=search], input[type=text] { font: inherit; color: var(--text); backgr
 .list .yours { color: var(--ok); font-size: 12px; }
 .play { width: 28px; padding: 2px 0 !important; }
 .empty-panel { color: var(--dim); padding: 40px 0; text-align: center; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.card.over { border-color: var(--accent); background: #221f17; }
+.card.replaced { border-color: #3d5a43; }
+.card h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.card small { color: var(--dim); font-size: 11px; }
+.card .pics { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; min-height: 90px; }
+.card .pics.one { grid-template-columns: 1fr; }
+.card .pics figure { margin: 0; text-align: center; }
+.card .pics img { max-width: 100%; max-height: 160px; background: repeating-conic-gradient(#25272e 0% 25%, #1c1e24 0% 50%) 50% / 16px 16px; border-radius: 4px; }
+.card figcaption { font-size: 11px; color: var(--dim); }
+.card .buttons { margin-top: 0; }
+.entry { border-bottom: 1px solid #1f2128; padding: 8px 0; }
+.entry .key { font-size: 11px; color: var(--dim); font-family: ui-monospace, Consolas, monospace; display: flex; gap: 8px; align-items: center; }
+.entry .key .edited { color: var(--ok); }
+.entry .key .dirty { color: var(--accent); }
+.entry .key button { margin-left: auto; font-size: 11px; padding: 1px 8px; }
+.entry textarea { width: 100%; margin-top: 4px; font: inherit; font-size: 13px; color: var(--text); background: #1b1d23; border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; resize: vertical; min-height: 34px; }
+.entry textarea:focus { outline: none; border-color: var(--accent-dim); }
+.entry .was { font-size: 11px; color: var(--dim); margin-top: 2px; }
 [hidden] { display: none !important; }
 @media (max-width: 760px) { .app { grid-template-columns: 1fr; grid-template-rows: auto 60vh; } aside { border-right: 0; } }
 </style>
@@ -88,8 +109,33 @@ input[type=search], input[type=text] { font: inherit; color: var(--text); backgr
     <div class="info" id="heroInfo"></div>
     <nav class="tabs" id="tabs">
       <button data-tab="model" class="on">Model</button><button data-tab="sounds">Sounds</button>
+      <button data-tab="images">Images</button><button data-tab="text">Text</button>
     </nav>
   </section>
+
+  <div id="tab-images" hidden>
+  <section>
+    <h2>Images</h2>
+    <div class="info">The hero's card on the hero select screen and in the HUD, portraits, minimap icon, background and ability icons.
+      Drop a PNG or JPEG on one: it is fitted to the game's size, cropped in the middle.</div>
+    <div class="chips" id="imageGroups"></div>
+    <div class="log" id="imageLog"></div>
+  </section>
+  </div>
+
+  <div id="tab-text" hidden>
+  <section>
+    <h2>Text</h2>
+    <div class="info">Ability names and descriptions, role, playstyle and lore, as the game shows them. Keep the {s:...} and
+      &lt;span&gt; parts: the game fills in numbers and colours there.</div>
+    <div class="row" style="grid-template-columns: 64px 1fr"><label for="textLanguage">Language</label><select id="textLanguage"></select></div>
+    <input type="search" id="textSearch" placeholder="Search names, keys or text">
+    <div class="buttons"><button class="primary" id="textSave" disabled>Save changes</button></div>
+    <div class="buttons"><button id="textRevert" disabled>Undo unsaved changes</button></div>
+    <div class="info" id="textInfo" style="margin-top:8px"></div>
+    <div class="log" id="textLog"></div>
+  </section>
+  </div>
 
   <div id="tab-sounds" hidden>
   <section>
@@ -163,6 +209,14 @@ input[type=search], input[type=text] { font: inherit; color: var(--text); backgr
       <tbody></tbody>
     </table>
     <audio id="player"></audio>
+  </div>
+  <div class="panel" id="imagesPanel" hidden>
+    <div class="empty-panel" id="imagesEmpty">Pick a hero to see their images.</div>
+    <div class="grid" id="imageGrid"></div>
+  </div>
+  <div class="panel" id="textPanel" hidden>
+    <div class="empty-panel" id="textEmpty">Pick a hero to see their text.</div>
+    <div id="textList"></div>
   </div>
   <div class="toggles">
     <label><input type="checkbox" id="showHero" checked> hero</label>
@@ -366,7 +420,7 @@ $("hero").onchange = async () => {
 const heroHooks = []; // tabs that show something of the hero reload when it changes
 
 // --- tabs: the model tab shows the 3D view, the others their own panel over it ---
-const panels = { sounds: "soundsPanel" };
+const panels = { sounds: "soundsPanel", images: "imagesPanel", text: "textPanel" };
 let tab = "model";
 function showTab(name) {
   tab = name;
@@ -548,6 +602,151 @@ for (const ev of ["dragover", "dragleave", "drop"]) $("soundDrop").addEventListe
 $("soundRestoreAll").onclick = () => restoreSounds(sounds.list.filter(s => s.replaced).map(s => s.path));
 tabHooks.sounds = [loadSounds];
 heroHooks.push(() => { if (tab === "sounds") loadSounds(); });
+
+// --- images: the hero's cards, portraits and ability icons ---
+const images = { hero: null, list: [], group: "All", stamp: Date.now() };
+function imageLog(text, kind) { const line = document.createElement("div"); if (kind) line.className = kind; line.textContent = text; $("imageLog").append(line); $("imageLog").scrollTop = 1e9; }
+async function loadImages(force) {
+  const hero = $("hero").value;
+  if (!hero) return;
+  if (!force && images.hero === hero && images.list.length) return renderImages();
+  $("imagesEmpty").textContent = "Reading the game's images…"; $("imagesEmpty").hidden = false; $("imageGrid").innerHTML = "";
+  try { const result = await api("images", { hero }); images.hero = hero; images.list = result.images; renderImages(); }
+  catch (e) { $("imagesEmpty").textContent = e.message; }
+}
+function imageURL(path, which, size) { return `/api/image?path=${encodeURIComponent(path)}&which=${which}&size=${size}&t=${TOKEN}&s=${images.stamp}`; }
+function renderImages() {
+  const groups = ["All", ...new Set(images.list.map(i => i.group))];
+  $("imageGroups").innerHTML = "";
+  for (const g of groups) {
+    const b = document.createElement("button");
+    b.textContent = `${g} ${g === "All" ? images.list.length : images.list.filter(i => i.group === g).length}`;
+    b.classList.toggle("on", g === images.group); b.onclick = () => { images.group = g; renderImages(); };
+    $("imageGroups").append(b);
+  }
+  const grid = $("imageGrid"); grid.innerHTML = "";
+  const shown = images.list.filter(i => images.group === "All" || i.group === images.group);
+  for (const img of shown) {
+    const card = document.createElement("div");
+    card.className = "card" + (img.replaced ? " replaced" : "");
+    const size = img.width > 1024 ? 512 : 320;
+    card.innerHTML = `<div><h3></h3><small>${img.width}×${img.height}${img.replaced ? " · yours: <span></span>" : ""}</small></div>
+      <div class="pics${img.replaced ? "" : " one"}"><figure><img loading="lazy" alt=""><figcaption>Game</figcaption></figure>
+      ${img.replaced ? `<figure><img loading="lazy" alt="" class="yours"><figcaption>Yours</figcaption></figure>` : ""}</div>
+      <div class="buttons"><button class="replace"${img.editable ? "" : " disabled title=\"This image is stored in a way dlmod cannot write yet\""}>Replace…</button>
+      ${img.replaced ? `<button class="restore">Restore</button>` : ""}</div>`;
+    card.querySelector("h3").textContent = img.label; card.querySelector("h3").title = img.path;
+    if (img.replaced) card.querySelector("small span").textContent = img.replaced;
+    card.querySelector("img").src = imageURL(img.path, "game", size);
+    if (img.replaced) card.querySelector("img.yours").src = imageURL(img.path, "yours", size);
+    const pick = () => { const input = document.createElement("input"); input.type = "file"; input.accept = ".png,.jpg,.jpeg,image/png,image/jpeg";
+      input.onchange = () => input.files[0] && replaceImage(img.path, input.files[0]); input.click(); };
+    card.querySelector(".replace").onclick = pick;
+    card.querySelector(".restore")?.addEventListener("click", () => restoreImages([img.path]));
+    if (img.editable) {
+      card.addEventListener("dragover", e => { e.preventDefault(); card.classList.add("over"); });
+      card.addEventListener("dragleave", () => card.classList.remove("over"));
+      card.addEventListener("drop", e => { e.preventDefault(); e.stopPropagation(); card.classList.remove("over"); if (e.dataTransfer.files[0]) replaceImage(img.path, e.dataTransfer.files[0]); });
+    }
+    grid.append(card);
+  }
+  $("imagesEmpty").hidden = shown.length > 0;
+  $("imagesEmpty").textContent = "No images of this hero were found in the game.";
+}
+async function replaceImage(path, file) {
+  const form = new FormData(); form.append("path", path); form.append("file", file, file.name);
+  busy("Fitting the picture and installing…");
+  try {
+    const result = await api("images/replace", form, true);
+    for (const m of result.messages) imageLog(m);
+    imageLog("Installed as the Custom images mod.", "ok");
+    images.stamp = Date.now(); await loadImages(true);
+  } catch (e) { imageLog(e.message, "bad"); }
+  busy();
+}
+async function restoreImages(paths) {
+  busy("Restoring…");
+  try { const result = await api("images/restore", { paths }); for (const m of result.messages) imageLog(m, "ok"); images.stamp = Date.now(); await loadImages(true); }
+  catch (e) { imageLog(e.message, "bad"); }
+  busy();
+}
+tabHooks.images = [() => loadImages()];
+heroHooks.push(() => { if (tab === "images") loadImages(); });
+
+// --- text: ability names, descriptions and lore in a language ---
+const text = { hero: null, language: "", entries: [], dirty: new Map(), query: "" };
+function textLog(line, kind) { const d = document.createElement("div"); if (kind) d.className = kind; d.textContent = line; $("textLog").append(d); $("textLog").scrollTop = 1e9; }
+const textKey = e => e.file + "\n" + e.key;
+async function loadText(force) {
+  const hero = $("hero").value;
+  if (!hero) return;
+  if (!force && text.hero === hero && text.entries.length && text.language === $("textLanguage").value) return renderText();
+  if (text.dirty.size && !confirm("Drop the unsaved text changes?")) return;
+  text.dirty.clear();
+  $("textEmpty").textContent = "Reading the game's text…"; $("textEmpty").hidden = false; $("textList").innerHTML = "";
+  try {
+    const result = await api("text", { hero, language: $("textLanguage").value || text.language });
+    text.hero = hero; text.language = result.language; text.entries = result.entries;
+    const select = $("textLanguage");
+    if (select.options.length !== result.languages.length) {
+      select.innerHTML = ""; for (const l of result.languages) select.add(new Option(l[0].toUpperCase() + l.slice(1), l));
+    }
+    select.value = result.language;
+    renderText();
+  } catch (e) { $("textEmpty").textContent = e.message; }
+}
+function renderText() {
+  const list = $("textList"); list.innerHTML = "";
+  const words = text.query.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = text.entries.filter(e => words.every(w => (e.key + " " + e.text + " " + (text.dirty.get(textKey(e)) ?? "")).toLowerCase().includes(w)));
+  for (const e of shown) {
+    const row = document.createElement("div"); row.className = "entry";
+    row.innerHTML = `<div class="key"><span class="name"></span><span class="state"></span><button class="reset" hidden>Game's text</button></div>
+      <textarea rows="1" spellcheck="false"></textarea><div class="was" hidden></div>`;
+    row.querySelector(".name").textContent = e.key; row.querySelector(".name").title = e.file;
+    const area = row.querySelector("textarea");
+    area.value = text.dirty.get(textKey(e)) ?? e.text;
+    const fit = () => { area.style.height = "auto"; area.style.height = area.scrollHeight + 2 + "px"; };
+    const mark = () => {
+      const value = area.value, dirty = value !== e.text;
+      if (dirty) text.dirty.set(textKey(e), value); else text.dirty.delete(textKey(e));
+      const edited = value !== e.original;
+      row.querySelector(".state").textContent = dirty ? "unsaved" : e.edited ? "changed" : "";
+      row.querySelector(".state").className = "state " + (dirty ? "dirty" : e.edited ? "edited" : "");
+      row.querySelector(".reset").hidden = !edited;
+      row.querySelector(".was").hidden = !edited; row.querySelector(".was").textContent = "Game: " + e.original;
+      updateTextButtons();
+    };
+    area.oninput = () => { fit(); mark(); };
+    row.querySelector(".reset").onclick = () => { area.value = e.original; fit(); mark(); };
+    list.append(row); requestAnimationFrame(fit); mark();
+  }
+  $("textEmpty").hidden = shown.length > 0;
+  $("textEmpty").textContent = text.entries.length ? "No lines match." : "No lines of this hero were found.";
+  updateTextButtons();
+}
+function updateTextButtons() {
+  const edited = text.entries.filter(e => e.edited).length;
+  $("textSave").disabled = $("textRevert").disabled = !text.dirty.size;
+  $("textSave").textContent = text.dirty.size ? `Save ${text.dirty.size} change${text.dirty.size > 1 ? "s" : ""}` : "Save changes";
+  $("textInfo").innerHTML = `<b>${text.entries.length}</b> lines · <b>${edited}</b> changed in the game`;
+}
+$("textSave").onclick = async () => {
+  const edits = text.entries.filter(e => text.dirty.has(textKey(e))).map(e => ({ file: e.file, key: e.key, text: text.dirty.get(textKey(e)) }));
+  busy("Saving and installing…");
+  try {
+    const result = await api("text/save", { edits });
+    for (const m of result.messages) textLog(m, "ok");
+    text.dirty.clear(); await loadText(true);
+  } catch (e) { textLog(e.message, "bad"); }
+  busy();
+};
+$("textRevert").onclick = () => { text.dirty.clear(); renderText(); };
+$("textSearch").oninput = e => { text.query = e.target.value; renderText(); };
+$("textLanguage").onchange = () => loadText(true);
+window.addEventListener("beforeunload", e => { if (text.dirty.size) e.preventDefault(); });
+tabHooks.text = [() => loadText()];
+heroHooks.push(() => { if (tab === "text") loadText(true); });
 </script>
 </body>
 </html>

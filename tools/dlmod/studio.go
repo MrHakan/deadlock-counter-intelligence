@@ -52,6 +52,7 @@ type studio struct {
 
 	sounds    *source2.VPKIndex // the game's sounds, read on the Sounds tab's first use
 	allSounds []string
+	images    *source2.VPKIndex // the game's interface images, read on the Images tab's first use
 }
 
 // studioOptions are the page's settings, as ImportOptions takes them.
@@ -170,6 +171,12 @@ func (s *studio) routes() http.Handler {
 	api("sound", s.soundAudio)
 	api("sounds/replace", s.soundReplace)
 	api("sounds/restore", s.soundRestore)
+	api("images", s.imageList)
+	api("image", s.imageFile)
+	api("images/replace", s.imageReplace)
+	api("images/restore", s.imageRestore)
+	api("text", s.textList)
+	api("text/save", s.textSave)
 	return mux
 }
 

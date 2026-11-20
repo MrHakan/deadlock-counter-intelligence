@@ -1,13 +1,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -130,11 +127,7 @@ func (s *studio) soundAudio(r *http.Request) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		chosen, ok := project.Replaced[name]
-		if !ok {
-			return nil, errors.New("this sound is not replaced")
-		}
-		if compiled, err = os.ReadFile(filepath.Join(s.game.soundsDir(), "files", chosen.Compiled)); err != nil {
+		if compiled, err = project.read(name); err != nil {
 			return nil, err
 		}
 	} else {
@@ -211,7 +204,7 @@ func (s *studio) soundReplace(r *http.Request) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		info, err := replaceSoundData(s.game, project, gamePath, name, audio)
+		info, err := replaceSoundData(project, gamePath, name, audio)
 		if err != nil {
 			problems = append(problems, err.Error())
 			continue
@@ -220,7 +213,7 @@ func (s *studio) soundReplace(r *http.Request) (any, error) {
 		p.say("%s now plays %s (%s, %.1f s).", path.Base(gamePath), name, strings.ToLower(info.Format), info.Duration)
 	}
 	if replaced > 0 {
-		if err := s.rebuildSounds(p, project); err != nil {
+		if err := s.rebuild(p, project); err != nil {
 			return nil, err
 		}
 	}
@@ -228,6 +221,15 @@ func (s *studio) soundReplace(r *http.Request) (any, error) {
 }
 
 func (s *studio) soundRestore(r *http.Request) (any, error) {
+	project, err := loadSoundProject(s.game)
+	if err != nil {
+		return nil, err
+	}
+	return s.restore(r, project, "%d sound plays the game's own again.", "%d sounds play the game's own again.")
+}
+
+// restore takes {"paths": [...]} and puts the game's own files back for them.
+func (s *studio) restore(r *http.Request, project *replacementProject, one, many string) (any, error) {
 	var request struct {
 		Paths []string `json:"paths"`
 	}
@@ -237,38 +239,28 @@ func (s *studio) soundRestore(r *http.Request) (any, error) {
 	if gameRunning() {
 		return nil, errRunning
 	}
-	project, err := loadSoundProject(s.game)
+	restored, err := project.restore(request.Paths)
 	if err != nil {
 		return nil, err
 	}
-	restored := 0
-	for _, name := range request.Paths {
-		if _, ok := project.Replaced[name]; ok {
-			delete(project.Replaced, name)
-			restored++
-		}
-	}
-	p := &webPrompter{}
 	if restored == 0 {
 		return map[string]any{"messages": []string{"Nothing to restore."}}, nil
 	}
-	if err := project.save(s.game); err != nil {
-		return nil, err
-	}
-	p.say("%s the game's own again.", plural(restored, "%d sound plays", "%d sounds play"))
-	if err := s.rebuildSounds(p, project); err != nil {
+	p := &webPrompter{}
+	p.say("%s", plural(restored, one, many))
+	if err := s.rebuild(p, project); err != nil {
 		return nil, err
 	}
 	return map[string]any{"messages": p.messages}, nil
 }
 
-// rebuildSounds reinstalls the custom sounds mod from a fresh read of the mod list.
-func (s *studio) rebuildSounds(p *webPrompter, project *soundProject) error {
+// rebuild reinstalls a project's mod from a fresh read of the mod list.
+func (s *studio) rebuild(p *webPrompter, project *replacementProject) error {
 	store, err := openStore(s.game)
 	if err != nil {
 		return err
 	}
-	if err := store.installCustomSounds(p, project); err != nil {
+	if err := store.installReplacements(p, project); err != nil {
 		return err
 	}
 	return ensurePatched(p, s.game)
