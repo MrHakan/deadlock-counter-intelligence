@@ -250,3 +250,48 @@ func TestExtractedFolderSources(t *testing.T) {
 		t.Fatal("containsVPK")
 	}
 }
+
+func TestTerminalAnswerUpgradesPreviewsToSixel(t *testing.T) {
+	for _, name := range []string{"DLMOD_IMAGES", "TERM_PROGRAM", "KITTY_WINDOW_ID", "NO_COLOR"} {
+		t.Setenv(name, "")
+	}
+	t.Setenv("TERM", "xterm-256color")
+	game := newFakeGame(t)
+	writeCatalog(t, game.Game, sampleCatalog)
+	ui := newTestTUI(t, game.Game)
+	var out bytes.Buffer
+	ui.out.Reset(&out)
+	ui.loadImage = func(address string) (image.Image, error) { return testPicture(), nil }
+	ui.handle([]byte("b"))
+	ui.out.Flush()
+	if !strings.Contains(out.String(), "\x1b[c") || ui.browse.imageMode != imagesBlocks {
+		t.Fatalf("blocks first, and the terminal is asked what it draws: %q", out.String())
+	}
+	ui.handle([]byte("\x1b[?61;6;7;14;21;22;23;24;28;32;42c")) // Windows Terminal before 1.22
+	if ui.browse.imageMode != imagesBlocks {
+		t.Fatal("no sixel attribute, no change")
+	}
+	ui.handle([]byte("\x1b[?61;4;6;7;14;21;22;23;24;28;32;42c")) // Windows Terminal 1.22+
+	if ui.browse.imageMode != imagesSixel || ui.mode != modeBrowse {
+		t.Fatalf("the sixel attribute switches previews to full resolution: %s", imageModeNames[ui.browse.imageMode])
+	}
+
+	ui.handle([]byte("\x1b[B")) // the mod with a picture
+	ui.handle([]byte("m"))      // sixel -> kitty, chosen by hand
+	ui.handle([]byte("m"))      // kitty -> off
+	ui.handle([]byte("m"))      // off -> blocks
+	ui.handle([]byte("\x1b[?61;4c"))
+	if ui.browse.imageMode != imagesBlocks {
+		t.Fatal("a mode picked with m is kept")
+	}
+	small := strings.Count(ui.screen(), "▀")
+	ui.handle([]byte("v"))
+	big := strings.Count(ui.screen(), "▀")
+	if big < small*3/2 || strings.Contains(ui.screen(), "Catgirl Wraith") {
+		t.Fatalf("the big preview fills the list's place with a larger picture: %d -> %d cells", small, big)
+	}
+	ui.handle([]byte("v"))
+	if !strings.Contains(ui.screen(), "Catgirl Wraith") {
+		t.Fatal("v again brings the list back")
+	}
+}

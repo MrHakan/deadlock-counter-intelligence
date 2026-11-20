@@ -36,6 +36,8 @@ type browser struct {
 	results               []RemoteMod
 	selected, top         int
 	imageMode             int
+	autoMode              bool // DLMOD_IMAGES did not choose, so the terminal's answer may upgrade blocks
+	fullPreview           bool
 	pictures              map[string]image.Image
 	failed                map[string]string
 	pending               string
@@ -78,9 +80,15 @@ func (t *tui) openBrowser(refresh bool) {
 			return
 		}
 		b := &browser{mods: mods, category: -1, hero: -1, imageMode: detectImageMode(os.Getenv),
+			autoMode: os.Getenv("DLMOD_IMAGES") == "",
 			pictures: map[string]image.Image{}, failed: map[string]string{}, cellWidth: 10, cellHeight: 20}
 		if t.browse != nil {
-			b.imageMode, b.query, b.nsfw = t.browse.imageMode, t.browse.query, t.browse.nsfw
+			b.imageMode, b.autoMode, b.query, b.nsfw = t.browse.imageMode, t.browse.autoMode, t.browse.query, t.browse.nsfw
+		} else if b.autoMode && b.imageMode == imagesBlocks {
+			// Ask which graphics the terminal draws (DA1). Windows Terminal 1.22+ answers with 4,
+			// sixel, and previews then switch to full resolution.
+			t.out.WriteString("\x1b[c")
+			t.out.Flush()
 		}
 		b.categories, b.heroes = facets(mods)
 		for i, category := range b.categories {
@@ -100,10 +108,24 @@ func (t *tui) openBrowser(refresh bool) {
 	t.requestPreview()
 }
 
-var cellSizeReply = regexp.MustCompile(`\x1b\[6;(\d+);(\d+)t`)
+var (
+	cellSizeReply   = regexp.MustCompile(`\x1b\[6;(\d+);(\d+)t`)
+	attributesReply = regexp.MustCompile(`\x1b\[\?([\d;]*)c`)
+)
 
-// takeCellSize consumes the terminal's answer to the cell-size question, if data holds it.
+// takeCellSize consumes the terminal's answers to dlmod's questions (cell size in pixels, and
+// the device attributes that tell whether it draws sixel graphics), so they are not read as keys.
 func (t *tui) takeCellSize(data []byte) []byte {
+	if match := attributesReply.FindSubmatchIndex(data); match != nil {
+		attributes := ";" + string(data[match[2]:match[3]]) + ";"
+		if b := t.browse; b != nil && b.autoMode && b.imageMode == imagesBlocks && strings.Contains(attributes, ";4;") {
+			b.imageMode, b.payloadKey = imagesSixel, ""
+			t.note(toneInfo, "This terminal draws sixel graphics, so previews are shown at full resolution (m changes it).")
+			t.out.WriteString("\x1b[16t")
+			t.out.Flush()
+		}
+		data = append(append([]byte(nil), data[:match[0]]...), data[match[1]:]...)
+	}
 	match := cellSizeReply.FindSubmatchIndex(data)
 	if match == nil {
 		return data
@@ -235,7 +257,12 @@ func (t *tui) pressBrowse(k key) bool {
 			b.category = cycle(b.category, len(b.categories), delta)
 			b.refilter()
 			t.requestPreview()
+		case 'v', ' ':
+			b.fullPreview = !b.fullPreview
+			b.payloadKey = ""
+			t.clearPicture()
 		case 'm':
+			b.autoMode = false
 			b.imageMode = (b.imageMode + 1) % len(imageModeNames)
 			b.payloadKey = ""
 			t.clearPicture()
@@ -318,6 +345,18 @@ func (t *tui) drawBrowse(c *canvas, room int) {
 	if b.selected >= b.top+rows {
 		b.top = b.selected - rows + 1
 	}
+	if b.fullPreview {
+		// The whole area shows the picture: many more cells, so blocks are much sharper.
+		for i, line := range t.browseDetails(c.width-2, rows) {
+			if i < rows {
+				c.line(append([]seg{{" ", ""}}, line...)...)
+			}
+		}
+		if t.imageAt.url != "" {
+			t.imageAt.row, t.imageAt.col = 2, 1
+		}
+		return
+	}
 	details := t.browseDetails(right, rows)
 	if t.imageAt.url != "" {
 		t.imageAt.row, t.imageAt.col = 2, left+3 // below the filter line and the rule, right of the list
@@ -359,6 +398,9 @@ func (t *tui) browseDetails(width, rows int) [][]seg {
 	}
 	var lines [][]seg
 	imageRows := min(rows-7, width/2+1)
+	if b.fullPreview {
+		imageRows = rows - 2 // only the name stays below the picture
+	}
 	address := ""
 	if len(mod.Images) > 0 {
 		address = mod.Images[0]
@@ -387,6 +429,9 @@ func (t *tui) browseDetails(width, rows int) [][]seg {
 			lines = append(lines, nil)
 		}
 		lines = append(lines, []seg{{"preview: " + imageModeNames[b.imageMode], p.dim}})
+	}
+	if b.fullPreview {
+		return append(lines, []seg{{truncate(mod.Name+" · "+mod.Author, width), p.bold}})
 	}
 	if len(lines) > 0 {
 		lines = append(lines, nil)
@@ -439,5 +484,5 @@ func (t *tui) browseHints() [][2]string {
 		return [][2]string{{"type", "search"}, {"Enter", "done"}, {"Ctrl+U", "clear"}}
 	}
 	return [][2]string{{"↑↓", "select"}, {"←→", "hero"}, {"c", "category"}, {"/", "search"}, {"Enter", "install"},
-		{"m", "preview mode"}, {"n", "NSFW"}, {"R", "refresh"}, {"Esc", "back"}}
+		{"v", "big preview"}, {"m", "preview mode"}, {"n", "NSFW"}, {"R", "refresh"}, {"Esc", "back"}}
 }

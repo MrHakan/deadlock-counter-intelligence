@@ -103,7 +103,9 @@ The selected mod's preview is drawn in the terminal. dlmod draws pictures itself
 | sixel | Full resolution in Windows Terminal 1.22 or later, WezTerm, foot, mlterm and xterm (`-ti vt340`). |
 | kitty | Full resolution in kitty, Ghostty and WezTerm. |
 
-dlmod starts with kitty in kitty and Ghostty, sixel in WezTerm and foot, and blocks elsewhere, including Windows Terminal, whose version it cannot see. Set `DLMOD_IMAGES=sixel` (or `blocks`, `kitty`, `off`) to choose. Previews are cached in `game/dlmod/catalog/previews`.
+dlmod starts with kitty in kitty and Ghostty and sixel in WezTerm and foot. Elsewhere it starts with blocks and asks the terminal which graphics it draws (its device attributes). Windows Terminal 1.22 and later answer that they draw sixel, and previews switch to full resolution on their own. `v` (or `Space`) shows a big preview that fills the screen, which makes block pictures much sharper; a smaller terminal font gives more cells and sharper blocks too. Set `DLMOD_IMAGES=sixel` (or `blocks`, `kitty`, `off`) to choose a mode. Previews are cached in `game/dlmod/catalog/previews`.
+
+![dlmod's big preview in block mode](docs/images/dlmod-preview.png)
 
 Deadlock updates and Steam's *Verify integrity of game files* replace `gameinfo.gi`, which turns all mods off. The screen then shows **MODS OFF**: press `r`, or start the game with `dlmod play`, which repairs first. Consoles older than Windows 10 get a numbered menu instead, which `-plain` also selects.
 

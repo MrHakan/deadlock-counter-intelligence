@@ -1215,6 +1215,7 @@ func (t *tui) drawHelp(c *canvas) {
 		{"← →", "choose a hero; c and C cycle the category (Skins first)"},
 		{"/", "search by name or author; Enter or Esc ends typing"},
 		{"Enter", "download the selected mod, check its MD5 and install it"},
+		{"v  Space", "big preview: the picture fills the screen (much sharper as blocks)"},
 		{"m", "preview mode: blocks (any terminal), sixel (Windows Terminal 1.22+, WezTerm, foot), kitty, off"},
 		{"n  R", "show NSFW mods; download the catalog again (it is kept for six hours)"},
 	} {
