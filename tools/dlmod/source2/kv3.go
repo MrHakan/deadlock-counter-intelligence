@@ -113,6 +113,7 @@ const (
 
 const (
 	magic4      = 0x4B563304 // "KV3" version 4
+	magic5      = 0x4B563305 // version 5, which splits the data into two buffers
 	trailer     = 0xFFEEDD00
 	compression = 0 // uncompressed; the engine and every reader accept it
 )
@@ -295,11 +296,18 @@ func WriteKV3(root *Value, format [16]byte) ([]byte, error) {
 type lanes struct{ b1, b2, b4, b8 []byte }
 
 type reader struct {
+	version int
 	main    lanes
+	aux     *lanes // the lanes ARRAY_TYPE_AUXILIARY_BUFFER elements come from
+	objects []byte // version 5 keeps object member counts apart
 	types   []byte
 	strings []string
 	blobs   [][]byte
 }
+
+// stringLanes is where the string count is: the auxiliary buffer in version 5, which is the main
+// buffer before it.
+func (r *reader) stringLanes() *lanes { return r.aux }
 
 var errShort = errors.New("kv3: data ends early")
 
@@ -433,7 +441,7 @@ func (r *reader) read(t, flag byte, lane *lanes) (*Value, error) {
 			}
 			v.Items = append(v.Items, item)
 		}
-	case nodeArrayTyped, nodeArrayByteLen:
+	case nodeArrayTyped, nodeArrayByteLen, nodeArrayAuxiliary:
 		var count int
 		if t == nodeArrayTyped {
 			b, err := get(&r.main.b4, 4)
@@ -453,15 +461,24 @@ func (r *reader) read(t, flag byte, lane *lanes) (*Value, error) {
 			return nil, err
 		}
 		v.Kind = Array
+		elements := &r.main
+		if t == nodeArrayAuxiliary {
+			elements = r.aux
+		}
+		v.Items = make([]*Value, 0, count)
 		for i := 0; i < count; i++ {
-			item, err := r.read(et, ef, &r.main)
+			item, err := r.read(et, ef, elements)
 			if err != nil {
 				return nil, err
 			}
 			v.Items = append(v.Items, item)
 		}
 	case nodeObject:
-		b, err := get(&r.main.b4, 4)
+		counts := &r.main.b4
+		if r.version >= 5 {
+			counts = &r.objects
+		}
+		b, err := get(counts, 4)
 		if err != nil {
 			return nil, err
 		}
@@ -488,99 +505,124 @@ func (r *reader) read(t, flag byte, lane *lanes) (*Value, error) {
 	return v, nil
 }
 
-// ReadKV3 decodes binary KV3 version 4, uncompressed or LZ4-compressed, without binary blobs.
-// It exists to check what dlmod writes against files Valve's tools wrote.
+// ReadKV3 decodes binary KV3 version 4 or 5, uncompressed or LZ4-compressed, with binary blobs.
+// Version 5 is what current compilers write for models, materials and textures: it splits the
+// data into two buffers, the strings with an auxiliary lane for packed arrays, and the rest.
 func ReadKV3(data []byte) (*Value, [16]byte, error) {
 	var format [16]byte
-	if len(data) < 72 || binary.LittleEndian.Uint32(data) != magic4 {
-		return nil, format, errors.New("kv3: not a version 4 binary KV3 block")
+	if len(data) < 72 {
+		return nil, format, errors.New("kv3: not a binary KV3 block")
+	}
+	version, headerSize := 0, 0
+	switch binary.LittleEndian.Uint32(data) {
+	case magic4:
+		version, headerSize = 4, 72
+	case magic5:
+		version, headerSize = 5, 120
+	default:
+		return nil, format, errors.New("kv3: not a version 4 or 5 binary KV3 block")
+	}
+	if len(data) < headerSize {
+		return nil, format, errShort
 	}
 	copy(format[:], data[4:20])
 	method := binary.LittleEndian.Uint32(data[20:])
-	field := func(offset int) int { return int(binary.LittleEndian.Uint32(data[offset:])) }
-	count1, count4, count8, countTypes := field(28), field(32), field(36), field(40)
-	sizeUncompressed, sizeCompressed, blocks, count2 := field(48), field(52), field(56), field(64)
-	blobBytes := field(60)
-	body := data[72:]
-	var buffer []byte
-	switch method {
-	case 0:
-		if len(body) < sizeUncompressed {
-			return nil, format, errShort
-		}
-		buffer = body[:sizeUncompressed]
-	case 1:
-		if len(body) < sizeCompressed {
-			return nil, format, errShort
-		}
-		var err error
-		if buffer, err = decodeLZ4Block(body[:sizeCompressed], sizeUncompressed); err != nil {
-			return nil, format, err
-		}
-	default:
+	if method > 1 {
 		return nil, format, fmt.Errorf("kv3: compression method %d is not supported", method)
 	}
-	offset := 0
-	section := func(count, size, alignment int) ([]byte, error) {
-		if count == 0 {
-			return nil, nil
+	field := func(offset int) int { return int(binary.LittleEndian.Uint32(data[offset:])) }
+	count1, count4, count8, countTypes := field(28), field(32), field(36), field(40)
+	blocks, blobBytes, count2 := field(56), field(60), field(64)
+	body := data[headerSize:]
+	unpack := func(compressed, size int) ([]byte, error) {
+		stored := size
+		if method == 1 {
+			stored = compressed
 		}
-		for offset%alignment != 0 {
-			offset++
-		}
-		end := offset + count*size
-		if end > len(buffer) {
+		if stored < 0 || len(body) < stored {
 			return nil, errShort
 		}
-		part := buffer[offset:end]
-		offset = end
-		return part, nil
+		raw := body[:stored]
+		body = body[stored:]
+		if method == 0 {
+			return raw, nil
+		}
+		return decodeLZ4Block(raw, size)
 	}
+
 	r := &reader{}
-	var err error
-	if r.main.b1, err = section(count1, 1, 1); err != nil {
-		return nil, format, err
+	r.aux = &r.main // before version 5 the auxiliary lane is the main buffer
+	var rest []byte // what follows the types: blob lengths, trailer, LZ4 frame sizes
+	readStrings := func(source *[]byte) error {
+		countBytes, err := take(&r.stringLanes().b4, 4)
+		if err != nil {
+			return err
+		}
+		for n := binary.LittleEndian.Uint32(countBytes); n > 0; n-- {
+			end := 0
+			for end < len(*source) && (*source)[end] != 0 {
+				end++
+			}
+			if end >= len(*source) {
+				return errShort
+			}
+			r.strings = append(r.strings, string((*source)[:end]))
+			*source = (*source)[end+1:]
+		}
+		return nil
 	}
-	if r.main.b2, err = section(count2, 2, 2); err != nil {
-		return nil, format, err
-	}
-	if r.main.b4, err = section(count4, 4, 4); err != nil {
-		return nil, format, err
-	}
-	if count8 > 0 {
-		if r.main.b8, err = section(count8, 8, 8); err != nil {
+	if version == 4 {
+		buffer, err := unpack(field(52), field(48))
+		if err != nil {
 			return nil, format, err
 		}
-	} else {
-		for offset%8 != 0 {
-			offset++
+		offset, err := splitLanes(buffer, 0, count1, count2, count4, count8, true, &r.main)
+		if err != nil {
+			return nil, format, err
 		}
-	}
-	countBytes, err := take(&r.main.b4, 4)
-	if err != nil {
-		return nil, format, err
-	}
-	stringsStart := offset
-	for n := binary.LittleEndian.Uint32(countBytes); n > 0; n-- {
-		end := offset
-		for end < len(buffer) && buffer[end] != 0 {
-			end++
+		tail := buffer[offset:]
+		if err := readStrings(&tail); err != nil {
+			return nil, format, err
 		}
-		if end >= len(buffer) {
+		typesLength := countTypes - (len(buffer) - offset - len(tail))
+		if typesLength < 0 || typesLength > len(tail) {
 			return nil, format, errShort
 		}
-		r.strings = append(r.strings, string(buffer[offset:end]))
-		offset = end + 1
+		r.types, rest = tail[:typesLength], tail[typesLength:]
+	} else {
+		buffer1, err := unpack(field(76), field(72))
+		if err != nil {
+			return nil, format, err
+		}
+		buffer2, err := unpack(field(84), field(80))
+		if err != nil {
+			return nil, format, err
+		}
+		r.aux = &lanes{}
+		if _, err := splitLanes(buffer1, 0, count1, count2, count4, count8, false, r.aux); err != nil {
+			return nil, format, err
+		}
+		if err := readStrings(&r.aux.b1); err != nil {
+			return nil, format, err
+		}
+		objects := field(108) * 4
+		if objects > len(buffer2) {
+			return nil, format, errShort
+		}
+		r.objects = buffer2[:objects]
+		offset, err := splitLanes(buffer2, objects, field(88), field(92), field(96), field(100), false, &r.main)
+		if err != nil {
+			return nil, format, err
+		}
+		if offset+countTypes > len(buffer2) {
+			return nil, format, errShort
+		}
+		r.types, rest = buffer2[offset:offset+countTypes], buffer2[offset+countTypes:]
 	}
-	typesEnd := stringsStart + countTypes
-	if typesEnd > len(buffer) || typesEnd < offset {
-		return nil, format, errShort
-	}
-	r.types = buffer[offset:typesEnd]
+
 	if blocks > 0 {
-		// After the types: each blob's length, the trailer, then (LZ4) each compressed frame's size.
-		// The blobs follow the main buffer.
-		rest := buffer[typesEnd:]
+		// Each blob's length, the trailer, then (LZ4) each compressed frame's size. The blobs
+		// follow the buffers, each split into frames that may refer back to earlier ones.
 		var lengths []int
 		for i := 0; i < blocks; i++ {
 			b, err := take(&rest, 4)
@@ -592,13 +634,12 @@ func ReadKV3(data []byte) (*Value, [16]byte, error) {
 		if _, err := take(&rest, 4); err != nil {
 			return nil, format, err
 		}
-		stored := body[min(len(body), map[uint32]int{0: sizeUncompressed, 1: sizeCompressed}[method]):]
 		var raw []byte
 		if method == 0 {
-			if len(stored) < blobBytes {
+			if len(body) < blobBytes {
 				return nil, format, errShort
 			}
-			raw = stored[:blobBytes]
+			raw = body[:blobBytes]
 		} else {
 			var frames []int
 			for len(rest) >= 2 {
@@ -606,7 +647,8 @@ func ReadKV3(data []byte) (*Value, [16]byte, error) {
 				rest = rest[2:]
 			}
 			frameSize := int(binary.LittleEndian.Uint16(data[26:]))
-			if raw, err = decodeLZ4Chain(stored, frames, frameSize, blobBytes); err != nil {
+			var err error
+			if raw, err = decodeLZ4Chain(body, frames, frameSize, blobBytes); err != nil {
 				return nil, format, err
 			}
 		}
@@ -617,12 +659,52 @@ func ReadKV3(data []byte) (*Value, [16]byte, error) {
 			r.blobs, raw = append(r.blobs, raw[:length]), raw[length:]
 		}
 	}
+	r.version = version
 	t, flag, err := r.typ()
 	if err != nil {
 		return nil, format, err
 	}
 	root, err := r.read(t, flag, &r.main)
 	return root, format, err
+}
+
+// splitLanes cuts a buffer into its 1, 2, 4 and 8 byte lanes from offset, each aligned to its
+// width, and returns where they end. Version 4 aligns to 8 even when the 8 byte lane is empty.
+func splitLanes(buffer []byte, offset, count1, count2, count4, count8 int, alignEmpty bool, out *lanes) (int, error) {
+	section := func(count, size int) ([]byte, error) {
+		if count == 0 {
+			return nil, nil
+		}
+		for offset%size != 0 {
+			offset++
+		}
+		end := offset + count*size
+		if count < 0 || end > len(buffer) {
+			return nil, errShort
+		}
+		part := buffer[offset:end]
+		offset = end
+		return part, nil
+	}
+	var err error
+	if out.b1, err = section(count1, 1); err != nil {
+		return 0, err
+	}
+	if out.b2, err = section(count2, 2); err != nil {
+		return 0, err
+	}
+	if out.b4, err = section(count4, 4); err != nil {
+		return 0, err
+	}
+	if out.b8, err = section(count8, 8); err != nil {
+		return 0, err
+	}
+	if count8 == 0 && alignEmpty {
+		for offset%8 != 0 {
+			offset++
+		}
+	}
+	return offset, nil
 }
 
 // decodeLZ4Chain decodes chained LZ4 frames: each holds up to frameSize bytes and may refer back

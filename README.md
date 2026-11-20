@@ -3,7 +3,8 @@
 Tools for Deadlock players and modders:
 
 - **Counter Intelligence**, an experimental in-game HUD that suggests counter items against the enemy lineup (below).
-- **[dlmod](#with-dlmod-no-mod-manager)**, a 3.6 MB mod manager in the terminal: it installs mods, switches them on and off, browses and downloads mods from GameBanana with previews, replaces game sounds with your own files, and repairs `gameinfo.gi` after game updates.
+- **[dlmod](#with-dlmod-no-mod-manager)**, a small mod manager in the terminal: it installs mods, switches them on and off, browses and downloads mods from GameBanana with previews, replaces game sounds with your own files, and repairs `gameinfo.gi` after game updates.
+- **[Model studio](#custom-models)**, part of dlmod: drop a `.glb`, `.gltf` or `.obj` model on a hero and play with it. dlmod fits it, rigs it to the hero's skeleton and builds the mod, with no Valve tools, Blender or Source 2 Viewer.
 
 ## Counter Intelligence HUD
 
@@ -122,6 +123,27 @@ dlmod starts with kitty in kitty and Ghostty and sixel in WezTerm and foot. Else
 
 dlmod compiles the file into the game's sound format itself, with no Valve tools, Blender or Source 2 Viewer. The format follows [ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat): an empty `DATA` block, a `CTRL` block describing the audio in binary KeyValues3, and the audio after it. Compiling the MP3 inside one of Valve's own sounds reproduces every field Valve's compiler wrote. All replacements go into one mod, *Custom sounds*, which dlmod rebuilds and reinstalls after every change. The list of replaced sounds is kept in `game/dlmod/sounds`.
 
+#### Custom models
+
+Drop a `.glb`, `.gltf` or `.obj` file onto `dlmod.exe`, or run `dlmod studio`. The model studio opens in your browser (it runs on your computer only):
+
+1. **Hero**: pick the hero the model replaces. dlmod reads the hero's model from the game.
+2. **Model**: drop the model with its textures (`.png` or `.jpg`), `.mtl` or `.bin` files, or a `.zip` of them. The preview shows it over the hero.
+3. **Fit**: the model is scaled to the hero's height and stands on the hero's spot. Size, turn and offset sliders adjust it; *Z is up* is for `.obj` files exported Z-up.
+4. **Hero parts**: ticked parts stay (the gun by default); the rest are replaced.
+5. **Rig**: *Rig and check* gives every vertex the hero's bones; *Arms up*, *Arms down* and *Legs apart* bend the result to check it.
+6. **Install**: builds the mod *Custom model: <hero>* and installs it. Importing again replaces it.
+
+The hero keeps its skeleton, animations, hitboxes, physics and abilities; only what you see changes. How it works:
+
+- **Rigging.** A rigged model (a `.glb` or `.gltf` with a skin) keeps its own weights. Each of its joints is mapped to the hero bone of the same name, or to the bone its vertices sit closest to. Weapons follow the joint they hang from. A model without a rig (any `.obj`) copies weights from the hero's own body, point by point. Clothes, hair and capes of the hero are left out, so the new model does not flap like them.
+- **Pose.** If the model stands in another pose than the hero (arms down, or a T-pose), dlmod first bends the hero's arms and legs to match, copies the weights, then bends the model back into the hero's pose.
+- **Pieces.** Small loose pieces that reach from a hand to a leg, such as a gun held at the hip, follow the hand as one piece. Weights are smoothed across the surface so joints bend without seams.
+- **Materials.** Each material of the model becomes a material for Deadlock's hero shader (`pbr.vfx`, with its outlines and status effects), and its colour texture is compressed to BC1 or BC3. WebP textures are not read: export with PNG or JPEG.
+- **Files.** dlmod rewrites the hero's `.vmdl_c` around the new mesh. Its blocks are decoded and written as [ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat) reads them: binary KeyValues3 (versions 4 and 5), meshoptimizer-compressed vertex and index buffers, the external reference list. Everything but the mesh blocks is copied unchanged.
+
+Without the browser: `dlmod model wraith model.glb`, with `-keep gun,cards` (parts to keep), `-scale 1.05`, `-yaw 90` or `-zup`.
+
 Deadlock updates and Steam's *Verify integrity of game files* replace `gameinfo.gi`, which turns all mods off. The screen then shows **MODS OFF**: press `r`, or start the game with `dlmod play`, which repairs first. Consoles older than Windows 10 get a numbered menu instead, which `-plain` also selects.
 
 The full-screen view needs about 5–8 MB of memory. While it waits it checks four file timestamps (and whether the game is running) once a second, and redraws only when something changed. Key presses take under a millisecond to show. On Windows, dlmod reads Steam's location from the registry and checks for the game through the system API, without starting other programs. Listing 40 mods, two of them with 6,000 files each, takes about 5 ms.
@@ -137,6 +159,9 @@ The full-screen view needs about 5–8 MB of memory. While it waits it checks fo
 | `dlmod update` | Download the Counter Intelligence HUD built for the installed game build from GitHub Releases, check it against GitHub's published SHA-256, and install it in place of the old version. |
 | `dlmod search <words> [-hero H] [-category C]` | Search the online catalog, for example `dlmod search -hero wraith` or `dlmod search catgirl`. |
 | `dlmod get <id or GameBanana address>` | Download and install a mod, for example `dlmod get https://gamebanana.com/mods/634614`. |
+| `dlmod studio`, or drop a model on dlmod | Open the model studio to put a `.glb`, `.gltf` or `.obj` model on a hero (see *Custom models*). |
+| `dlmod model <hero> <file>` | Put a model on a hero without the studio. |
+| `dlmod extract <path> [folder]` | Copy files out of the game's archive, for example `dlmod extract models/heroes_staging/haze`. |
 | `dlmod profile save <name>` / `use <name>` / `delete <name>` | Remember which mods are on, switch on exactly that set later (everything else is switched off, not deleted), or forget a profile. `dlmod profile` lists them. |
 
 `<mod>` is a number from `dlmod list`, a slot such as `pak03`, or part of the mod's name. dlmod finds the game through Steam's library folders. If it cannot, pass `-game "D:\SteamLibrary\steamapps\common\Deadlock"`. It keeps its list of mods, switched-off mods, and a copy of the previous `gameinfo.gi` in `game/dlmod`, which the game never reads.

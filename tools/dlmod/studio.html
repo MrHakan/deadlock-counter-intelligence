@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Studio</title>
+<style>
+:root {
+  --bg: #121317; --panel: #1b1d23; --line: #2c2f38; --text: #e6e2d8; --dim: #8d8a82;
+  --accent: #e8b04b; --accent-dim: #6b5427; --ok: #7fc48a; --bad: #e0705f;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.app { display: grid; grid-template-columns: 340px 1fr; height: 100%; }
+aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 16px; }
+h1 { font-size: 15px; margin: 0 0 2px; letter-spacing: .02em; }
+h1 span { color: var(--accent); }
+.sub { color: var(--dim); font-size: 12px; margin-bottom: 14px; }
+section { border-top: 1px solid var(--line); padding: 12px 0; }
+section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); margin: 0 0 8px; font-weight: 600; }
+select, button, input[type=number] { font: inherit; color: var(--text); background: #23262e; border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; }
+select { width: 100%; }
+button { cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent-dim); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); color: #1a1407; border-color: var(--accent); font-weight: 600; width: 100%; padding: 9px; }
+.drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: 18px 12px; text-align: center; color: var(--dim); cursor: pointer; }
+.drop.over { border-color: var(--accent); color: var(--text); background: #221f17; }
+.drop b { color: var(--text); display: block; margin-bottom: 2px; }
+.row { display: grid; grid-template-columns: 64px 1fr 52px; align-items: center; gap: 8px; margin: 6px 0; }
+.row label { color: var(--dim); font-size: 12px; }
+.row output { font-variant-numeric: tabular-nums; text-align: right; font-size: 12px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.buttons button { flex: 1; font-size: 12px; padding: 5px 6px; }
+.parts label { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
+.parts small { color: var(--dim); margin-left: auto; font-variant-numeric: tabular-nums; }
+.info { font-size: 12px; color: var(--dim); }
+.info b { color: var(--text); font-weight: 600; }
+.note { font-size: 12px; color: var(--accent); margin-top: 6px; white-space: pre-line; }
+.log { font-size: 12px; white-space: pre-wrap; margin-top: 8px; color: var(--dim); max-height: 180px; overflow-y: auto; }
+.log .ok { color: var(--ok); } .log .bad { color: var(--bad); }
+main { position: relative; overflow: hidden; }
+canvas { display: block; }
+.hud { position: absolute; left: 14px; bottom: 12px; font-size: 12px; color: var(--dim); pointer-events: none; }
+.toggles { position: absolute; right: 14px; top: 12px; display: flex; gap: 12px; font-size: 12px; color: var(--dim);
+  background: rgba(27,29,35,.85); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.toggles label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+.busy { position: absolute; inset: 0; display: none; place-items: center; background: rgba(18,19,23,.55); font-size: 15px; }
+.busy.on { display: grid; }
+.empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); text-align: center; pointer-events: none; }
+[hidden] { display: none !important; }
+@media (max-width: 760px) { .app { grid-template-columns: 1fr; grid-template-rows: auto 60vh; } aside { border-right: 0; } }
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <h1>Deadlock Modkit · <span>Model Studio</span></h1>
+  <div class="sub">Put any model on a hero. It keeps the hero's animations, hitboxes and abilities.</div>
+
+  <section>
+    <h2>1 · Hero</h2>
+    <select id="hero"><option value="">Pick a hero…</option></select>
+    <div class="info" id="heroInfo"></div>
+  </section>
+
+  <section>
+    <h2>2 · Model</h2>
+    <div class="drop" id="drop"><b>Drop a .glb, .gltf or .obj here</b>with its textures, .mtl or .bin, or a .zip of them. Or click to pick files.</div>
+    <input type="file" id="picker" multiple hidden accept=".glb,.gltf,.obj,.mtl,.bin,.png,.jpg,.jpeg,.zip">
+    <div class="info" id="modelInfo"></div>
+  </section>
+
+  <section>
+    <h2>3 · Fit</h2>
+    <div class="row"><label for="scale">Size</label><input type="range" id="scale" min="0.5" max="1.5" step="0.01" value="1"><output id="scaleOut">100%</output></div>
+    <div class="row"><label for="yaw">Turn</label><input type="range" id="yaw" min="-180" max="180" step="1" value="0"><output id="yawOut">0°</output></div>
+    <div class="row"><label for="offx">Forward</label><input type="range" id="offx" min="-20" max="20" step="0.5" value="0"><output id="offxOut">0</output></div>
+    <div class="row"><label for="offy">Sideways</label><input type="range" id="offy" min="-20" max="20" step="0.5" value="0"><output id="offyOut">0</output></div>
+    <div class="row"><label for="offz">Up</label><input type="range" id="offz" min="-20" max="20" step="0.5" value="0"><output id="offzOut">0</output></div>
+    <div class="buttons">
+      <button data-turn="-90">↺ 90°</button><button data-turn="90">↻ 90°</button><button data-turn="180">Face back</button>
+      <button id="zup" title="Blender exports .obj files Z-up">Z is up: off</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>4 · Hero parts</h2>
+    <div class="info">Ticked parts stay; the rest are replaced by your model.</div>
+    <div class="parts" id="parts"></div>
+  </section>
+
+  <section>
+    <h2>5 · Rig</h2>
+    <div class="info">dlmod copies bone weights from the hero's own body. If your model stands in another pose (arms down, T-pose), it bends the hero to match first.</div>
+    <div class="buttons"><button id="rig" disabled>Rig and check</button></div>
+    <div class="info" id="rigInfo"></div>
+    <div class="buttons" id="bendButtons" hidden>
+      <button data-bend="0,0">Bind pose</button><button data-bend="-45,0">Arms up</button>
+      <button data-bend="40,0">Arms down</button><button data-bend="0,15">Legs apart</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>6 · Install</h2>
+    <button class="primary" id="install" disabled>Install on hero</button>
+    <div class="log" id="log"></div>
+  </section>
+</aside>
+<main id="view">
+  <div class="empty" id="empty">Pick a hero and drop a model</div>
+  <div class="toggles">
+    <label><input type="checkbox" id="showHero" checked> hero</label>
+    <label><input type="checkbox" id="showModel" checked> model</label>
+    <label><input type="checkbox" id="wire"> wireframe</label>
+  </div>
+  <div class="hud" id="hud">Drag to turn · scroll to zoom · right-drag to move</div>
+  <div class="busy" id="busy">Working…</div>
+</main>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+const TOKEN = "{{TOKEN}}";
+const $ = id => document.getElementById(id);
+const state = { hero: null, model: null, keep: {}, zup: false, rig: null, bent: null };
+
+async function api(name, body, isForm) {
+  const options = { method: "POST", headers: { "X-Studio": TOKEN } };
+  if (isForm) options.body = body;
+  else if (body !== undefined) { options.body = JSON.stringify(body); options.headers["Content-Type"] = "application/json"; }
+  const response = await fetch("/api/" + name, options);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || response.statusText);
+  return data;
+}
+function decodeFloats(b64) { const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); return new Float32Array(bin.buffer); }
+function decodeIndices(b64) { const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); return new Uint32Array(bin.buffer); }
+function busy(text) { $("busy").textContent = text || "Working…"; $("busy").classList.toggle("on", !!text); }
+function log(text, kind) { const line = document.createElement("div"); if (kind) line.className = kind; line.textContent = text; $("log").append(line); $("log").scrollTop = 1e9; }
+
+// --- 3D view ---
+let THREE, scene, camera, renderer, controls, heroGroup, modelGroup;
+try {
+  THREE = await import("three");
+  const { OrbitControls } = await import("three/addons/controls/OrbitControls.js");
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x121317);
+  camera = new THREE.PerspectiveCamera(35, 1, 1, 5000);
+  camera.up.set(0, 0, 1); // the game's Z is up
+  camera.position.set(190, 90, 90);
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  $("view").prepend(renderer.domElement);
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0, 40);
+  controls.update();
+  scene.add(new THREE.HemisphereLight(0xfff4e0, 0x30323a, 1.6));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(120, 80, 160); scene.add(sun);
+  const grid = new THREE.GridHelper(200, 20, 0x3a3d47, 0x24262d); grid.rotation.x = Math.PI / 2; scene.add(grid);
+  heroGroup = new THREE.Group(); modelGroup = new THREE.Group(); scene.add(heroGroup, modelGroup);
+  const resize = () => { const r = $("view").getBoundingClientRect(); renderer.setSize(r.width, r.height); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); };
+  window.addEventListener("resize", resize); resize();
+  renderer.setAnimationLoop(() => renderer.render(scene, camera));
+} catch (e) {
+  $("empty").textContent = "The 3D preview could not load three.js (it comes from cdn.jsdelivr.net). Everything else still works.";
+}
+
+function geometryOf(positions, indices, uvs) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  if (uvs) g.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+  g.setIndex(new THREE.BufferAttribute(indices, 1));
+  g.computeVertexNormals();
+  return g;
+}
+
+function drawHero() {
+  if (!THREE || !state.hero) return;
+  heroGroup.clear();
+  for (const part of state.hero.parts) {
+    const kept = state.keep[part.name];
+    const material = new THREE.MeshStandardMaterial({ color: kept ? 0x9a978f : 0x6d7b92, transparent: !kept, opacity: kept ? 1 : 0.22,
+      depthWrite: kept, side: THREE.DoubleSide, wireframe: $("wire").checked });
+    heroGroup.add(new THREE.Mesh(geometryOf(part.positions, part.indices), material));
+  }
+  heroGroup.visible = $("showHero").checked;
+}
+
+const textureCache = {};
+function drawModel(positions) {
+  if (!THREE || !state.model) return;
+  modelGroup.clear();
+  const uvs = state.model.uvs;
+  state.model.parts.forEach((part, i) => {
+    const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(...part.color.slice(0, 3)), side: THREE.DoubleSide,
+      roughness: 0.8, wireframe: $("wire").checked });
+    if (part.texture) {
+      if (!textureCache[i]) {
+        textureCache[i] = new THREE.TextureLoader().load(`/api/texture?part=${i}&t=${TOKEN}`);
+        textureCache[i].flipY = false; textureCache[i].colorSpace = THREE.SRGBColorSpace;
+      }
+      material.map = textureCache[i]; material.color.set(0xffffff);
+    }
+    modelGroup.add(new THREE.Mesh(geometryOf(positions, part.indices, uvs), material));
+  });
+  modelGroup.visible = $("showModel").checked;
+  $("empty").hidden = true;
+}
+
+// --- fitting, the same as dlmod does it (source2 Model.Fit) ---
+function options() {
+  return { keep: state.keep, scale: +$("scale").value, yaw: +$("yaw").value, zup: state.zup,
+    offset: [+$("offx").value, +$("offy").value, +$("offz").value], pose: null };
+}
+function heroBounds() {
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const part of state.hero.parts) {
+    if (state.keep[part.name]) continue;
+    const p = part.positions;
+    for (let i = 0; i < p.length; i += 3) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], p[i + k]); hi[k] = Math.max(hi[k], p[i + k]); }
+  }
+  return [lo, hi];
+}
+// The average across X and Y of the middle 90% of points, as dlmod's trimmedCentre.
+function trimmedCentre(points) {
+  const out = [0, 0], n = points.length / 3;
+  if (!n) return out;
+  const values = new Float64Array(n);
+  for (let k = 0; k < 2; k++) {
+    for (let i = 0; i < n; i++) values[i] = points[3 * i + k];
+    values.sort();
+    const cut = Math.floor(n * 5 / 100);
+    let sum = 0;
+    for (let i = cut; i < n - cut; i++) sum += values[i];
+    out[k] = sum / (n - 2 * cut);
+  }
+  return out;
+}
+function heroAnchor() {
+  if (state.hero.pelvis) return state.hero.pelvis;
+  const all = [];
+  for (const part of state.hero.parts) if (!state.keep[part.name]) all.push(...part.positions);
+  return trimmedCentre(all);
+}
+function fitted() {
+  const o = options(), raw = state.model.raw, out = new Float32Array(raw.length);
+  const [lo, hi] = heroBounds();
+  if (!isFinite(lo[0])) return raw;
+  const s = Math.sin(o.yaw * Math.PI / 180), c = Math.cos(o.yaw * Math.PI / 180);
+  const low = [Infinity, Infinity, Infinity], high = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < raw.length; i += 3) {
+    let x = raw[i], y = raw[i + 1], z = raw[i + 2];
+    if (o.zup) { [x, y] = [-y, x]; } else { [x, y, z] = [z, x, y]; }
+    out[i] = x * c - y * s; out[i + 1] = x * s + y * c; out[i + 2] = z;
+    for (let k = 0; k < 3; k++) { low[k] = Math.min(low[k], out[i + k]); high[k] = Math.max(high[k], out[i + k]); }
+  }
+  const scale = (hi[2] - lo[2]) / (high[2] - low[2]) * (o.scale || 1);
+  const middle = trimmedCentre(out), anchor = heroAnchor();
+  const centre = [middle[0], middle[1], low[2]];
+  const target = [anchor[0], anchor[1], lo[2]];
+  for (let i = 0; i < out.length; i += 3) for (let k = 0; k < 3; k++) out[i + k] = (out[i + k] - centre[k]) * scale + target[k] + o.offset[k];
+  return out;
+}
+function refresh() {
+  for (const id of ["scale", "yaw", "offx", "offy", "offz"]) {
+    const v = +$(id).value;
+    $(id + "Out").textContent = id === "scale" ? Math.round(v * 100) + "%" : id === "yaw" ? v + "°" : v;
+  }
+  $("zup").textContent = "Z is up: " + (state.zup ? "on" : "off");
+  if (state.rig) { state.rig = null; $("rigInfo").textContent = "Settings changed: rig again to check."; $("bendButtons").hidden = true; }
+  if (state.model && state.hero) drawModel(fitted());
+  $("rig").disabled = !(state.model && state.hero);
+  $("install").disabled = !(state.model && state.hero);
+}
+
+// --- hero ---
+const heroes = await api("heroes");
+for (const h of heroes) {
+  const option = new Option(h.name + (h.available ? "" : " (not in this game build)"), h.id);
+  option.disabled = !h.available; $("hero").add(option);
+}
+$("hero").onchange = async () => {
+  if (!$("hero").value) return;
+  busy("Reading " + $("hero").selectedOptions[0].text + "'s model…");
+  try {
+    const hero = await api("hero", { hero: $("hero").value });
+    hero.parts.forEach(p => { p.positions = decodeFloats(p.positions); p.indices = decodeIndices(p.indices); });
+    state.hero = hero; state.keep = {};
+    $("parts").innerHTML = "";
+    for (const part of hero.parts) {
+      state.keep[part.name] = part.keep;
+      const label = document.createElement("label");
+      label.innerHTML = `<input type="checkbox"${part.keep ? " checked" : ""}> <span></span><small>${part.vertices.toLocaleString()} v</small>`;
+      label.querySelector("span").textContent = part.name;
+      label.querySelector("input").onchange = e => { state.keep[part.name] = e.target.checked; drawHero(); refresh(); };
+      $("parts").append(label);
+    }
+    $("heroInfo").textContent = hero.path;
+    drawHero(); refresh(); $("empty").hidden = !!state.model;
+  } catch (e) { $("heroInfo").textContent = e.message; }
+  busy();
+};
+
+// --- model ---
+function showModel(model) {
+    model.raw = decodeFloats(model.positions); model.uvs = decodeFloats(model.uvs);
+    model.parts.forEach(p => p.indices = decodeIndices(p.indices));
+    for (const k in textureCache) delete textureCache[k];
+    state.model = model; state.rig = null;
+    const notes = model.parts.filter(p => p.note).map(p => `${p.name}: ${p.note}`);
+    $("modelInfo").innerHTML = `<b></b><br>${model.triangles.toLocaleString()} triangles · ${model.parts.length} materials · ${model.rigged ? "rigged: its own weights are kept" : "not rigged: weights come from the hero"}`;
+    $("modelInfo").querySelector("b").textContent = model.name;
+    if (notes.length) { const n = document.createElement("div"); n.className = "note"; n.textContent = notes.join("\n"); $("modelInfo").append(n); }
+    refresh();
+}
+async function upload(files) {
+  if (!files.length) return;
+  const form = new FormData();
+  for (const f of files) form.append("file", f, f.webkitRelativePath || f.name);
+  busy("Reading " + files[0].name + "…");
+  try { showModel(await api("upload", form, true)); }
+  catch (e) { $("modelInfo").textContent = e.message; }
+  busy();
+}
+api("current").then(model => { if (model.name) showModel(model); }).catch(() => {});
+const drop = $("drop");
+drop.onclick = () => $("picker").click();
+$("picker").onchange = e => upload([...e.target.files]);
+for (const target of [drop, $("view")]) {
+  target.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+  target.addEventListener("dragleave", () => drop.classList.remove("over"));
+  target.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); upload([...e.dataTransfer.files]); });
+}
+
+// --- fit controls ---
+for (const id of ["scale", "yaw", "offx", "offy", "offz"]) $(id).oninput = refresh;
+document.querySelectorAll("[data-turn]").forEach(b => b.onclick = () => {
+  let v = +$("yaw").value + +b.dataset.turn; v = ((v + 180) % 360 + 360) % 360 - 180; $("yaw").value = v; refresh();
+});
+$("zup").onclick = () => { state.zup = !state.zup; refresh(); };
+$("showHero").onchange = () => heroGroup && (heroGroup.visible = $("showHero").checked);
+$("showModel").onchange = () => modelGroup && (modelGroup.visible = $("showModel").checked);
+$("wire").onchange = () => { drawHero(); if (state.model) drawModel(state.bent || state.rig || fitted()); };
+
+// --- rig ---
+$("rig").onclick = async () => {
+  busy("Rigging: matching the pose and copying bone weights…");
+  try {
+    const result = await api("rig", options());
+    state.rig = decodeFloats(result.positions); state.bent = null;
+    const p = result.pose;
+    $("rigInfo").textContent = `Rigged in ${result.seconds.toFixed(1)} s. The hero was bent ${p.Arms > 0 ? "arms down" : p.Arms < 0 ? "arms up" : "arms as they are"} (${p.Arms}°)` +
+      `${p.Legs ? `, legs ${p.Legs > 0 ? "apart" : "together"} (${p.Legs}°)` : ""} to match. Shown in the hero's bind pose; try the poses below.`;
+    $("bendButtons").hidden = false;
+    drawModel(state.rig);
+  } catch (e) { $("rigInfo").textContent = e.message; }
+  busy();
+};
+document.querySelectorAll("[data-bend]").forEach(b => b.onclick = async () => {
+  const [arms, legs] = b.dataset.bend.split(",").map(Number);
+  try { const result = await api("bend", { Arms: arms, Legs: legs }); state.bent = decodeFloats(result.positions); drawModel(state.bent); }
+  catch (e) { $("rigInfo").textContent = e.message; }
+});
+
+// --- install ---
+$("install").onclick = async () => {
+  busy("Building and installing…");
+  try {
+    const result = await api("install", options());
+    for (const m of result.messages) log(m);
+    log("Installed. Start Deadlock to see it.", "ok");
+  } catch (e) { log(e.message, "bad"); }
+  busy();
+};
+</script>
+</body>
+</html>
