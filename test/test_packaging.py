@@ -81,8 +81,10 @@ class PackagingTests(unittest.TestCase):
         self.assertIsNone(root.find("CitadelHud/GlobalClassListener"))
         self.assertEqual((listener.get("hittest"), listener.get("hittestchildren")), ("false", "true"))
         hoverable = {panel.get("id") for panel in listener.iter() if panel.get("hittest") == "true"}
-        self.assertEqual(hoverable, {"DCIPatchBadge"} | {f"DCI{part}{index}" for part in ("Patch", "Queue") for index in range(4)},
-                         "only the patch icons and queue buttons catch the mouse; everything else lets clicks through")
+        self.assertEqual(hoverable, {"DCIPatchBadge", "DCIPatch0", "DCIPatch1", "DCIPatch2", "DCIPatch3"},
+                         "only the patch icons may catch the mouse; everything else lets clicks through")
+        self.assertTrue(all(panel.get("acceptsfocus") == "false" for panel in listener.iter() if panel.get("hittest") == "true"),
+                        "a panel that takes the mouse must not take keyboard focus, or the player cannot move")
         self.assertTrue(all(panel.get("hittest") in ("true", "false") for panel in listener.iter() if panel is not listener))
         hidden = {panel.get("id") for panel in listener.iter() if "DCIHidden" in panel.get("class", "").split()}
         self.assertEqual(hidden, {"DCITip", "DCIPatchBadge", "DCISource", "DCIThreats"} | {

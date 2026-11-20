@@ -50,7 +50,10 @@ def patch_hud(stock):
         """Every panel lets clicks through except the patch icons, which show a tooltip on hover."""
         if hidden:
             attributes = {**attributes, "class": attributes["class"] + " DCIHidden"}
-        return ET.SubElement(parent, tag, {**attributes, "hittest": "true" if hover else "false"})
+        # Panels that take the mouse must not take keyboard focus, or WASD and the shop key go to the
+        # HUD instead of the game; Valve's own HUD buttons set acceptsfocus="false" for the same reason.
+        extra = {"hittest": "true", "acceptsfocus": "false"} if hover else {"hittest": "false"}
+        return ET.SubElement(parent, tag, {**attributes, **extra})
 
     # A GlobalClassListener puts its classes on its parent. Under CitadelHud itself, a second
     # gShopOpen ancestor matched Valve's ".gShopOpen .gShopOpen .QuickbuyQueueOuter" rule and moved the
@@ -80,7 +83,6 @@ def patch_hud(stock):
         add(line, "Label", {"id": f"DCIName{index}", "class": "DCIName"})
         add(line, "Label", {"id": f"DCIPatch{index}", "class": "DCIPatch", "text": "!"}, hover=True, hidden=True)
         add(line, "Label", {"id": f"DCIBuy{index}", "class": "DCIBuy", "text": "BUY NOW"}, hidden=True)
-        add(line, "Label", {"id": f"DCIQueue{index}", "class": "DCIQueue", "text": "+ QUEUE"}, hover=True)
         cost = add(line, "Panel", {"class": "DCICost"})
         add(cost, "Panel", {"class": "DCISoul"})
         add(cost, "Label", {"id": f"DCIPrice{index}", "class": "DCIPrice"})

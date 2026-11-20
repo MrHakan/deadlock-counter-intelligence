@@ -30,7 +30,6 @@
   var rows = [];
   var badgeNotes = DCIEngine.formatNotes([]); // tooltip of the PATCHED badge
   var rowNotes = [];                          // tooltip of each row's ! icon
-  var shownRows = [];                         // the items the rows show, for the queue buttons
   var against = "";                           // enemy counter items you are facing, as text
 
   function setShown(panel, shown) {
@@ -53,7 +52,6 @@
         impact: row.FindChildTraverse("DCIImpact" + i),
         buy: row.FindChildTraverse("DCIBuy" + i),
         patch: row.FindChildTraverse("DCIPatch" + i),
-        queue: row.FindChildTraverse("DCIQueue" + i),
         faces: row.FindChildTraverse("DCIFaces" + i),
         face: [],
       });
@@ -75,28 +73,8 @@
     hover(found, found.badge, function () { return badgeNotes; });
     rows.forEach(function (row, index) {
       hover(found, row.patch, function () { return rowNotes[index]; });
-      if (row.queue && row.queue.SetPanelEvent) {
-        row.queue.SetPanelEvent("onactivate", function () { queueItem(shownRows[index]); });
-      }
     });
     return found;
-  }
-
-  // Adds an item to the game's own quick-buy queue. The event name comes from the game client;
-  // its argument is not documented, so the forms are tried in turn and the console says which
-  // one the game accepted.
-  function queueItem(item) {
-    if (!item) return;
-    var attempts = [[item.id], [context, item.id], [item.key]];
-    for (var i = 0; i < attempts.length; i++) {
-      try {
-        $.DispatchEvent.apply($, ["CitadelQuickbuyAddItem"].concat(attempts[i]));
-        $.Msg("[DCI] Quick buy: queued " + item.name + " (form " + (i + 1) + ")");
-        return;
-      } catch (error) {
-        if (i === attempts.length - 1) $.Msg("[DCI] Quick buy failed for " + item.name + ": " + error);
-      }
-    }
   }
 
   // A GlobalClassListener puts the global classes it lists on its parent panel, not on itself, so
@@ -133,7 +111,6 @@
     view.source.text = laning ? text.lane : text.roster;
     setShown(view.source, true);
 
-    shownRows = recommendations.slice();
     showAgainst();
     view.rows.forEach(function (row, index) {
       var item = recommendations[index];

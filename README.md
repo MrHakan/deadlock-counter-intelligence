@@ -1,13 +1,21 @@
-# Deadlock Counter Intelligence
+# Deadlock Modkit
 
-An experimental Panorama HUD for Deadlock. Open the scoreboard or shop to see:
+Tools for Deadlock players and modders:
 
-- **Counter items for the enemy lineup.** The three items from the reference counter table that answer the most enemy heroes, with soul price, item category, what the item does against them (for example *Anti-heal* or *CC immunity*), and the enemy heroes it counters. Items you already bought this match are left out.
+- **Counter Intelligence**, an experimental in-game HUD that suggests counter items against the enemy lineup (below).
+- **[dlmod](#with-dlmod-no-mod-manager)**, a 3.6 MB mod manager in the terminal: it installs mods, switches them on and off, browses and downloads mods from GameBanana with previews, replaces game sounds with your own files, and repairs `gameinfo.gi` after game updates.
+
+## Counter Intelligence HUD
+
+Open the scoreboard or shop to see:
+
+- **Counter items for the enemy lineup.** The three items from the reference counter table that answer the most enemy heroes, each with its icon, soul price, what it does against them (for example *Anti-heal* or *CC immunity*), and the portraits of the enemy heroes it counters. Item icons and portraits come from the game's own textures. Items you already own are left out.
 - **What to buy now.** A **BUY NOW** badge marks the first suggestion your souls can pay for, and prices you cannot reach yet turn grey.
 - **What match data says.** Each row shows the estimated change in the buyer's win rate against the current lineup and the minute the item is usually bought, for example `+0.6 WR · ~14m`. A fourth row adds the item with the largest measured gain against the lineup that the table does not already suggest.
 - **Lane counters.** For the first ten minutes the fourth row switches to the best early item against the enemies in your lane.
 - **Patch warnings.** When a game patch changes an enemy hero after the counter table was last reviewed, a **PATCHED** badge appears next to the title; when it changes a suggested item, that row gets a **!** mark. Hover either one to see what changed, taken from Valve's patch notes or, when Valve changed values without notes, from the game data. The warnings stay until the counters are reviewed for that patch.
 - **Enemy counter-purchase alerts.** When an enemy buys an item from the counter list of a hero on your team, a banner names the buyer, the item, and the allies it counters. It stays up for 8 seconds and turns red when the item counters your own hero. Each enemy purchase alerts once per match.
+- **Counters against you.** Items enemies own that are on your own hero's counter list are listed in red under the panel title, for example *Countering you: Healbane (Haze)*.
 
 ## Reference counter table
 
@@ -49,14 +57,14 @@ The suggestion panel sits above the ability bar on the scoreboard and below Quic
 
 - Both teams' heroes come from the player cards, including their rendered hero names. The card marked `LocalPlayer` identifies your side, and enemy cards marked `IsInLocalPlayerLane` are your lane opponents.
 - Your spendable souls come from the shop or HUD balance (`CurrentGoldAmount`), and the match time from the top bar clock (`GameTime`).
-- Items you own come from your card's purchased-items panel (`mod_universal`) and from your own rows in the shop's recent-purchase list. The game creates the item icons at run time, so the mod tries the usual item-name properties and ignores anything that is not a known item.
-- Enemy purchases come from the shop's recent-purchase list, which the mod reads every half second while the shop is open, so alerts appear when you open the shop.
+- Items you own come from the shop's own item cards while the shop is open: the game marks the cards of items you own (or own as part of an upgrade) with `owned` or `usedAsComponent`, and names the item in their `modName` label. Your own rows in the shop's recent-purchase list count too. An owned item stays out of the suggestions for the rest of the match.
+- Enemy purchases come from the shop's recent-purchase list, which the mod reads every half second while the shop is open, so alerts appear when you open the shop. Items enemies already own are read from the item icons on their top-bar cards (`mod_universal`), which the scoreboard shows, through the `{s:mod_name}` dialog variable the shop's cards use. If the game does not give the icons that variable, the *Countering you* line stays empty.
 
-The PATCHED badge and the **!** marks are the only parts of the panel that react to the mouse; everything else lets clicks through to the game. Hovering needs a mouse cursor, which the shop always has.
+The PATCHED badge and the **!** marks are the only parts of the panel that react to the mouse; everything else lets clicks through to the game. They never take keyboard focus (`acceptsfocus="false"`, like Valve's own HUD buttons), so movement and the shop key keep working. Hovering needs a mouse cursor, which the shop always has. The mod's class listener sits in a panel of its own, so the `gShopOpen` and `gScoreboardOpen` classes it needs never reach the game's panels; under the stock HUD panel they once matched a Valve style rule and moved the shop's quick-buy list.
 
 When the enemy lineup changes, the mod treats it as a new match and clears its alert history and owned items. Suggestions are only recomputed when the lineup, the lane phase or your items change; souls only move the badge.
 
-The recommendation engine, HUD state changes, and archive format are covered by local tests. Displaying the HUD in Deadlock still requires in-game verification. If one of the panels above turns out to be named differently in game, its feature switches itself off: no badge without souls, no lane row without lane opponents, and owned items stay listed. The HUD does not track item sales.
+The recommendation engine, HUD state changes, and archive format are covered by local tests. Displaying the HUD in Deadlock still requires in-game verification. If one of the panels above turns out to be named differently in game, its feature switches itself off: no badge without souls, no lane row without lane opponents, and owned items stay listed. The HUD does not track item sales. When the script loads, the console shows `[DCI] Counter items HUD loaded`.
 
 ## Install
 
@@ -64,9 +72,9 @@ Close Deadlock first, and use one install method only: two tools editing the sam
 
 ### With dlmod (no mod manager)
 
-`dlmod` is a 3 MB program in [`tools/dlmod`](tools/dlmod). It uses only Go's standard library and has no installer or background service. It finds Deadlock through Steam, copies mods into `game/citadel/addons` under free `pakNN_dir.vpk` names, and edits `gameinfo.gi` so the game loads that folder. It works with any VPK mod, not just this one. Only `dlmod update` goes online; it uses the `curl` that comes with Windows 10 and later, which keeps dlmod half the size it would be with its own HTTPS code.
+`dlmod` is a 3.6 MB program in [`tools/dlmod`](tools/dlmod). It uses only Go's standard library and has no installer or background service. It finds Deadlock through Steam, copies mods into `game/citadel/addons` under free `pakNN_dir.vpk` names, and edits `gameinfo.gi` so the game loads that folder. It works with any VPK mod, not just this one, and installs `.zip`, `.rar` and `.7z` downloads. It goes online only when you browse or download mods or update the HUD, through the `curl` that comes with Windows 10 and later, which keeps dlmod half the size it would be with its own HTTPS code. `.rar` and `.7z` archives are opened with the `tar.exe` that also comes with Windows (or 7-Zip, if installed).
 
-1. From [GitHub Releases](https://github.com/MrHakan/deadlock-counter-intelligence/releases), download the HUD ZIP and `dlmod-windows-amd64.exe` (on Linux, `dlmod-linux-amd64`).
+1. From [GitHub Releases](https://github.com/MrHakan/deadlock-modkit/releases), download the HUD ZIP and `dlmod-windows-amd64.exe` (on Linux, `dlmod-linux-amd64`).
 2. Drag the ZIP onto `dlmod-windows-amd64.exe`.
 3. Start Deadlock.
 
@@ -79,6 +87,8 @@ Double-click dlmod to open its full-screen view of every mod, with its slot, fil
 | `↑` `↓` (or `j` `k`) | Select a mod |
 | `Space` or `Enter` | Switch the selected mod on or off. It keeps its place in the list. |
 | Drag a file into the window | Install it straight away. `i` lets you type a path instead. |
+| `b` | Browse mods online and install them (see below) |
+| `s` | Listen to the game's sounds and replace them with your own (see below) |
 | `d` | Delete the selected mod, after a confirmation |
 | `f` | Profiles: switch to a saved set of mods, save the mods that are on now, or delete a profile |
 | `u` | Download the Counter Intelligence HUD for your game build and replace the old one (asks first) |
@@ -88,19 +98,45 @@ Double-click dlmod to open its full-screen view of every mod, with its slot, fil
 | `?` | Help |
 | `q` or `Esc` | Quit |
 
+#### Browsing mods online
+
+`b` opens the catalog Deadlock Mod Manager uses: about 12,000 mods mirrored from GameBanana by [deadlockmods.app](https://deadlockmods.app), each with its hero and category. dlmod downloads the list once (about 15 MB) and keeps it for six hours; `R` downloads it again. It opens on skins, most downloaded first. `←` `→` pick a hero, `c` cycles the category, `/` searches names and authors, and `n` shows NSFW mods, which are hidden otherwise. `Enter` downloads the selected mod, checks its published MD5, and installs it like a dropped file, asking which file when a mod has several (often with or without voice lines). The mod's files come from deadlockmods.app, or from GameBanana's own API when the mirror has none.
+
+![dlmod's online browser listing Lash skins with a preview](docs/images/dlmod-browse.png)
+
+The selected mod's preview is drawn in the terminal. dlmod draws pictures itself, with no extra library:
+
+| Preview mode (`m`) | Where it works |
+| --- | --- |
+| blocks | Any terminal with 24-bit colour: Windows Terminal, the Windows 10+ console, macOS and Linux terminals. Each character shows two pixels with `▀`, so pictures are coarse. |
+| sixel | Full resolution in Windows Terminal 1.22 or later, WezTerm, foot, mlterm and xterm (`-ti vt340`). Each picture gets its own 256-colour palette (median cut) with Floyd–Steinberg dithering, and is drawn at the pane's exact pixel size, which dlmod asks the terminal for. |
+| kitty | Full resolution in kitty, Ghostty and WezTerm. |
+
+dlmod starts with kitty in kitty and Ghostty and sixel in WezTerm and foot. Elsewhere it starts with blocks and asks the terminal which graphics it draws (its device attributes). Windows Terminal 1.22 and later answer that they draw sixel, and previews switch to full resolution on their own. `v` (or `Space`) shows a big preview that fills the screen, which makes block pictures much sharper; a smaller terminal font gives more cells and sharper blocks too. Set `DLMOD_IMAGES=sixel` (or `blocks`, `kitty`, `off`) to choose a mode. Previews are cached in `game/dlmod/catalog/previews`.
+
+![dlmod's big preview in block mode](docs/images/dlmod-preview.png)
+
+#### Replacing sounds
+
+`s` lists every sound in the game (about 95,000), grouped by hero: voice lines in `sounds/vo/<hero>` and ability sounds in `sounds/abilities/<hero>`. `←` `→` pick a hero and `/` searches by name. `Enter` plays the game's sound in your default player. To replace the selected sound, drop a `.wav` (8- or 16-bit PCM, mono or stereo) or `.mp3` file onto the window, or press `r` and type its path. `p` plays your version and `x` restores the original.
+
+dlmod compiles the file into the game's sound format itself, with no Valve tools, Blender or Source 2 Viewer. The format follows [ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat): an empty `DATA` block, a `CTRL` block describing the audio in binary KeyValues3, and the audio after it. Compiling the MP3 inside one of Valve's own sounds reproduces every field Valve's compiler wrote. All replacements go into one mod, *Custom sounds*, which dlmod rebuilds and reinstalls after every change. The list of replaced sounds is kept in `game/dlmod/sounds`.
+
 Deadlock updates and Steam's *Verify integrity of game files* replace `gameinfo.gi`, which turns all mods off. The screen then shows **MODS OFF**: press `r`, or start the game with `dlmod play`, which repairs first. Consoles older than Windows 10 get a numbered menu instead, which `-plain` also selects.
 
 The full-screen view needs about 5–8 MB of memory. While it waits it checks four file timestamps (and whether the game is running) once a second, and redraws only when something changed. Key presses take under a millisecond to show. On Windows, dlmod reads Steam's location from the registry and checks for the game through the system API, without starting other programs. Listing 40 mods, two of them with 6,000 files each, takes about 5 ms.
 
 | Command | What it does |
 | --- | --- |
-| `dlmod <file.zip or .vpk>` | Install mods, including multi-part sets (`pakNN_000.vpk`). If a newer version changes the same files, dlmod offers to replace the old one in its slot. |
+| `dlmod <file.zip, .rar, .7z or .vpk>` | Install mods, including multi-part sets (`pakNN_000.vpk`). If a newer version changes the same files, dlmod offers to replace the old one in its slot. |
 | `dlmod list` | Show mods, conflicts between them, and whether the game loads mods. |
 | `dlmod off <mod>` / `dlmod on <mod>` | Move a mod out of `addons` without deleting it, and back. |
 | `dlmod remove <mod>` | Delete a mod. |
 | `dlmod patch` / `dlmod unpatch` | Add or remove dlmod's `gameinfo.gi` lines. `unpatch` restores Valve's file exactly. |
 | `dlmod play` | Patch if needed, then start Deadlock through Steam. |
 | `dlmod update` | Download the Counter Intelligence HUD built for the installed game build from GitHub Releases, check it against GitHub's published SHA-256, and install it in place of the old version. |
+| `dlmod search <words> [-hero H] [-category C]` | Search the online catalog, for example `dlmod search -hero wraith` or `dlmod search catgirl`. |
+| `dlmod get <id or GameBanana address>` | Download and install a mod, for example `dlmod get https://gamebanana.com/mods/634614`. |
 | `dlmod profile save <name>` / `use <name>` / `delete <name>` | Remember which mods are on, switch on exactly that set later (everything else is switched off, not deleted), or forget a profile. `dlmod profile` lists them. |
 
 `<mod>` is a number from `dlmod list`, a slot such as `pak03`, or part of the mod's name. dlmod finds the game through Steam's library folders. If it cannot, pass `-game "D:\SteamLibrary\steamapps\common\Deadlock"`. It keeps its list of mods, switched-off mods, and a copy of the previous `gameinfo.gi` in `game/dlmod`, which the game never reads.

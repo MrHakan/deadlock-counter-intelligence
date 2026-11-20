@@ -191,7 +191,7 @@ func TestPromptAndNarrowScreens(t *testing.T) {
 		t.Fatalf("prompt: %v %q", ui.mode, string(ui.input))
 	}
 	ui.handle([]byte("\r"))
-	if !strings.Contains(ui.screen(), "nope: nope was not found") && !strings.Contains(ui.screen(), "dlmod installs .zip and .vpk files") {
+	if !strings.Contains(ui.screen(), "nope: nope was not found") && !strings.Contains(ui.screen(), "dlmod installs .zip, .rar, .7z and .vpk files") {
 		t.Fatalf("expected an error for a missing file:\n%s", ui.screen())
 	}
 	ui.handle([]byte("\x1b[F")) // End

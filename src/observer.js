@@ -44,7 +44,7 @@ var DCIObserver = (function () {
   // a known item is ignored.
   var ITEM_PROPERTIES = ["abilityname", "itemname", "ability_name", "item_name"];
 
-  function ownedItems(card, engine) {
+  function ownedItems(card, engine, localize) {
     var mods = card && card.FindChildTraverse("mod_universal");
     if (!valid(mods)) return [];
     var found = [];
@@ -61,6 +61,12 @@ var DCIObserver = (function () {
         }
         var key = typeof name === "string" && /^upgrade_[a-z0-9_]+$/.test(name) ? engine.itemKey(name) : null;
         if (key && found.indexOf(key) === -1) found.push(key);
+      }
+      // The shop's item cards name their item through the {s:mod_name} dialog variable; the icons
+      // in the item bars may share it.
+      if (localize && panel.paneltype === "CitadelModIcon") {
+        var named = engine.itemKey(resolve(localize, "{s:mod_name}", panel));
+        if (named && found.indexOf(named) === -1) found.push(named);
       }
       if (panel.Children) {
         panel.Children().forEach(function (child) { pending.push(child); });
@@ -126,11 +132,11 @@ var DCIObserver = (function () {
       self: friends.self,
       lane: enemies.lane,
       souls: null,
-      owned: friends.card ? ownedItems(friends.card, engine) : [],
+      owned: friends.card ? ownedItems(friends.card, engine, localize) : [],
       clock: clock,
       // What each enemy already owns, from the item icons on their top-bar card (shown on Tab).
       enemyItems: enemies.cards.reduce(function (list, entry) {
-        return list.concat(ownedItems(entry.card, engine).map(function (item) {
+        return list.concat(ownedItems(entry.card, engine, localize).map(function (item) {
           return { hero: entry.hero, item: item };
         }));
       }, []),
@@ -145,6 +151,22 @@ var DCIObserver = (function () {
     return shown(label) ? parseSouls(label.text) : null;
   }
 
+  // Items the shop marks as yours: its item cards (CitadelShopMod) carry the class "owned", or
+  // "usedAsComponent" when an upgrade you own includes them, and name the item in a modName label.
+  function shopOwned(shop, engine, localize) {
+    var found = [];
+    ["owned", "usedAsComponent"].forEach(function (state) {
+      shop.FindChildrenWithClassTraverse(state).forEach(function (card) {
+        if (!valid(card) || card.paneltype !== "CitadelShopMod") return;
+        var labels = card.FindChildrenWithClassTraverse("modName");
+        var key = engine.itemKey(valid(labels[0]) ? labels[0].text : "") ||
+          engine.itemKey(resolve(localize, "{s:mod_name}", card));
+        if (key && found.indexOf(key) === -1) found.push(key);
+      });
+    });
+    return found;
+  }
+
   function observe(root, engine, localize, shopOpen) {
     var teams = lineup(root.FindChildTraverse("TopBar"), engine, localize);
     var heroes = teams.heroes;
@@ -153,6 +175,11 @@ var DCIObserver = (function () {
     if (heroes.length) {
       var shop = shopOpen && root.FindChildTraverse("CitadelHudHeroShop");
       if (valid(shop)) teams.souls = spendableSouls(shop.FindChildTraverse("GoldAPContainer"));
+      if (valid(shop)) {
+        shopOwned(shop, engine, localize).forEach(function (item) {
+          if (teams.owned.indexOf(item) === -1) teams.owned.push(item);
+        });
+      }
       if (teams.souls === null) teams.souls = spendableSouls(root.FindChildTraverse("gold_and_ap_container"));
       var recent = valid(shop) && shop.FindChildTraverse("RecentPurchasesContainer");
       if (shown(recent)) {

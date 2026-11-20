@@ -25,7 +25,7 @@ import (
 // brings proxy settings, redirects and the system's certificate store.
 
 // releasesURL lists the project's releases, newest first; tests point it at a local server.
-var releasesURL = "https://api.github.com/repos/MrHakan/deadlock-counter-intelligence/releases?per_page=20"
+var releasesURL = "https://api.github.com/repos/MrHakan/deadlock-modkit/releases?per_page=20"
 
 var hudAssetName = regexp.MustCompile(`^deadlock-counter-intelligence-(\d+)-hud-en\.zip$`)
 

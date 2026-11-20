@@ -321,23 +321,6 @@
     border-radius: 3px;
 }
 
-/* Adds the item to the game's quick-buy queue. */
-.DCIQueue {
-    margin-left: 6px;
-    padding: 1px 5px 0px 5px;
-    vertical-align: center;
-    background-color: #2f3a48;
-    border: 1px solid #56708c;
-    color: #d6e6f7;
-    font-size: 11px;
-    font-weight: bold;
-    letter-spacing: 1px;
-}
-
-.DCIQueue:hover {
-    background-color: #46607c;
-    color: #ffffff;
-}
 
 /* Enemy items, seen on the scoreboard or in the shop, that counter your own hero. */
 .DCIThreats {
