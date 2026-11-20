@@ -5,6 +5,8 @@ import (
 	"image"
 	"image/png"
 	"math"
+	"math/rand"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -112,6 +114,45 @@ func TestImportModelOntoHero(t *testing.T) {
 	}
 	if wrong > checked/20 {
 		t.Errorf("%d of %d vertices away from the joints follow another bone than the hero's point they copy", wrong, checked)
+	}
+}
+
+// The grid finds the same nearest points as checking them all, for points among its own and far
+// outside them (where it used to walk dozens of rings of empty cells).
+func TestPointGridNearest(t *testing.T) {
+	random := rand.New(rand.NewSource(1))
+	grid := newPointGrid(2)
+	var pts [][3]float32
+	for i := 0; i < 2000; i++ {
+		p := [3]float32{random.Float32()*20 - 10, random.Float32() * 8, random.Float32() * 100}
+		if i%2 == 0 { // every other index, as the per-limb grids hold only some samples
+			grid.add(i, p)
+			pts = append(pts, p)
+		}
+	}
+	for q := 0; q < 300; q++ {
+		spread := float32(30)
+		if q%3 == 0 {
+			spread = 300
+		}
+		p := [3]float32{(random.Float32()*2 - 1) * spread, (random.Float32()*2 - 1) * spread, random.Float32() * 100}
+		hits := grid.nearest(p, 6)
+		var all []float64
+		for _, o := range pts {
+			all = append(all, math.Sqrt(sq(p[0]-o[0])+sq(p[1]-o[1])+sq(p[2]-o[2])))
+		}
+		sort.Float64s(all)
+		if all[5] > 63*2 {
+			continue // beyond the 64 rings searched, like before
+		}
+		if len(hits) != 6 {
+			t.Fatalf("%v: %d hits", p, len(hits))
+		}
+		for k, h := range hits {
+			if math.Abs(h.distance-all[k]) > 1e-4 {
+				t.Fatalf("%v: hit %d at %v, nearest is %v", p, k, h.distance, all[k])
+			}
+		}
 	}
 }
 

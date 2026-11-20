@@ -209,7 +209,16 @@ type pointGrid struct {
 	cell  float64
 	cells map[[3]int][]int
 	pts   [][3]float32
+
+	// The cells again, laid out by freeze over the box the points fill, x fastest: cell c holds
+	// items[starts[c]:starts[c+1]]. Nil until the first search, and after any add.
+	lo, size [3]int
+	starts   []int32
+	items    []int32
 }
+
+// maxFrozenCells caps the array freeze builds; a grid spread wider keeps searching its map.
+const maxFrozenCells = 1 << 22
 
 type gridHit struct {
 	index    int
@@ -231,11 +240,64 @@ func (g *pointGrid) add(index int, p [3]float32) {
 	g.pts[index] = p
 	k := g.key(p)
 	g.cells[k] = append(g.cells[k], index)
+	g.starts = nil
+}
+
+func (g *pointGrid) cellIndex(k [3]int) int {
+	return ((k[2]-g.lo[2])*g.size[1]+(k[1]-g.lo[1]))*g.size[0] + (k[0] - g.lo[0])
+}
+
+// freeze lays the cells out as one array over the box the points fill. A search far from the
+// points (a round model's belly, nowhere near the hero's thin arm) walks dozens of rings of
+// empty cells; as map lookups that took most of a minute per model, as array reads it does not,
+// and cells outside the box are not visited at all.
+func (g *pointGrid) freeze() {
+	var hi [3]int
+	first := true
+	for k := range g.cells {
+		for a := 0; a < 3; a++ {
+			if first || k[a] < g.lo[a] {
+				g.lo[a] = k[a]
+			}
+			if first || k[a] > hi[a] {
+				hi[a] = k[a]
+			}
+		}
+		first = false
+	}
+	total := 1
+	for a := 0; a < 3; a++ {
+		g.size[a] = hi[a] - g.lo[a] + 1
+		total *= g.size[a]
+		if total > maxFrozenCells {
+			return
+		}
+	}
+	starts := make([]int32, total+1)
+	for k, list := range g.cells {
+		starts[g.cellIndex(k)+1] += int32(len(list))
+	}
+	for c := 1; c <= total; c++ {
+		starts[c] += starts[c-1]
+	}
+	items := make([]int32, starts[total])
+	next := append([]int32(nil), starts[:total]...)
+	for k, list := range g.cells {
+		c := g.cellIndex(k)
+		for _, i := range list { // in the order added, so ties go the same way as before
+			items[next[c]] = int32(i)
+			next[c]++
+		}
+	}
+	g.starts, g.items = starts, items
 }
 
 // nearest finds up to n points closest to p, searching outward ring by ring and keeping only the
 // best n seen so far.
 func (g *pointGrid) nearest(p [3]float32, n int) []gridHit {
+	if g.starts == nil && len(g.cells) > 0 {
+		g.freeze()
+	}
 	center := g.key(p)
 	best := make([]gridHit, 0, n) // ordered by squared distance until the end
 	consider := func(i int) {
@@ -254,23 +316,50 @@ func (g *pointGrid) nearest(p [3]float32, n int) []gridHit {
 		}
 		best[at] = gridHit{i, d}
 	}
+	frozen := g.starts != nil
+	visit := func(k [3]int) {
+		if !frozen {
+			for _, i := range g.cells[k] {
+				consider(i)
+			}
+			return
+		}
+		c := g.cellIndex(k)
+		for _, i := range g.items[g.starts[c]:g.starts[c+1]] {
+			consider(int(i))
+		}
+	}
+	// span is the part of a ring's side along one axis that lies in the box (all of it unfrozen).
+	span := func(axis, ring int) (int, int) {
+		if !frozen {
+			return -ring, ring
+		}
+		return max(-ring, g.lo[axis]-center[axis]), min(ring, g.lo[axis]+g.size[axis]-1-center[axis])
+	}
 	for ring := 0; ring < 64; ring++ {
-		for dx := -ring; dx <= ring; dx++ {
-			for dy := -ring; dy <= ring; dy++ {
+		x0, x1 := span(0, ring)
+		y0, y1 := span(1, ring)
+		z0, z1 := span(2, ring)
+		for dx := x0; dx <= x1; dx++ {
+			for dy := y0; dy <= y1; dy++ {
 				edge := abs(dx) == ring || abs(dy) == ring
-				for dz := -ring; dz <= ring; dz++ {
+				for dz := z0; dz <= z1; dz++ {
 					if !edge && abs(dz) != ring {
 						dz = ring - 1 // inside the shell: jump to its far face
 						continue
 					}
-					for _, i := range g.cells[[3]int{center[0] + dx, center[1] + dy, center[2] + dz}] {
-						consider(i)
-					}
+					visit([3]int{center[0] + dx, center[1] + dy, center[2] + dz})
 				}
 			}
 		}
 		// Every point within ring cells has been seen once n points lie within that distance.
 		if reach := float64(ring) * g.cell; len(best) == n && best[n-1].distance <= reach*reach {
+			break
+		}
+		// Once the ring holds the whole box, every point has been seen.
+		if frozen && x0 == g.lo[0]-center[0] && x1 == g.lo[0]+g.size[0]-1-center[0] &&
+			y0 == g.lo[1]-center[1] && y1 == g.lo[1]+g.size[1]-1-center[1] &&
+			z0 == g.lo[2]-center[2] && z1 == g.lo[2]+g.size[2]-1-center[2] {
 			break
 		}
 	}
