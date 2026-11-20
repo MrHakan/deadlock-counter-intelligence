@@ -391,7 +391,11 @@ func readSources(file string) ([]*source, []string, func(), error) {
 			files = append(files, &sourceFile{entry.Name, entry.Open, int64(entry.UncompressedSize64)})
 		}
 		sources, err := groupSources(files)
-		return sources, skipped, func() { archive.Close() }, err
+		if err != nil { // the caller only closes what it got without an error
+			archive.Close()
+			return nil, nil, nil, err
+		}
+		return sources, skipped, func() { archive.Close() }, nil
 	}
 	if ext := strings.ToLower(filepath.Ext(file)); ext == ".rar" || ext == ".7z" {
 		folder, err := extractArchive(file, os.TempDir())
@@ -399,7 +403,11 @@ func readSources(file string) ([]*source, []string, func(), error) {
 			return nil, nil, nil, err
 		}
 		sources, skipped, err := folderSources(folder)
-		return sources, skipped, func() { os.RemoveAll(folder) }, err
+		if err != nil {
+			os.RemoveAll(folder)
+			return nil, nil, nil, err
+		}
+		return sources, skipped, func() { os.RemoveAll(folder) }, nil
 	}
 	if !strings.EqualFold(filepath.Ext(file), ".vpk") {
 		return nil, nil, nil, errors.New("dlmod installs .zip, .rar, .7z and .vpk files")
