@@ -93,15 +93,20 @@ func heroLabel(codename string) string {
 	return codename
 }
 
-// replaceSound compiles audio for one game path and records it.
+// replaceSound compiles an audio file for one game path and records it.
 func replaceSound(game Game, project *soundProject, gamePath, audioFile string) (source2.SoundInfo, error) {
 	audio, err := os.ReadFile(audioFile)
 	if err != nil {
 		return source2.SoundInfo{}, err
 	}
+	return replaceSoundData(game, project, gamePath, filepath.Base(audioFile), audio)
+}
+
+// replaceSoundData compiles audio (named source, for display) for one game path and records it.
+func replaceSoundData(game Game, project *soundProject, gamePath, source string, audio []byte) (source2.SoundInfo, error) {
 	compiled, info, err := source2.CompileSound(audio)
 	if err != nil {
-		return info, fmt.Errorf("%s: %v", filepath.Base(audioFile), err)
+		return info, fmt.Errorf("%s: %v", source, err)
 	}
 	sum := sha1.Sum(compiled)
 	name := hex.EncodeToString(sum[:10]) + ".vsnd_c"
@@ -112,7 +117,7 @@ func replaceSound(game Game, project *soundProject, gamePath, audioFile string) 
 	if err := os.WriteFile(filepath.Join(folder, name), compiled, 0o644); err != nil {
 		return info, err
 	}
-	project.Replaced[gamePath] = soundReplacement{Source: filepath.Base(audioFile), Compiled: name}
+	project.Replaced[gamePath] = soundReplacement{Source: source, Compiled: name}
 	return info, project.save(game)
 }
 

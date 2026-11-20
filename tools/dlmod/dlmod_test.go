@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/MrHakan/deadlock-modkit/tools/dlmod/source2"
 )
 
 // The SearchPaths layout of the stock gameinfo.gi (build 6864), with Valve's comments shortened.
@@ -201,6 +203,43 @@ func (g fakeGame) addons() []string {
 		names = append(names, item.Name())
 	}
 	return names
+}
+
+// installed opens the VPK of the mod called name, failing the test when it is not installed.
+func (g fakeGame) installed(t *testing.T, name string) *source2.VPKIndex {
+	t.Helper()
+	store, err := openStore(g.Game)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := store.entries()
+	for _, entry := range entries {
+		if entry.Mod != nil && entry.Mod.Name == name && len(entry.Files) > 0 {
+			index, err := source2.OpenVPK(entry.Files[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			return index
+		}
+	}
+	t.Fatalf("no mod called %q is installed", name)
+	return nil
+}
+
+// hasMod reports whether a mod called name is installed.
+func (g fakeGame) hasMod(t *testing.T, name string) bool {
+	t.Helper()
+	store, err := openStore(g.Game)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := store.entries()
+	for _, entry := range entries {
+		if entry.Mod != nil && entry.Mod.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func writeZip(t *testing.T, file string, entries map[string][]byte) string {

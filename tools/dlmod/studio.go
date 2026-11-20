@@ -49,6 +49,9 @@ type studio struct {
 
 	rigKey string
 	rigged *source2.Rigged
+
+	sounds    *source2.VPKIndex // the game's sounds, read on the Sounds tab's first use
+	allSounds []string
 }
 
 // studioOptions are the page's settings, as ImportOptions takes them.
@@ -146,6 +149,11 @@ func (s *studio) routes() http.Handler {
 				w.Write(image)
 				return
 			}
+			if file, ok := result.(download); ok {
+				w.Header().Set("Content-Type", file.contentType)
+				w.Write(file.data)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(result)
 		})
@@ -158,6 +166,10 @@ func (s *studio) routes() http.Handler {
 	api("rig", s.rig)
 	api("bend", s.bend)
 	api("install", s.install)
+	api("sounds", s.soundList)
+	api("sound", s.soundAudio)
+	api("sounds/replace", s.soundReplace)
+	api("sounds/restore", s.soundRestore)
 	return mux
 }
 
