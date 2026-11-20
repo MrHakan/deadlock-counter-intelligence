@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
@@ -135,11 +137,35 @@ func TestStudioPutsAModelOnAHero(t *testing.T) {
 
 	options := studioOptions{Keep: map[string]bool{"sample_body": false, "gun_model": true}}
 	var rig struct {
-		Pose      source2.Pose
-		Positions string
+		Pose       source2.Pose
+		Positions  string
+		Skeleton   struct{ Names []string }
+		Bones      string
+		PieceCount int
 	}
-	if code := call("rig", options, &rig); code != 200 || rig.Positions == "" {
+	if code := call("rig", options, &rig); code != 200 || rig.Positions == "" || len(rig.Skeleton.Names) == 0 || rig.Bones == "" || rig.PieceCount != 1 {
 		t.Fatalf("rig: %d %+v", code, rig)
+	}
+	// Pinning the box (piece 0) to the head makes every vertex follow the head alone.
+	pinned := options
+	pinned.Pins = map[int]string{0: "head"}
+	if code := call("rig", pinned, &rig); code != 200 {
+		t.Fatalf("rig with a pin: %d", code)
+	}
+	head := 0
+	for i, name := range rig.Skeleton.Names {
+		if name == "head" {
+			head = i
+		}
+	}
+	bones, _ := base64.StdEncoding.DecodeString(rig.Bones)
+	for v := 0; v+8 <= len(bones); v += 8 {
+		if int(binary.LittleEndian.Uint16(bones[v:])) != head {
+			t.Fatalf("vertex %d does not follow the head", v/8)
+		}
+	}
+	if code := call("rig", options, &rig); code != 200 { // back to the automatic weights for the rest
+		t.Fatalf("rig: %d", code)
 	}
 	var bent struct{ Positions string }
 	if code := call("bend", source2.Pose{Legs: 20}, &bent); code != 200 || bent.Positions == "" || bent.Positions == rig.Positions {

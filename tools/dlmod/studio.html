@@ -93,6 +93,11 @@ input[type=search], input[type=text] { font: inherit; color: var(--text); backgr
   border-radius: 6px; padding: 6px 8px; resize: vertical; min-height: 34px; }
 .entry textarea:focus { outline: none; border-color: var(--accent-dim); }
 .entry .was { font-size: 11px; color: var(--dim); margin-top: 2px; }
+.joint { display: grid; grid-template-columns: 1fr 52px 120px; gap: 6px; align-items: center; font-size: 12px; padding: 2px 0; }
+.joint span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.joint small { color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+.joint select, #weightBone, #pinBone { font-size: 12px; padding: 3px 4px; }
+.joint.changed span { color: var(--accent); }
 .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 8px; }
 .swatch { border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
 .swatch .halves { display: grid; grid-template-columns: 1fr 1fr; height: 46px; }
@@ -215,6 +220,43 @@ input[type=search], input[type=text] { font: inherit; color: var(--text); backgr
     </div>
   </section>
 
+  <section id="advanced" hidden>
+    <h2>Advanced rig</h2>
+    <div class="chips" id="advTools">
+      <button data-tool="pose" class="on">Pose preview</button><button data-tool="weights">Weights</button>
+      <button data-tool="pin">Pin pieces</button><button data-tool="joints" id="jointsTool">Joint map</button>
+    </div>
+    <div id="tool-pose" style="margin-top:8px">
+      <div class="buttons">
+        <button data-anim="walk">Walk</button><button data-anim="run">Run</button><button data-anim="crouch">Crouch</button>
+        <button data-anim="jump">Jump</button><button data-anim="armsup">Arms up</button><button data-anim="look">Look around</button>
+      </div>
+      <div class="buttons"><button data-anim="">Stop</button></div>
+      <div class="info" style="margin-top:6px">The hero's own skeleton bends here and moves your model by its weights, as the game does.
+        The motions are made up to show how the rig bends; the game's own animation clips are not read yet.</div>
+    </div>
+    <div id="tool-weights" hidden style="margin-top:8px">
+      <select id="weightBone"></select>
+      <div class="info" style="margin-top:6px">Red follows the bone fully, blue not at all. Paint to change it, then apply.</div>
+      <label class="info" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="brushOn"> Paint with the mouse (drag over the model)</label>
+      <div class="row"><label for="brushSize">Brush</label><input type="range" id="brushSize" min="0.5" max="20" step="0.5" value="4"><output id="brushSizeOut">4</output></div>
+      <div class="row"><label for="brushWeight">Weight</label><input type="range" id="brushWeight" min="0" max="1" step="0.05" value="1"><output id="brushWeightOut">100%</output></div>
+      <div class="buttons"><button id="paintApply" disabled>Apply painting</button><button id="paintClear" disabled>Clear painting</button></div>
+    </div>
+    <div id="tool-pin" hidden style="margin-top:8px">
+      <div class="info">Click a piece of your model (a hat, a bag, a sword) and pick the bone it should follow without bending.</div>
+      <div class="info" id="pinPicked" style="margin:6px 0">No piece picked.</div>
+      <select id="pinBone"></select>
+      <div class="buttons"><button id="pinAdd" disabled>Pin to this bone</button></div>
+      <div class="parts" id="pinList"></div>
+    </div>
+    <div id="tool-joints" hidden style="margin-top:8px">
+      <div class="info">Your model's own joints, the vertices each mostly moves, and the hero bone it follows. Change one to remap it.</div>
+      <div id="jointList"></div>
+    </div>
+    <div class="info" id="advInfo" style="margin-top:6px"></div>
+  </section>
+
   <section>
     <h2>6 · Install</h2>
     <button class="primary" id="install" disabled>Install on hero</button>
@@ -329,13 +371,22 @@ function drawHero() {
 }
 
 const textureCache = {};
-function drawModel(positions) {
+// drawModel shows the model at positions; colors (RGB per vertex) replace its materials, for the
+// weight heat map and picked pieces.
+function drawModel(positions, colors) {
   if (!THREE || !state.model) return;
   modelGroup.clear();
   const uvs = state.model.uvs;
   state.model.parts.forEach((part, i) => {
     const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(...part.color.slice(0, 3)), side: THREE.DoubleSide,
       roughness: 0.8, wireframe: $("wire").checked });
+    if (colors) {
+      const g = geometryOf(positions, part.indices, uvs);
+      g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      material.vertexColors = true; material.color.set(0xffffff);
+      modelGroup.add(new THREE.Mesh(g, material));
+      return;
+    }
     if (part.texture) {
       if (!textureCache[i]) {
         textureCache[i] = new THREE.TextureLoader().load(`/api/texture?part=${i}&t=${TOKEN}`);
@@ -352,7 +403,13 @@ function drawModel(positions) {
 // --- fitting, the same as dlmod does it (source2 Model.Fit) ---
 function options() {
   return { keep: state.keep, scale: +$("scale").value, yaw: +$("yaw").value, zup: state.zup,
-    offset: [+$("offx").value, +$("offy").value, +$("offz").value], pose: null };
+    offset: [+$("offx").value, +$("offy").value, +$("offz").value], pose: null,
+    jointMap: adv.joints, pins: adv.pins, paint: paintStrokes() };
+}
+// The advanced rig tools' state; the edits go with every rig and install (options above).
+const adv = { joints: {}, pins: {}, paint: new Map(), tool: "pose", anim: "", picked: -1 };
+function paintStrokes() {
+  return [...adv.paint].map(([bone, painted]) => ({ bone, vertices: [...painted.keys()], weights: [...painted.values()] }));
 }
 function heroBounds() {
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
@@ -409,7 +466,8 @@ function refresh() {
     $(id + "Out").textContent = id === "scale" ? Math.round(v * 100) + "%" : id === "yaw" ? v + "°" : v;
   }
   $("zup").textContent = "Z is up: " + (state.zup ? "on" : "off");
-  if (state.rig) { state.rig = null; $("rigInfo").textContent = "Settings changed: rig again to check."; $("bendButtons").hidden = true; }
+  if (state.rig) { state.rig = null; $("rigInfo").textContent = "Settings changed: rig again to check."; $("bendButtons").hidden = true;
+    $("advanced").hidden = true; stopAnim(); }
   if (state.model && state.hero) drawModel(fitted());
   $("rig").disabled = !(state.model && state.hero);
   $("install").disabled = !(state.model && state.hero);
@@ -502,8 +560,9 @@ $("showModel").onchange = () => modelGroup && (modelGroup.visible = $("showModel
 $("wire").onchange = () => { drawHero(); if (state.model) drawModel(state.bent || state.rig || fitted()); };
 
 // --- rig ---
-$("rig").onclick = async () => {
-  busy("Rigging: matching the pose and copying bone weights…");
+async function doRig(text) {
+  busy(text || "Rigging: matching the pose and copying bone weights…");
+  stopAnim();
   try {
     const result = await api("rig", options());
     state.rig = decodeFloats(result.positions); state.bent = null;
@@ -511,15 +570,261 @@ $("rig").onclick = async () => {
     $("rigInfo").textContent = `Rigged in ${result.seconds.toFixed(1)} s. The hero was bent ${p.Arms > 0 ? "arms down" : p.Arms < 0 ? "arms up" : "arms as they are"} (${p.Arms}°)` +
       `${p.Legs ? `, legs ${p.Legs > 0 ? "apart" : "together"} (${p.Legs}°)` : ""} to match. Shown in the hero's bind pose; try the poses below.`;
     $("bendButtons").hidden = false;
-    drawModel(state.rig);
+    setupAdvanced(result);
+    showTool(adv.tool);
   } catch (e) { $("rigInfo").textContent = e.message; }
   busy();
-};
+}
+$("rig").onclick = () => doRig();
 document.querySelectorAll("[data-bend]").forEach(b => b.onclick = async () => {
   const [arms, legs] = b.dataset.bend.split(",").map(Number);
+  stopAnim();
   try { const result = await api("bend", { Arms: arms, Legs: legs }); state.bent = decodeFloats(result.positions); drawModel(state.bent); }
   catch (e) { $("rigInfo").textContent = e.message; }
 });
+
+// --- advanced rig: pose preview, weights, pins, joint map ---
+function setupAdvanced(result) {
+  if (!result.skeleton) { $("advanced").hidden = true; return; }
+  const bin = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0)).buffer;
+  adv.skeleton = result.skeleton;
+  adv.bones = new Uint16Array(bin(result.bones)); adv.weights = new Float32Array(bin(result.weights));
+  adv.pieces = new Uint32Array(bin(result.pieces)); adv.pieceCount = result.pieceCount;
+  adv.jointMap = result.jointMap || {}; adv.jointVertices = result.jointVertices || {};
+  adv.index = {}; result.skeleton.names.forEach((n, i) => adv.index[n] = i);
+  // Body bones to offer, in the skeleton's order (pelvis first).
+  adv.core = result.skeleton.names.filter((n, i) => result.skeleton.core[i]);
+  for (const id of ["weightBone", "pinBone"]) {
+    const select = $(id), keep = select.value; select.innerHTML = "";
+    for (const n of adv.core) select.add(new Option(n, n));
+    if (adv.core.includes(keep)) select.value = keep; else if (id === "pinBone" && adv.core.includes("head")) select.value = "head";
+  }
+  $("jointsTool").hidden = !Object.keys(adv.jointMap).length;
+  renderPins(); renderJoints();
+  $("advanced").hidden = false;
+  const edits = Object.keys(adv.pins).length + Object.keys(adv.joints).length + adv.paint.size;
+  $("advInfo").textContent = edits ? "Your rig edits are in this rig and go with Install." : "";
+}
+function showTool(tool) {
+  adv.tool = tool;
+  document.querySelectorAll("#advTools button").forEach(b => b.classList.toggle("on", b.dataset.tool === tool));
+  for (const t of ["pose", "weights", "pin", "joints"]) $("tool-" + t).hidden = t !== tool;
+  if (tool !== "pose") stopAnim();
+  redraw();
+}
+document.querySelectorAll("#advTools button").forEach(b => b.onclick = () => showTool(b.dataset.tool));
+// redraw shows the model as the current tool wants it: weights as heat, a picked piece lit.
+function redraw() {
+  if (!state.rig) return;
+  if (adv.tool === "weights" && adv.bones) return drawModel(state.rig, heatColors());
+  if (adv.tool === "pin" && adv.picked >= 0) return drawModel(state.rig, pieceColors(adv.picked));
+  if (!adv.anim) drawModel(state.bent || state.rig);
+}
+function boneWeight(v, bone) {
+  let w = 0;
+  for (let k = 0; k < 4; k++) if (adv.bones[v * 4 + k] === bone) w += adv.weights[v * 4 + k];
+  return w;
+}
+function heatColors() {
+  const name = $("weightBone").value, bone = adv.index[name], painted = adv.paint.get(name);
+  const n = state.rig.length / 3, colors = new Float32Array(n * 3);
+  for (let v = 0; v < n; v++) {
+    let w = painted?.has(v) ? painted.get(v) : boneWeight(v, bone);
+    // blue (none) through green to red (all)
+    colors[v * 3] = Math.min(1, w * 2); colors[v * 3 + 1] = 1 - Math.abs(w - 0.5) * 2; colors[v * 3 + 2] = Math.max(0, 1 - w * 2);
+    if (w === 0) { colors[v * 3] = 0.12; colors[v * 3 + 1] = 0.16; colors[v * 3 + 2] = 0.45; }
+  }
+  return colors;
+}
+function pieceColors(piece) {
+  const n = state.rig.length / 3, colors = new Float32Array(n * 3);
+  for (let v = 0; v < n; v++) {
+    const lit = adv.pieces[v] === piece, pinned = adv.pins[adv.pieces[v]] !== undefined;
+    colors.set(lit ? [0.91, 0.69, 0.29] : pinned ? [0.5, 0.77, 0.54] : [0.45, 0.46, 0.5], v * 3);
+  }
+  return colors;
+}
+$("weightBone").onchange = redraw;
+
+// Picking and painting on the model in the 3D view.
+const ray = THREE ? new THREE.Raycaster() : null;
+function hitModel(event) {
+  if (!ray || !state.rig) return null;
+  const r = renderer.domElement.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2((event.clientX - r.left) / r.width * 2 - 1, -(event.clientY - r.top) / r.height * 2 + 1), camera);
+  const hits = ray.intersectObjects(modelGroup.children, false);
+  return hits.length ? hits[0] : null;
+}
+let pointer = null;
+if (renderer) {
+  const canvas = renderer.domElement;
+  canvas.addEventListener("pointerdown", e => {
+    pointer = { x: e.clientX, y: e.clientY, painting: adv.tool === "weights" && $("brushOn").checked && !$("advanced").hidden };
+    if (pointer.painting) { controls.enabled = false; paintAt(e); }
+  });
+  canvas.addEventListener("pointermove", e => { if (pointer?.painting) paintAt(e); });
+  canvas.addEventListener("pointerup", e => {
+    const click = pointer && Math.hypot(e.clientX - pointer.x, e.clientY - pointer.y) < 4;
+    if (pointer?.painting) { controls.enabled = true; redraw(); }
+    else if (click && adv.tool === "pin" && !$("advanced").hidden) pickPiece(e);
+    pointer = null;
+  });
+}
+function paintAt(event) {
+  const hit = hitModel(event);
+  if (!hit) return;
+  const name = $("weightBone").value, radius = +$("brushSize").value, weight = +$("brushWeight").value;
+  if (!adv.paint.has(name)) adv.paint.set(name, new Map());
+  const painted = adv.paint.get(name), p = hit.point, pos = state.rig, r2 = radius * radius;
+  for (let v = 0; v < pos.length / 3; v++) {
+    const dx = pos[v * 3] - p.x, dy = pos[v * 3 + 1] - p.y, dz = pos[v * 3 + 2] - p.z;
+    if (dx * dx + dy * dy + dz * dz <= r2) painted.set(v, weight);
+  }
+  $("paintApply").disabled = $("paintClear").disabled = false;
+  // Light up what was painted without rebuilding the whole view each move.
+  const colors = modelGroup.children[0]?.geometry.getAttribute("color");
+  if (colors) {
+    const heat = heatColors();
+    for (const mesh of modelGroup.children) { const c = mesh.geometry.getAttribute("color"); c.array.set(heat); c.needsUpdate = true; }
+  }
+}
+$("brushSize").oninput = () => $("brushSizeOut").textContent = $("brushSize").value;
+$("brushWeight").oninput = () => $("brushWeightOut").textContent = Math.round($("brushWeight").value * 100) + "%";
+$("paintApply").onclick = () => doRig("Rigging with your painting…");
+$("paintClear").onclick = () => { adv.paint.clear(); $("paintApply").disabled = $("paintClear").disabled = true; doRig("Rigging without painting…"); };
+
+function pickPiece(event) {
+  const hit = hitModel(event);
+  if (!hit) return;
+  const v = hit.object.geometry.index.array[hit.faceIndex * 3];
+  adv.picked = adv.pieces[v];
+  let count = 0; for (const p of adv.pieces) if (p === adv.picked) count++;
+  $("pinPicked").textContent = `Piece ${adv.picked + 1} of ${adv.pieceCount}: ${count.toLocaleString()} vertices` +
+    (adv.pins[adv.picked] ? `, pinned to ${adv.pins[adv.picked]}` : "");
+  $("pinAdd").disabled = false;
+  redraw();
+}
+$("pinAdd").onclick = () => { if (adv.picked < 0) return; adv.pins[adv.picked] = $("pinBone").value; doRig("Rigging with the pin…"); };
+function renderPins() {
+  const list = $("pinList"); list.innerHTML = "";
+  for (const [piece, bone] of Object.entries(adv.pins)) {
+    const row = document.createElement("label");
+    row.innerHTML = `<span></span><small><button>Remove</button></small>`;
+    row.querySelector("span").textContent = `Piece ${+piece + 1} → ${bone}`;
+    row.querySelector("button").onclick = e => { e.preventDefault(); delete adv.pins[piece]; doRig("Rigging without the pin…"); };
+    list.append(row);
+  }
+}
+function renderJoints() {
+  const list = $("jointList"); list.innerHTML = "";
+  const joints = Object.keys(adv.jointMap).sort((a, b) => (adv.jointVertices[b] || 0) - (adv.jointVertices[a] || 0));
+  for (const joint of joints) {
+    const row = document.createElement("div");
+    row.className = "joint" + (adv.joints[joint] ? " changed" : "");
+    row.innerHTML = `<span></span><small>${(adv.jointVertices[joint] || 0).toLocaleString()}</small><select></select>`;
+    row.querySelector("span").textContent = joint; row.querySelector("span").title = joint;
+    const select = row.querySelector("select");
+    select.add(new Option("auto", ""));
+    for (const n of adv.skeleton.names) select.add(new Option(n, n));
+    select.value = adv.joints[joint] || "";
+    select.options[0].text = "auto: " + (adv.joints[joint] ? "…" : adv.jointMap[joint]);
+    select.onchange = () => { if (select.value) adv.joints[joint] = select.value; else delete adv.joints[joint]; doRig("Rigging with the new joint map…"); };
+    list.append(row);
+  }
+}
+
+// Pose preview: bend the hero's bones and move the model by its weights (linear blend skinning).
+// Bone matrices are 3x4, row-major, as dlmod sends them.
+function mul(a, b) {
+  const o = new Array(12);
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++)
+    o[r * 4 + c] = a[r * 4] * b[c] + a[r * 4 + 1] * b[4 + c] + a[r * 4 + 2] * b[8 + c] + (c === 3 ? a[r * 4 + 3] : 0);
+  return o;
+}
+function inverse(m) { // rotation and uniform scale: the inverse rotation is the transpose over scale squared
+  const s2 = m[0] * m[0] + m[4] * m[4] + m[8] * m[8] || 1;
+  const t = [m[0], m[4], m[8], 0, m[1], m[5], m[9], 0, m[2], m[6], m[10], 0].map(x => x / s2);
+  for (let r = 0; r < 3; r++) t[r * 4 + 3] = -(t[r * 4] * m[3] + t[r * 4 + 1] * m[7] + t[r * 4 + 2] * m[11]);
+  return t;
+}
+function axisAngle(axis, degrees) {
+  const [x, y, z] = axis, a = degrees * Math.PI / 180, c = Math.cos(a), s = Math.sin(a), t = 1 - c;
+  return [t * x * x + c, t * x * y - s * z, t * x * z + s * y, 0, t * x * y + s * z, t * y * y + c, t * y * z - s * x, 0,
+    t * x * z - s * y, t * y * z + s * x, t * z * z + c, 0];
+}
+// A turn about a world axis (X forward, Y to the hero's left, Z up) at a bone, carried by its parents.
+function pose(turns, lift) {
+  const sk = adv.skeleton, n = sk.names.length, world = [], posed = [], skin = [];
+  for (let i = 0; i < n; i++) world.push(sk.world.slice(i * 12, i * 12 + 12));
+  for (let i = 0; i < n; i++) {
+    const parent = sk.parents[i];
+    let local = parent >= 0 ? mul(inverse(world[parent]), world[i]) : world[i].slice();
+    const turn = turns[sk.names[i]];
+    if (turn) { // the world turn, in the bone's own frame: Rb^T * R * Rb
+      const rot = world[i].slice(); rot[3] = rot[7] = rot[11] = 0;
+      local = mul(local, mul(inverse(rot), mul(turn, rot)));
+    }
+    posed.push(parent >= 0 ? mul(posed[parent], local) : local);
+    if (parent < 0 && lift) posed[i][11] += lift;
+  }
+  for (let i = 0; i < n; i++) skin.push(mul(posed[i], inverse(world[i])));
+  return skin;
+}
+function skinned(skin) {
+  const bind = state.rig, out = new Float32Array(bind.length), n = bind.length / 3;
+  for (let v = 0; v < n; v++) {
+    const x = bind[v * 3], y = bind[v * 3 + 1], z = bind[v * 3 + 2];
+    let ox = 0, oy = 0, oz = 0;
+    for (let k = 0; k < 4; k++) {
+      const w = adv.weights[v * 4 + k]; if (!w) continue;
+      const m = skin[adv.bones[v * 4 + k]];
+      ox += w * (m[0] * x + m[1] * y + m[2] * z + m[3]); oy += w * (m[4] * x + m[5] * y + m[6] * z + m[7]); oz += w * (m[8] * x + m[9] * y + m[10] * z + m[11]);
+    }
+    out[v * 3] = ox; out[v * 3 + 1] = oy; out[v * 3 + 2] = oz;
+  }
+  return out;
+}
+const X = [1, 0, 0], Y = [0, 1, 0], Z = [0, 0, 1];
+// Each motion gives the turns of a moment t (seconds). Swinging a leg forward is a turn about -Y.
+const motions = {
+  walk: t => { const s = Math.sin(t * 5), k = Math.max(0, Math.sin(t * 5 + 1.6));
+    return { turns: { leg_upper_L: axisAngle(Y, -28 * s), leg_upper_R: axisAngle(Y, 28 * s), leg_lower_L: axisAngle(Y, 35 * k),
+      leg_lower_R: axisAngle(Y, 35 * Math.max(0, -Math.sin(t * 5 + 1.6))), arm_upper_L: axisAngle(Y, 22 * s), arm_upper_R: axisAngle(Y, -22 * s),
+      spine_1: axisAngle(Z, 6 * s) }, lift: -1.5 * Math.abs(Math.cos(t * 5)) }; },
+  run: t => { const s = Math.sin(t * 9);
+    return { turns: { leg_upper_L: axisAngle(Y, -50 * s), leg_upper_R: axisAngle(Y, 50 * s), leg_lower_L: axisAngle(Y, 70 * Math.max(0, Math.sin(t * 9 + 1.4))),
+      leg_lower_R: axisAngle(Y, 70 * Math.max(0, -Math.sin(t * 9 + 1.4))), arm_upper_L: axisAngle(Y, 45 * s), arm_upper_R: axisAngle(Y, -45 * s),
+      arm_lower_L: axisAngle(Y, -60), arm_lower_R: axisAngle(Y, -60), spine_1: axisAngle(Y, 12) }, lift: -3 * Math.abs(Math.cos(t * 9)) }; },
+  crouch: t => { const d = (1 - Math.cos(t * 2)) / 2;
+    return { turns: { leg_upper_L: axisAngle(Y, -70 * d), leg_upper_R: axisAngle(Y, -70 * d), leg_lower_L: axisAngle(Y, 120 * d),
+      leg_lower_R: axisAngle(Y, 120 * d), ankle_L: axisAngle(Y, -50 * d), ankle_R: axisAngle(Y, -50 * d), spine_1: axisAngle(Y, 25 * d) }, lift: -18 * d }; },
+  jump: t => { const p = (t * 1.2) % 1, up = Math.sin(p * Math.PI), tuck = Math.sin(p * Math.PI * 2) > 0 ? Math.sin(p * Math.PI * 2) : 0;
+    return { turns: { leg_upper_L: axisAngle(Y, -60 * tuck), leg_upper_R: axisAngle(Y, -40 * tuck), leg_lower_L: axisAngle(Y, 100 * tuck),
+      leg_lower_R: axisAngle(Y, 80 * tuck), arm_upper_L: axisAngle(X, 50 * up), arm_upper_R: axisAngle(X, -50 * up) }, lift: 30 * up }; },
+  armsup: t => { const d = (1 - Math.cos(t * 2)) / 2;
+    return { turns: { arm_upper_L: axisAngle(X, 110 * d), arm_upper_R: axisAngle(X, -110 * d), arm_lower_L: axisAngle(X, 20 * d), arm_lower_R: axisAngle(X, -20 * d) } }; },
+  look: t => ({ turns: { neck_0: axisAngle(Z, 35 * Math.sin(t * 1.5)), head: mul(axisAngle(Z, 25 * Math.sin(t * 1.5)), axisAngle(Y, 20 * Math.sin(t * 0.9))),
+    spine_3: axisAngle(Z, 10 * Math.sin(t * 1.5)) } }),
+};
+let animFrame = 0;
+function stopAnim() { adv.anim = ""; cancelAnimationFrame(animFrame); }
+function play(name) {
+  stopAnim();
+  if (!name || !state.rig || !adv.skeleton) { redraw(); return; }
+  adv.anim = name;
+  drawModel(new Float32Array(state.rig));
+  for (const mesh of modelGroup.children) mesh.frustumCulled = false; // a jump leaves the bind pose's bounds
+  const start = performance.now();
+  const frame = now => {
+    if (adv.anim !== name) return;
+    const { turns, lift } = motions[name]((now - start) / 1000);
+    const moved = skinned(pose(turns, lift || 0));
+    for (const mesh of modelGroup.children) { const a = mesh.geometry.getAttribute("position"); a.array.set(moved); a.needsUpdate = true; }
+    animFrame = requestAnimationFrame(frame);
+  };
+  animFrame = requestAnimationFrame(frame);
+}
+document.querySelectorAll("[data-anim]").forEach(b => b.onclick = () => play(b.dataset.anim));
 
 // --- install ---
 $("install").onclick = async () => {

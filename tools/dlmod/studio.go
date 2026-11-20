@@ -64,6 +64,11 @@ type studioOptions struct {
 	ZUp    bool            `json:"zup"`
 	Offset [3]float64      `json:"offset"`
 	Pose   *source2.Pose   `json:"pose"` // nil to match the model's pose automatically
+
+	// The advanced rig tools' edits.
+	JointMap map[string]string     `json:"jointMap"`
+	Pins     map[int]string        `json:"pins"`
+	Paint    []source2.PaintStroke `json:"paint"`
 }
 
 func (o studioOptions) importOptions() source2.ImportOptions {
@@ -71,7 +76,8 @@ func (o studioOptions) importOptions() source2.ImportOptions {
 	for k, v := range o.Keep {
 		keep[k] = v
 	}
-	return source2.ImportOptions{Keep: keep, Scale: o.Scale, Yaw: o.Yaw, ZUp: o.ZUp, Offset: o.Offset}
+	return source2.ImportOptions{Keep: keep, Scale: o.Scale, Yaw: o.Yaw, ZUp: o.ZUp, Offset: o.Offset,
+		JointMap: o.JointMap, Pins: o.Pins, Paint: o.Paint}
 }
 
 // runStudio serves the studio until dlmod is closed. A model file given (dropped on dlmod) is
@@ -185,7 +191,8 @@ func (s *studio) routes() http.Handler {
 }
 
 func readJSON(r *http.Request, into any) error {
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(into); err != nil {
+	// Painted weights of a big model take some megabytes.
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<20)).Decode(into); err != nil {
 		return fmt.Errorf("bad request: %v", err)
 	}
 	return nil
@@ -454,8 +461,65 @@ func (s *studio) rig(r *http.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"pose": rigged.Pose, "positions": floats(rigged.Mesh.Positions),
-		"seconds": time.Since(start).Seconds()}, nil
+	out := map[string]any{"pose": rigged.Pose, "positions": floats(rigged.Mesh.Positions), "seconds": time.Since(start).Seconds()}
+	s.mu.Lock()
+	model, mesh := s.model, s.mesh
+	s.mu.Unlock()
+	// For the advanced rig tools: the hero's skeleton and each vertex's bones, to show weights and
+	// bend the model in the page; the model's pieces, to pin; a rigged model's joints, to remap.
+	skeleton, err := model.Skeleton()
+	if err != nil {
+		return out, nil
+	}
+	index := map[string]int{}
+	var core []bool
+	var world []float64
+	for i, name := range skeleton.Names {
+		index[name] = i
+		core = append(core, source2.CoreBone(name))
+		world = append(world, skeleton.World[i][:]...)
+	}
+	bones := make([]byte, 0, len(rigged.Skin)*8)
+	weights := make([]byte, 0, len(rigged.Skin)*16)
+	for _, influences := range rigged.Skin {
+		for k := 0; k < 4; k++ {
+			bone, weight := 0, float32(0)
+			if k < len(influences) {
+				bone, weight = index[influences[k].Bone], influences[k].Weight
+			}
+			bones = binary.LittleEndian.AppendUint16(bones, uint16(bone))
+			weights = binary.LittleEndian.AppendUint32(weights, math.Float32bits(weight))
+		}
+	}
+	pieces := source2.Pieces(mesh)
+	var pieceIDs []uint32
+	count := 0
+	for _, p := range pieces {
+		pieceIDs = append(pieceIDs, uint32(p))
+		count = max(count, p+1)
+	}
+	joints := map[string]int{} // vertices each joint holds most of
+	if len(mesh.Joints) == len(mesh.Positions) {
+		for _, influences := range mesh.Joints {
+			best := -1
+			for k, j := range influences {
+				if best < 0 || j.Weight > influences[best].Weight {
+					best = k
+				}
+			}
+			if best >= 0 && influences[best].Joint < len(mesh.JointNames) {
+				joints[mesh.JointNames[influences[best].Joint]]++
+			}
+		}
+	}
+	out["skeleton"] = map[string]any{"names": skeleton.Names, "parents": skeleton.Parent, "core": core, "world": world}
+	out["bones"] = base64.StdEncoding.EncodeToString(bones)
+	out["weights"] = base64.StdEncoding.EncodeToString(weights)
+	out["pieces"] = indexBytes(pieceIDs)
+	out["pieceCount"] = count
+	out["jointMap"] = rigged.JointMap
+	out["jointVertices"] = joints
+	return out, nil
 }
 
 func (s *studio) bend(r *http.Request) (any, error) {

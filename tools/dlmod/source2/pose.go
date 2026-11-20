@@ -221,6 +221,10 @@ type heroSample struct {
 
 // coreBone reports whether a bone belongs to the body itself rather than to cloth, hair, props
 // or IK helpers, by the names Valve's hero skeletons use.
+// CoreBone reports whether a hero bone belongs to the body (see coreBone), the bones worth
+// offering when a model's part is put on a bone by hand.
+func CoreBone(name string) bool { return coreBone(name) }
+
 func coreBone(name string) bool {
 	lower := strings.ToLower(name)
 	for _, skip := range []string{"iktarget", "offset", "_end", "ponytail", "cloth", "coat", "cape", "skirt", "hair", "tail", "ear_", "card", "gun", "weapon", "magazine", "muzzle"} {
@@ -440,9 +444,137 @@ func matchPose(samples []heroSample, skeleton *Skeleton, points [][3]float32, ce
 
 // Rigged is an imported model moved into the hero's bind pose, with the bones each vertex follows.
 type Rigged struct {
-	Mesh *ImportedMesh
-	Skin [][]BoneWeight
-	Pose Pose // how the hero was bent to match the model
+	Mesh     *ImportedMesh
+	Skin     [][]BoneWeight
+	Pose     Pose              // how the hero was bent to match the model
+	JointMap map[string]string // a rigged model's joints and the hero bones they became
+}
+
+// PaintStroke sets how much vertices follow a bone, as painted in the studio: weight 1 makes
+// them follow it alone, 0 takes the bone away, and the rest share what is left.
+type PaintStroke struct {
+	Bone     string    `json:"bone"`
+	Vertices []int32   `json:"vertices"`
+	Weights  []float32 `json:"weights"`
+}
+
+// applyRigEdits lays the studio's hand edits over the computed weights: pinned pieces follow one
+// bone, then painted strokes in order.
+func applyRigEdits(mesh *ImportedMesh, skin [][]BoneWeight, skeleton *Skeleton, opts ImportOptions, maxBones int) {
+	if len(opts.Pins) > 0 {
+		pieces := Pieces(mesh)
+		for i, piece := range pieces {
+			if bone, ok := opts.Pins[piece]; ok {
+				if _, known := skeleton.index[bone]; known {
+					skin[i] = []BoneWeight{{bone, 1}}
+				}
+			}
+		}
+	}
+	for _, stroke := range opts.Paint {
+		if _, known := skeleton.index[stroke.Bone]; !known {
+			continue
+		}
+		for k, vertex := range stroke.Vertices {
+			if vertex < 0 || int(vertex) >= len(skin) || k >= len(stroke.Weights) {
+				continue
+			}
+			w := float32(math.Max(0, math.Min(1, float64(stroke.Weights[k]))))
+			var others []BoneWeight
+			var rest float32
+			for _, b := range skin[vertex] {
+				if b.Bone != stroke.Bone {
+					others = append(others, b)
+					rest += b.Weight
+				}
+			}
+			if rest == 0 { // nothing else to share with: the bone keeps it all, or nothing changes
+				if w > 0 {
+					skin[vertex] = []BoneWeight{{stroke.Bone, 1}}
+				}
+				continue
+			}
+			list := make([]BoneWeight, 0, len(others)+1)
+			if w > 0 {
+				list = append(list, BoneWeight{stroke.Bone, w})
+			}
+			for _, b := range others {
+				list = append(list, BoneWeight{b.Bone, b.Weight / rest * (1 - w)})
+			}
+			sort.Slice(list, func(a, b int) bool {
+				if list[a].Weight != list[b].Weight {
+					return list[a].Weight > list[b].Weight
+				}
+				return list[a].Bone < list[b].Bone
+			})
+			list = list[:min(len(list), maxBones)]
+			var sum float32
+			for _, b := range list {
+				sum += b.Weight
+			}
+			for j := range list {
+				list[j].Weight /= sum
+			}
+			skin[vertex] = list
+		}
+	}
+}
+
+// Pieces numbers the separate pieces of a mesh (a hat, a bag, the body), as the studio picks
+// them for pinning: triangles sharing vertices, or vertices at the same spot (texture seams),
+// are one piece. Pieces are numbered in the order of their first vertex.
+func Pieces(mesh *ImportedMesh) []int {
+	n := len(mesh.Positions)
+	parent := make([]int, n)
+	for i := range parent {
+		parent[i] = i
+	}
+	find := func(i int) int {
+		for parent[i] != i {
+			parent[i] = parent[parent[i]]
+			i = parent[i]
+		}
+		return i
+	}
+	union := func(a, b int) {
+		if a < 0 || b < 0 || a >= n || b >= n {
+			return
+		}
+		if ra, rb := find(a), find(b); ra != rb {
+			if ra < rb {
+				parent[rb] = ra
+			} else {
+				parent[ra] = rb
+			}
+		}
+	}
+	for _, part := range mesh.Parts {
+		for t := 0; t+2 < len(part.Indices); t += 3 {
+			union(int(part.Indices[t]), int(part.Indices[t+1]))
+			union(int(part.Indices[t]), int(part.Indices[t+2]))
+		}
+	}
+	at := map[[3]int32]int{}
+	for i, p := range mesh.Positions {
+		key := [3]int32{int32(math.Round(float64(p[0]) * 1000)), int32(math.Round(float64(p[1]) * 1000)), int32(math.Round(float64(p[2]) * 1000))}
+		if j, ok := at[key]; ok {
+			union(i, j)
+		} else {
+			at[key] = i
+		}
+	}
+	ids := map[int]int{}
+	out := make([]int, n)
+	for i := range out {
+		root := find(i)
+		id, ok := ids[root]
+		if !ok {
+			id = len(ids)
+			ids[root] = id
+		}
+		out[i] = id
+	}
+	return out
 }
 
 // AutoRig gives each vertex of a fitted model the bones of the nearest points of the hero's own
@@ -571,10 +703,13 @@ func (m *Model) AutoRig(fitted *ImportedMesh, opts ImportOptions, pose *Pose, ma
 		out.Skin[i] = kept
 	}
 	if len(fitted.Joints) == len(fitted.Positions) && skeleton != nil {
-		mapJoints(fitted, out.Skin, distances, skeleton, maxBones, math.Max(hi[2]-lo[2], 1))
+		out.JointMap = mapJoints(fitted, out.Skin, distances, skeleton, maxBones, math.Max(hi[2]-lo[2], 1), opts.JointMap)
 	} else {
 		fixed := rigidParts(fitted, out.Skin, labels, distances, math.Max(hi[2]-lo[2], 1), skeleton)
 		smoothWeights(fitted, out.Skin, fixed, 8, maxBones)
+	}
+	if skeleton != nil {
+		applyRigEdits(fitted, out.Skin, skeleton, opts, maxBones)
 	}
 	var inverses [limbCount]mat34
 	for limb := range inverses {
@@ -793,42 +928,9 @@ func rigidParts(mesh *ImportedMesh, skin [][]BoneWeight, labels []int, distances
 		return bone
 	}
 	n := len(mesh.Positions)
-	parent := make([]int, n)
-	for i := range parent {
-		parent[i] = i
-	}
-	var find func(int) int
-	find = func(i int) int {
-		for parent[i] != i {
-			parent[i] = parent[parent[i]]
-			i = parent[i]
-		}
-		return i
-	}
-	union := func(a, b int) {
-		if ra, rb := find(a), find(b); ra != rb {
-			parent[ra] = rb
-		}
-	}
-	for _, part := range mesh.Parts {
-		for t := 0; t+2 < len(part.Indices); t += 3 {
-			union(int(part.Indices[t]), int(part.Indices[t+1]))
-			union(int(part.Indices[t]), int(part.Indices[t+2]))
-		}
-	}
-	// Vertices split along texture seams sit at the same spot and belong together.
-	at := map[[3]int32]int{}
-	for i, p := range mesh.Positions {
-		key := [3]int32{int32(math.Round(float64(p[0]) * 1000)), int32(math.Round(float64(p[1]) * 1000)), int32(math.Round(float64(p[2]) * 1000))}
-		if j, ok := at[key]; ok {
-			union(i, j)
-		} else {
-			at[key] = i
-		}
-	}
 	groups := map[int][]int{}
-	for i := 0; i < n; i++ {
-		groups[find(i)] = append(groups[find(i)], i)
+	for i, piece := range Pieces(mesh) {
+		groups[piece] = append(groups[piece], i)
 	}
 	fixed := make([]bool, n)
 	for _, members := range groups {
@@ -868,8 +970,10 @@ func rigidParts(mesh *ImportedMesh, skin [][]BoneWeight, labels []int, distances
 // the bone of the same name when the hero has one, else the bone the skeleton's shape puts it on
 // (structuralJoints), else the hero bone its vertices voted for most (closer vertices count
 // more). Props stay on the joint the artist put them on, and the weights stay as smooth as the
-// artist painted them.
-func mapJoints(mesh *ImportedMesh, skin [][]BoneWeight, distances []float64, skeleton *Skeleton, maxBones int, height float64) {
+// artist painted them. forced (joint name -> bone, from the studio) overrides all of that. It
+// returns each skinned joint's bone, by joint name.
+func mapJoints(mesh *ImportedMesh, skin [][]BoneWeight, distances []float64, skeleton *Skeleton, maxBones int, height float64,
+	forced map[string]string) map[string]string {
 	votes := map[int]map[string]float64{}
 	for i, joints := range mesh.Joints {
 		closeness := 1 / math.Pow(distances[i]+height*0.002, 2)
@@ -915,6 +1019,13 @@ func mapJoints(mesh *ImportedMesh, skin [][]BoneWeight, distances []float64, ske
 		structural = structuralJoints(mesh, skeleton)
 	}
 	mapping := map[int]string{}
+	for joint, name := range mesh.JointNames {
+		if bone, ok := forced[name]; ok {
+			if _, known := skeleton.index[bone]; known {
+				mapping[joint] = bone
+			}
+		}
+	}
 	var resolve func(joint, depth int) string
 	resolve = func(joint, depth int) string {
 		if bone, ok := mapping[joint]; ok {
@@ -990,6 +1101,13 @@ func mapJoints(mesh *ImportedMesh, skin [][]BoneWeight, distances []float64, ske
 		}
 		skin[i] = list
 	}
+	out := map[string]string{}
+	for joint := range votes {
+		if name := nameOf(joint); name != "" && mapping[joint] != "" {
+			out[name] = mapping[joint]
+		}
+	}
+	return out
 }
 
 // Bend moves a rigged model's vertices as the hero's limbs would in a pose, to check the weights

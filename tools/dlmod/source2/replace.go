@@ -62,6 +62,11 @@ type ImportOptions struct {
 	Offset    [3]float64        // moved after fitting, in game units (Z is up)
 	ZUp       bool              // the file is Z-up (Blender's axes) rather than Y-up
 	Materials map[string]string // imported part name to the material it is drawn with
+
+	// Hand edits from the studio's rig tools, applied over the computed weights.
+	JointMap map[string]string // a rigged model's joint (by name) -> hero bone, over the automatic choice
+	Pins     map[int]string    // a piece of the model (see Pieces) -> the one hero bone it follows
+	Paint    []PaintStroke     // painted weights, in order
 }
 
 func (o ImportOptions) kept(name string) bool { return o.Keep[baseName(name)] }

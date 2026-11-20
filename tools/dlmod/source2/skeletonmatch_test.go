@@ -5,6 +5,40 @@ import (
 	"testing"
 )
 
+// The studio's hand edits: a pinned piece follows one bone, painting sets a bone's share and the
+// others share the rest, and painting a bone to nothing hands its share to the others.
+func TestRigEdits(t *testing.T) {
+	model, _ := LoadModel(SampleHero())
+	skeleton, _ := model.Skeleton()
+	mesh := &ImportedMesh{
+		Positions: [][3]float32{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {5, 5, 5}, {6, 5, 5}, {5, 6, 5}},
+		Parts:     []ImportedPart{{Indices: []uint32{0, 1, 2}}, {Indices: []uint32{3, 4, 5}}},
+	}
+	if pieces := Pieces(mesh); pieces[0] != 0 || pieces[2] != 0 || pieces[3] != 1 || pieces[5] != 1 {
+		t.Fatalf("two triangles are two pieces: %v", pieces)
+	}
+	skin := make([][]BoneWeight, 6)
+	for i := range skin {
+		skin[i] = []BoneWeight{{"spine_3", 0.75}, {"pelvis", 0.25}}
+	}
+	applyRigEdits(mesh, skin, skeleton, ImportOptions{
+		Pins: map[int]string{1: "head"},
+		Paint: []PaintStroke{
+			{Bone: "hand_L", Vertices: []int32{0}, Weights: []float32{0.5}},
+			{Bone: "spine_3", Vertices: []int32{1}, Weights: []float32{0}},
+		},
+	}, 4)
+	if len(skin[4]) != 1 || skin[4][0] != (BoneWeight{"head", 1}) {
+		t.Errorf("the pinned piece follows the head: %v", skin[4])
+	}
+	if skin[0][0] != (BoneWeight{"hand_L", 0.5}) || skin[0][1] != (BoneWeight{"spine_3", 0.375}) {
+		t.Errorf("painted half to the hand, the rest shared: %v", skin[0])
+	}
+	if len(skin[1]) != 1 || skin[1][0] != (BoneWeight{"pelvis", 1}) {
+		t.Errorf("painting the spine away leaves the pelvis: %v", skin[1])
+	}
+}
+
 // A rig with names that say nothing, shaped like Meshy's SmartRig: an empty armature node, hips,
 // a joint the legs hang from, a spine, a chest with a neck chain, two arms (one with fingers and a
 // twist bone, one with an end joint) and a cape. Each joint lands on the hero bone its place in
@@ -69,7 +103,10 @@ func TestStructuralJoints(t *testing.T) {
 	for i := range skin {
 		skin[i] = []BoneWeight{{"pelvis", 1}}
 	}
-	mapJoints(mesh, skin, make([]float64, len(skin)), skeleton, 4, 85)
+	mapping := mapJoints(mesh, skin, make([]float64, len(skin)), skeleton, 4, 85, nil)
+	if mapping["Bone_017"] != "hand_L" {
+		t.Errorf("the mapping is returned by joint name: %v", mapping)
+	}
 	for i, j := range joints[1:] {
 		if got := skin[i][0].Bone; len(skin[i]) != 1 || got != j.want {
 			t.Errorf("Bone_%03d went to %v, want %s", i+1, skin[i], j.want)
