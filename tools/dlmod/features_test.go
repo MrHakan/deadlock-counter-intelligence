@@ -203,10 +203,10 @@ func TestProfilesInTheFullScreenView(t *testing.T) {
 func TestOnlySecureAddressesAreDownloaded(t *testing.T) {
 	for address, ok := range map[string]bool{
 		"https://github.com/MrHakan/deadlock-modkit/releases/download/v0.3.0/x.zip": true,
-		"http://127.0.0.1:8080/releases": true,
-		"http://example.com/x.zip":       false,
-		"file:///etc/passwd":             false,
-		"ftp://example.com/x.zip":        false,
+		"http://127.0.0.1:8080/releases":                                            true,
+		"http://example.com/x.zip":                                                  false,
+		"file:///etc/passwd":                                                        false,
+		"ftp://example.com/x.zip":                                                   false,
 	} {
 		if err := allowedURL(address); (err == nil) != ok {
 			t.Errorf("allowedURL(%q) = %v", address, err)
