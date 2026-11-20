@@ -212,6 +212,37 @@ func TestPromptAndNarrowScreens(t *testing.T) {
 	}
 }
 
+// The keys at the bottom say what they do, over two lines when one is not enough; Tab hides them
+// down to a reminder, and dlmod remembers that.
+func TestKeyHints(t *testing.T) {
+	game := newFakeGame(t)
+	ui := newTestTUI(t, game.Game)
+	bottom := func() []string {
+		lines := strings.Split(ui.screen(), "\n")
+		return lines[len(lines)-2:]
+	}
+	ui.width = 200
+	if got := bottom(); !strings.Contains(got[1], "m model studio") || !strings.Contains(got[1], "Tab hide keys") || strings.Contains(got[0], " q ") {
+		t.Fatalf("a wide window has one line of keys:\n%s", strings.Join(got, "\n"))
+	}
+	ui.width = 100
+	if got := bottom(); !strings.Contains(got[0], "s sounds") || !strings.Contains(got[1], "q quit") {
+		t.Fatalf("a narrower one wraps them over two lines, descriptions kept:\n%s", strings.Join(got, "\n"))
+	}
+	ui.handle([]byte("\t"))
+	if got := bottom(); !strings.Contains(got[1], "Tab show keys") || strings.Contains(ui.screen(), "model studio") {
+		t.Fatalf("Tab hides the keys:\n%s", ui.screen())
+	}
+	again := newTestTUI(t, game.Game)
+	if !strings.Contains(again.screen(), "Tab show keys") {
+		t.Fatalf("hidden keys stay hidden next time:\n%s", again.screen())
+	}
+	again.handle([]byte("\t"))
+	if !strings.Contains(again.screen(), "Tab hide keys") {
+		t.Fatalf("Tab shows them again:\n%s", again.screen())
+	}
+}
+
 type countingWriter struct{ writes int }
 
 func (w *countingWriter) Write(data []byte) (int, error) { w.writes++; return len(data), nil }

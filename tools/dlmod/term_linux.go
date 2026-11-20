@@ -50,8 +50,8 @@ func colorSupported() bool {
 		ioctl(os.Stdout.Fd(), syscall.TCGETS, unsafe.Pointer(&state)) == nil
 }
 
-// gameRunning looks for Proton's deadlock.exe among the process names in /proc.
-func gameRunning() bool {
+// deadlockRunning looks for Proton's deadlock.exe among the process names in /proc.
+func deadlockRunning() bool {
 	names, _ := filepath.Glob("/proc/[0-9]*/comm")
 	for _, name := range names {
 		if data, err := os.ReadFile(name); err == nil && bytes.EqualFold(bytes.TrimSpace(data), []byte("deadlock.exe")) {

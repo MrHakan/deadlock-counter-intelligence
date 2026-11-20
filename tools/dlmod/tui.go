@@ -82,6 +82,9 @@ func parseKeys(data []byte) []key {
 		case b == 0x15:
 			keys = append(keys, key{name: "ctrl+u"})
 			data = data[1:]
+		case b == '\t':
+			keys = append(keys, key{name: "tab"})
+			data = data[1:]
 		case b < 0x20:
 			data = data[1:]
 		default:
@@ -282,7 +285,8 @@ type tui struct {
 	previewDone chan previewResult
 	loadImage   func(string) (image.Image, error) // tests replace the download
 	imageAt     imageArea
-	under       int // the mode a question or the help screen covers
+	under       int    // the mode a question or the help screen covers
+	studioURL   string // the model studio, once m started it
 
 	keys  <-chan []byte
 	out   *bufio.Writer
@@ -442,6 +446,10 @@ func (t *tui) paste(text string) {
 }
 
 func (t *tui) press(k key) bool {
+	if k.name == "tab" && t.mode != modeQuestion {
+		t.toggleKeys()
+		return false
+	}
 	switch t.mode {
 	case modeHelp:
 		t.mode = modeList
@@ -555,6 +563,8 @@ func (t *tui) press(k key) bool {
 			t.openBrowser(false)
 		case 's':
 			t.openSounds()
+		case 'm':
+			t.openStudio()
 		case '?', 'h':
 			t.mode, t.under = modeHelp, modeList
 		}
@@ -700,6 +710,37 @@ func (t *tui) profiles() {
 			t.act(func() error { return t.store.useProfile(t, name) })
 			return
 		}
+	}
+}
+
+// toggleKeys shows or hides the key hints at the bottom, and remembers the choice.
+func (t *tui) toggleKeys() {
+	t.store.manifest.HideKeys = !t.store.manifest.HideKeys
+	if err := t.store.save(); err != nil {
+		t.note(toneBad, err.Error())
+	}
+}
+
+// openStudio starts the model studio in the background the first time and opens it in the
+// browser; it runs until dlmod quits.
+func (t *tui) openStudio() {
+	t.notes = nil
+	if t.studioURL == "" {
+		t.busy = "Starting the model studio…"
+		t.render()
+		url, serve, _, err := startStudio(t.game)
+		t.busy = ""
+		if err != nil {
+			t.note(toneBad, err.Error())
+			return
+		}
+		go serve()
+		t.studioURL = url
+	}
+	t.note(toneGood, "The model studio is open in your browser: "+t.studioURL)
+	t.note(toneInfo, "It runs while dlmod is open. Pick a hero there and drop a .glb, .gltf or .obj on it.")
+	if err := openInPlayer(t.studioURL); err != nil {
+		t.note(toneWarn, "Open the address above in your browser.")
 	}
 }
 
@@ -1210,25 +1251,47 @@ func (t *tui) drawBottom(c *canvas, compact bool) {
 	case modeSounds:
 		hints = t.soundHints()
 	default:
-		hints = [][2]string{{"↑↓", "select"}, {"Space", "on/off"}, {"b", "browse online"}, {"s", "sounds"}, {"i", "install"}, {"d", "delete"},
-			{"f", "profiles"}, {"u", "update HUD"}, {"r", "repair"}, {"p", "play"}, {"?", "help"}, {"q", "quit"}}
+		hints = [][2]string{{"↑↓", "select"}, {"Space", "on/off"}, {"b", "browse online"}, {"s", "sounds"}, {"m", "model studio"},
+			{"i", "install"}, {"d", "delete"}, {"f", "profiles"}, {"u", "update HUD"}, {"r", "repair"}, {"p", "play"},
+			{"?", "help"}, {"q", "quit"}}
 	}
-	full := 0
-	for _, hint := range hints {
-		full += utf8.RuneCountInString(hint[0]) + utf8.RuneCountInString(hint[1]) + 3
+	t.drawHints(c, hints)
+}
+
+// drawHints lists keys and what they do, the descriptions in grey, over up to two lines; a
+// window too narrow even for that shows the keys alone. Tab hides them (remembered in mods.json)
+// down to a reminder of how to bring them back.
+func (t *tui) drawHints(c *canvas, hints [][2]string) {
+	p := t.p
+	if t.mode != modeQuestion && t.store != nil && t.store.manifest.HideKeys {
+		c.line(seg{" Tab", p.dim + p.bold}, seg{" show keys", p.dim})
+		return
 	}
-	var segments []seg
+	if t.mode != modeQuestion {
+		hints = append(hints, [2]string{"Tab", "hide keys"})
+	}
+	var lines [][]seg
+	var current []seg
+	used := 0
 	for _, hint := range hints {
-		if full <= c.width {
-			segments = append(segments, seg{" " + hint[0], p.bold + p.cyan}, seg{" " + hint[1] + " ", p.dim})
-		} else {
-			segments = append(segments, seg{" " + hint[0], p.bold + p.cyan}) // narrow window: keys only
+		width := utf8.RuneCountInString(hint[0]) + utf8.RuneCountInString(hint[1]) + 3
+		if used > 0 && used+width > c.width {
+			lines, current, used = append(lines, current), nil, 0
 		}
+		current = append(current, seg{" " + hint[0], p.bold + p.cyan}, seg{" " + hint[1] + " ", p.dim})
+		used += width
 	}
-	if full > c.width {
-		segments = append(segments, seg{"   ? help", p.dim})
+	lines = append(lines, current)
+	if len(lines) > 2 { // narrow window: keys only
+		var keys []seg
+		for _, hint := range hints {
+			keys = append(keys, seg{" " + hint[0], p.bold + p.cyan})
+		}
+		lines = [][]seg{append(keys, seg{"   ? help", p.dim})}
 	}
-	c.line(segments...)
+	for _, line := range lines {
+		c.line(line...)
+	}
 }
 
 func (t *tui) drawHelp(c *canvas) {
@@ -1265,6 +1328,7 @@ func (t *tui) drawHelp(c *canvas) {
 		{"Space  Enter", "switch the selected mod on or off"},
 		{"b", "browse mods online (the Deadlock Mod Manager catalog, from GameBanana) and install them"},
 		{"s", "sounds: listen to any game sound and replace it with your own .wav or .mp3"},
+		{"m", "model studio: put your own 3D model on a hero, in your browser"},
 		{"i", "install a mod; dragging a .zip, .rar, .7z or .vpk file into the window works too"},
 		{"d  Delete", "delete the selected mod"},
 		{"f", "profiles: switch between saved sets of mods, or save the current one"},
@@ -1272,6 +1336,7 @@ func (t *tui) drawHelp(c *canvas) {
 		{"r", "repair gameinfo.gi after a game update"},
 		{"x", "undo dlmod's gameinfo.gi change; mods stay installed but stop loading"},
 		{"p", "start Deadlock through Steam"},
+		{"Tab", "hide or show the keys at the bottom (remembered)"},
 		{"q  Esc", "quit"},
 	}
 	c.line(seg{" Keys", p.bold})
@@ -1285,7 +1350,7 @@ func (t *tui) drawHelp(c *canvas) {
 		"Game updates and Verify integrity reset gameinfo.gi. This screen then shows MODS OFF; press r.",
 		"When two mods change the same file only one of them takes effect, so a ! marks both.",
 		"Interface mods built for an older game build can stop Deadlock from starting after an update.",
-		"To put your own 3D model on a hero, drop a .glb, .gltf or .obj file on dlmod, or run dlmod studio: it opens the model studio in your browser.",
+		"To put your own 3D model on a hero, press m, drop a .glb, .gltf or .obj file on dlmod, or run dlmod studio: it opens the model studio in your browser.",
 	} {
 		for _, line := range wrap(text, c.width-4) {
 			c.line(seg{"   " + line, p.dim})

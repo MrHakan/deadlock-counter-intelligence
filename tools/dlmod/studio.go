@@ -35,7 +35,6 @@ var studioPage string
 type studio struct {
 	mu    sync.Mutex
 	game  Game
-	store *Store
 	index *source2.VPKIndex
 	token string
 
@@ -72,36 +71,49 @@ func (o studioOptions) importOptions() source2.ImportOptions {
 
 // runStudio serves the studio until dlmod is closed. A model file given (dropped on dlmod) is
 // loaded before the page opens, with the files next to it that it names.
-func runStudio(ui *UI, store *Store, game Game, preload ...string) error {
-	index, err := openHeroModels(game)
+func runStudio(ui *UI, game Game, preload ...string) error {
+	url, serve, loaded, err := startStudio(game, preload...)
 	if err != nil {
 		return err
 	}
-	secret := make([]byte, 16)
-	if _, err := rand.Read(secret); err != nil {
-		return err
+	if loaded != "" {
+		ui.say("%s", loaded)
 	}
-	s := &studio{game: game, store: store, index: index, token: hex.EncodeToString(secret)}
-	if len(preload) > 0 {
-		mesh, err := source2.LoadMeshFile(preload[0])
-		if err != nil {
-			return err
-		}
-		s.mesh, s.fileName = mesh, filepath.Base(preload[0])
-		ui.say("Loaded %s: %d triangles.", s.fileName, mesh.TriangleCount())
-	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return err
-	}
-	url := fmt.Sprintf("http://%s/?t=%s", listener.Addr(), s.token)
 	ui.say("The model studio is at %s", url)
 	ui.say("It opens in your browser; leave this window open while you use it, and press Ctrl+C to stop.")
 	if err := openInPlayer(url); err != nil {
 		ui.say("Open the address above in your browser.")
 	}
+	return serve()
+}
+
+// startStudio gets the studio ready on a port of this computer and returns its address and the
+// function that serves it (until dlmod quits), so the full-screen view can run it in the
+// background. loaded describes a preloaded model.
+func startStudio(game Game, preload ...string) (url string, serve func() error, loaded string, err error) {
+	index, err := openHeroModels(game)
+	if err != nil {
+		return "", nil, "", err
+	}
+	secret := make([]byte, 16)
+	if _, err := rand.Read(secret); err != nil {
+		return "", nil, "", err
+	}
+	s := &studio{game: game, index: index, token: hex.EncodeToString(secret)}
+	if len(preload) > 0 {
+		mesh, err := source2.LoadMeshFile(preload[0])
+		if err != nil {
+			return "", nil, "", err
+		}
+		s.mesh, s.fileName = mesh, filepath.Base(preload[0])
+		loaded = fmt.Sprintf("Loaded %s: %d triangles.", s.fileName, mesh.TriangleCount())
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", nil, "", err
+	}
 	server := &http.Server{Handler: s.routes(), ReadHeaderTimeout: 10 * time.Second}
-	return server.Serve(listener)
+	return fmt.Sprintf("http://%s/?t=%s", listener.Addr(), s.token), func() error { return server.Serve(listener) }, loaded, nil
 }
 
 func (s *studio) routes() http.Handler {
@@ -477,9 +489,15 @@ func (s *studio) install(r *http.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Read the mod list again: dlmod's full-screen view may have changed it since the studio
+	// opened, and installing from a stale list would undo that.
+	store, err := openStore(s.game)
+	if err != nil {
+		return nil, err
+	}
 	p := &webPrompter{}
 	p.messages = append(p.messages, result.Notes...)
-	if err := installModel(p, s.store, hero, result); err != nil {
+	if err := installModel(p, store, hero, result); err != nil {
 		return nil, err
 	}
 	if err := ensurePatched(p, s.game); err != nil {

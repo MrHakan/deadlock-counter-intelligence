@@ -53,6 +53,7 @@ type Manifest struct {
 	NextID   int              `json:"nextId"`
 	Mods     []*Mod           `json:"mods"`
 	Profiles map[string][]int `json:"profiles,omitempty"` // profile name -> IDs of the mods it switches on
+	HideKeys bool             `json:"hideKeys,omitempty"` // the full-screen view hides its key hints (Tab)
 }
 
 // Entry is one mod: a filled slot in citadel/addons, or a switched-off mod in dlmod's folder.

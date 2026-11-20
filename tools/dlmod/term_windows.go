@@ -95,9 +95,9 @@ func colorSupported() bool {
 	return err == nil
 }
 
-// gameRunning walks the process list through the Toolhelp API, which takes about a millisecond,
-// instead of starting tasklist.exe.
-func gameRunning() bool {
+// deadlockRunning walks the process list through the Toolhelp API, which takes about a
+// millisecond, instead of starting tasklist.exe.
+func deadlockRunning() bool {
 	snapshot, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return false

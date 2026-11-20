@@ -408,7 +408,7 @@ func execute(ui *UI, game Game, command string, args []string, opts options) err
 	case "model":
 		return modelCommand(ui, store, game, args, opts)
 	case "studio":
-		return runStudio(ui, store, game, args...)
+		return runStudio(ui, game, args...)
 	case "extract":
 		if len(args) < 1 || len(args) > 2 {
 			return errors.New("name what to extract, for example: dlmod extract models/heroes_staging/haze")

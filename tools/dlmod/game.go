@@ -14,6 +14,10 @@ import (
 
 const appID = "1422450"
 
+// gameRunning reports whether Deadlock is open. Tests replace it, so they pass on a computer
+// where the game is running.
+var gameRunning = deadlockRunning
+
 // Game is a Deadlock installation; Root holds the game folder.
 type Game struct{ Root string }
 

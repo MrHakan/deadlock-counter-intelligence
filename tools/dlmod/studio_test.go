@@ -35,15 +35,19 @@ func TestStudioPutsAModelOnAHero(t *testing.T) {
 	game.write("game/citadel/pak01_dir.vpk", source2.WriteVPK(map[string][]byte{
 		heroModels["wraith"] + "_c": source2.SampleHero(),
 	}))
-	store, err := openStore(game.Game)
-	if err != nil {
-		t.Fatal(err)
-	}
 	index, err := openHeroModels(game.Game)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &studio{game: game.Game, store: store, index: index, token: "secret"}
+	s := &studio{game: game.Game, index: index, token: "secret"}
+	entries := func() []*Entry {
+		store, err := openStore(game.Game) // the studio writes the mod list itself
+		if err != nil {
+			t.Fatal(err)
+		}
+		list, _ := store.entries()
+		return list
+	}
 	server := httptest.NewServer(s.routes())
 	defer server.Close()
 	call := func(name string, body any, into any) int {
@@ -148,9 +152,8 @@ func TestStudioPutsAModelOnAHero(t *testing.T) {
 	if code := call("install", options, &installed); code != 200 {
 		t.Fatalf("install: %d %+v", code, installed)
 	}
-	entries, _ := store.entries()
-	if len(entries) != 1 || entries[0].Name() != "Custom model: Wraith" {
-		t.Fatalf("the custom model is installed as a mod: %v (%v)", entries, installed.Messages)
+	if list := entries(); len(list) != 1 || list[0].Name() != "Custom model: Wraith" {
+		t.Fatalf("the custom model is installed as a mod: %v (%v)", list, installed.Messages)
 	}
 	vpk, err := source2.OpenVPK(filepath.Join(game.Addons(), "pak01_dir.vpk"))
 	if err != nil {
@@ -164,8 +167,39 @@ func TestStudioPutsAModelOnAHero(t *testing.T) {
 	// Installing again replaces the hero's previous custom model instead of adding a second.
 	options.Scale = 0.9
 	call("install", options, &installed)
-	if entries, _ = store.entries(); len(entries) != 1 {
-		t.Fatalf("a second import replaces the first: %v %v", entries, installed.Messages)
+	if list := entries(); len(list) != 1 {
+		t.Fatalf("a second import replaces the first: %v %v", list, installed.Messages)
+	}
+}
+
+// m in the full-screen view starts the studio in the background and opens it in the browser;
+// pressing it again reopens the same studio.
+func TestStudioFromTheFullScreenView(t *testing.T) {
+	game := newFakeGame(t)
+	game.write("game/citadel/pak01_dir.vpk", source2.WriteVPK(map[string][]byte{
+		heroModels["wraith"] + "_c": source2.SampleHero(),
+	}))
+	var opened []string
+	saved := openInPlayer
+	openInPlayer = func(url string) error { opened = append(opened, url); return nil }
+	defer func() { openInPlayer = saved }()
+
+	ui := newTestTUI(t, game.Game)
+	ui.handle([]byte("m"))
+	if len(opened) != 1 || !strings.Contains(ui.screen(), "model studio is open") {
+		t.Fatalf("m opens the studio: %v\n%s", opened, ui.screen())
+	}
+	response, err := http.Get(opened[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != 200 {
+		t.Fatalf("the studio answers at %s: %d", opened[0], response.StatusCode)
+	}
+	ui.handle([]byte("m"))
+	if len(opened) != 2 || opened[1] != opened[0] {
+		t.Fatalf("m again reopens the same studio: %v", opened)
 	}
 }
 

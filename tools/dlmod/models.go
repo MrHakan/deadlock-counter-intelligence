@@ -176,10 +176,10 @@ func installModel(p prompter, store *Store, id string, result *source2.ImportRes
 // modelCommand is "dlmod model <hero> <file>": import and install without the studio.
 func modelCommand(ui *UI, store *Store, game Game, args []string, opts options) error {
 	if len(args) == 0 {
-		return runStudio(ui, store, game)
+		return runStudio(ui, game)
 	}
 	if len(args) == 1 && isModelFile(args[0]) {
-		return runStudio(ui, store, game, args[0])
+		return runStudio(ui, game, args[0])
 	}
 	if len(args) != 2 {
 		return errors.New("name a hero and a model file, for example: dlmod model wraith model.glb (or dlmod studio)")
