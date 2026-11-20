@@ -1,6 +1,13 @@
-# Deadlock Counter Intelligence
+# Deadlock Modkit
 
-An experimental Panorama HUD for Deadlock. Open the scoreboard or shop to see:
+Tools for Deadlock players and modders:
+
+- **Counter Intelligence**, an experimental in-game HUD that suggests counter items against the enemy lineup (below).
+- **[dlmod](#with-dlmod-no-mod-manager)**, a 3 MB mod manager in the terminal: it installs mods, switches them on and off, browses and downloads mods from GameBanana with previews, and repairs `gameinfo.gi` after game updates.
+
+## Counter Intelligence HUD
+
+Open the scoreboard or shop to see:
 
 - **Counter items for the enemy lineup.** The three items from the reference counter table that answer the most enemy heroes, with soul price, item category, what the item does against them (for example *Anti-heal* or *CC immunity*), and the enemy heroes it counters. Items you already bought this match are left out.
 - **What to buy now.** A **BUY NOW** badge marks the first suggestion your souls can pay for, and prices you cannot reach yet turn grey.
@@ -66,7 +73,7 @@ Close Deadlock first, and use one install method only: two tools editing the sam
 
 `dlmod` is a 3 MB program in [`tools/dlmod`](tools/dlmod). It uses only Go's standard library and has no installer or background service. It finds Deadlock through Steam, copies mods into `game/citadel/addons` under free `pakNN_dir.vpk` names, and edits `gameinfo.gi` so the game loads that folder. It works with any VPK mod, not just this one, and installs `.zip`, `.rar` and `.7z` downloads. It goes online only when you browse or download mods or update the HUD, through the `curl` that comes with Windows 10 and later, which keeps dlmod half the size it would be with its own HTTPS code. `.rar` and `.7z` archives are opened with the `tar.exe` that also comes with Windows (or 7-Zip, if installed).
 
-1. From [GitHub Releases](https://github.com/MrHakan/deadlock-counter-intelligence/releases), download the HUD ZIP and `dlmod-windows-amd64.exe` (on Linux, `dlmod-linux-amd64`).
+1. From [GitHub Releases](https://github.com/MrHakan/deadlock-modkit/releases), download the HUD ZIP and `dlmod-windows-amd64.exe` (on Linux, `dlmod-linux-amd64`).
 2. Drag the ZIP onto `dlmod-windows-amd64.exe`.
 3. Start Deadlock.
 

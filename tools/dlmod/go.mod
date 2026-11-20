@@ -1,3 +1,3 @@
-module github.com/MrHakan/deadlock-counter-intelligence/tools/dlmod
+module github.com/MrHakan/deadlock-modkit/tools/dlmod
 
 go 1.21
