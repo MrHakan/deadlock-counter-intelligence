@@ -6,6 +6,11 @@ Tools for Deadlock players and modders:
 - **[dlmod](#with-dlmod-no-mod-manager)**, a small mod manager in the terminal: it installs mods, switches them on and off, browses and downloads mods from GameBanana with previews, replaces game sounds with your own files, and repairs `gameinfo.gi` after game updates.
 - **[Model studio](#custom-models)**, part of dlmod: drop a `.glb`, `.gltf` or `.obj` model on a hero and play with it. dlmod fits it, rigs it to the hero's skeleton and builds the mod, with no Valve tools, Blender or Source 2 Viewer.
 
+| dlmod | Model studio |
+| --- | --- |
+| [![dlmod's list of installed mods](docs/images/dlmod.png)](#with-dlmod-no-mod-manager) | [![Haze's model on Wraith in the model studio](docs/images/model-studio.png)](#custom-models) |
+| [![Browsing Haze skins online with a sixel preview](docs/images/dlmod-browse.png)](#browsing-mods-online) | [![Replacing Haze's voice lines](docs/images/dlmod-sounds.png)](#replacing-sounds) |
+
 ## Counter Intelligence HUD
 
 Open the scoreboard or shop to see:
@@ -73,7 +78,7 @@ Close Deadlock first, and use one install method only: two tools editing the sam
 
 ### With dlmod (no mod manager)
 
-`dlmod` is a 3.6 MB program in [`tools/dlmod`](tools/dlmod). It uses only Go's standard library and has no installer or background service. It finds Deadlock through Steam, copies mods into `game/citadel/addons` under free `pakNN_dir.vpk` names, and edits `gameinfo.gi` so the game loads that folder. It works with any VPK mod, not just this one, and installs `.zip`, `.rar` and `.7z` downloads. It goes online only when you browse or download mods or update the HUD, through the `curl` that comes with Windows 10 and later, which keeps dlmod half the size it would be with its own HTTPS code. `.rar` and `.7z` archives are opened with the `tar.exe` that also comes with Windows (or 7-Zip, if installed).
+`dlmod` is an 8 MB program in [`tools/dlmod`](tools/dlmod). It uses only Go's standard library and has no installer or background service. It finds Deadlock through Steam, copies mods into `game/citadel/addons` under free `pakNN_dir.vpk` names, and edits `gameinfo.gi` so the game loads that folder. It works with any VPK mod, not just this one, and installs `.zip`, `.rar` and `.7z` downloads. It goes online only when you browse or download mods or update the HUD, through the `curl` that comes with Windows 10 and later, which keeps dlmod half the size it would be with its own HTTPS code. `.rar` and `.7z` archives are opened with the `tar.exe` that also comes with Windows (or 7-Zip, if installed).
 
 1. From [GitHub Releases](https://github.com/MrHakan/deadlock-modkit/releases), download the HUD ZIP and `dlmod-windows-amd64.exe` (on Linux, `dlmod-linux-amd64`).
 2. Drag the ZIP onto `dlmod-windows-amd64.exe`.
@@ -81,7 +86,9 @@ Close Deadlock first, and use one install method only: two tools editing the sam
 
 Double-click dlmod to open its full-screen view of every mod, with its slot, file count, size, and conflicts or update warnings. It updates by itself when something changes outside it: a game update, a mod added by hand, or Deadlock starting.
 
-![dlmod showing five mods, one conflict and its explanation](docs/images/dlmod.png)
+![dlmod showing seven mods: a HUD, skins, a custom model, custom sounds, one conflict and one mod switched off](docs/images/dlmod.png)
+
+The selected mod, *Big Numbers HUD*, changes the same file as the Counter Intelligence HUD, so both carry a `!` and the line below explains which file. *Kill Sounds* is switched off: it waits in `game/dlmod` until you switch it on.
 
 | Key | Action |
 | --- | --- |
@@ -103,7 +110,7 @@ Double-click dlmod to open its full-screen view of every mod, with its slot, fil
 
 `b` opens the catalog Deadlock Mod Manager uses: about 12,000 mods mirrored from GameBanana by [deadlockmods.app](https://deadlockmods.app), each with its hero and category. dlmod downloads the list once (about 15 MB) and keeps it for six hours; `R` downloads it again. It opens on skins, most downloaded first. `←` `→` pick a hero, `c` cycles the category, `/` searches names and authors, and `n` shows NSFW mods, which are hidden otherwise. `Enter` downloads the selected mod, checks its published MD5, and installs it like a dropped file, asking which file when a mod has several (often with or without voice lines). The mod's files come from deadlockmods.app, or from GameBanana's own API when the mirror has none.
 
-![dlmod's online browser listing Lash skins with a preview](docs/images/dlmod-browse.png)
+![dlmod's online browser listing the most downloaded Haze skins, with the selected skin's picture drawn in sixel](docs/images/dlmod-browse.png)
 
 The selected mod's preview is drawn in the terminal. dlmod draws pictures itself, with no extra library:
 
@@ -115,11 +122,13 @@ The selected mod's preview is drawn in the terminal. dlmod draws pictures itself
 
 dlmod starts with kitty in kitty and Ghostty and sixel in WezTerm and foot. Elsewhere it starts with blocks and asks the terminal which graphics it draws (its device attributes). Windows Terminal 1.22 and later answer that they draw sixel, and previews switch to full resolution on their own. `v` (or `Space`) shows a big preview that fills the screen, which makes block pictures much sharper; a smaller terminal font gives more cells and sharper blocks too. Set `DLMOD_IMAGES=sixel` (or `blocks`, `kitty`, `off`) to choose a mode. Previews are cached in `game/dlmod/catalog/previews`.
 
-![dlmod's big preview in block mode](docs/images/dlmod-preview.png)
+![dlmod's big preview (v) of the same skin in sixel](docs/images/dlmod-preview.png)
 
 #### Replacing sounds
 
 `s` lists every sound in the game (about 95,000), grouped by hero: voice lines in `sounds/vo/<hero>` and ability sounds in `sounds/abilities/<hero>`. `←` `→` pick a hero and `/` searches by name. `Enter` plays the game's sound in your default player. To replace the selected sound, drop a `.wav` (8- or 16-bit PCM, mono or stereo) or `.mp3` file onto the window, or press `r` and type its path. `p` plays your version and `x` restores the original.
+
+![The sounds screen filtered to Haze and "kill", with two voice lines replaced by a dropped .wav file](docs/images/dlmod-sounds.png)
 
 dlmod compiles the file into the game's sound format itself, with no Valve tools, Blender or Source 2 Viewer. The format follows [ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat): an empty `DATA` block, a `CTRL` block describing the audio in binary KeyValues3, and the audio after it. Compiling the MP3 inside one of Valve's own sounds reproduces every field Valve's compiler wrote. All replacements go into one mod, *Custom sounds*, which dlmod rebuilds and reinstalls after every change. The list of replaced sounds is kept in `game/dlmod/sounds`.
 
@@ -133,6 +142,12 @@ Drop a `.glb`, `.gltf` or `.obj` file onto `dlmod.exe`, or run `dlmod studio`. T
 4. **Hero parts**: ticked parts stay (the gun by default); the rest are replaced.
 5. **Rig**: *Rig and check* gives every vertex the hero's bones; *Arms up*, *Arms down* and *Legs apart* bend the result to check it.
 6. **Install**: builds the mod *Custom model: <hero>* and installs it. Importing again replaces it.
+
+![The model studio with Haze's model, exported as .obj with its PNG textures, fitted over Wraith (shown as a ghost)](docs/images/model-studio.png)
+
+*Rig and check* then *Arms up*: the model lifts its arms with the guns in its hands, while Wraith's ghost stays in its bind pose. dlmod matched the model's pose first (Wraith's arms 24° lower, legs 10° wider) and copied the weights from Wraith's body.
+
+![The rig check: Haze's model with its arms lifted by Wraith's skeleton](docs/images/model-studio-rig.png)
 
 The hero keeps its skeleton, animations, hitboxes, physics and abilities; only what you see changes. How it works:
 

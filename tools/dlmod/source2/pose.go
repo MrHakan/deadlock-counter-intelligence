@@ -632,7 +632,9 @@ func limbDistances(segments []limbSegment, p [3]float64) ([limbCount]float64, bo
 		distance := math.Sqrt(dot(sub(p, closest), sub(p, closest)))
 		out[seg.limb] = math.Min(out[seg.limb], distance)
 		if distance < nearest {
-			nearest, seed = distance, seg.seed
+			// An arm decides only near the shoulder: a lowered elbow sits beside the hips, where
+			// wide trousers or a coat flare out.
+			nearest, seed = distance, seg.seed && (seg.limb != limbArmL && seg.limb != limbArmR || t <= 0.5)
 		}
 	}
 	return out, seed
