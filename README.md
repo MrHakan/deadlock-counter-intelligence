@@ -3,18 +3,19 @@
 Tools for Deadlock players and modders:
 
 - **Counter Intelligence**, an experimental in-game HUD that suggests counter items against the enemy lineup (below).
-- **[dlmod](#with-dlmod-no-mod-manager)**, a 3 MB mod manager in the terminal: it installs mods, switches them on and off, browses and downloads mods from GameBanana with previews, and repairs `gameinfo.gi` after game updates.
+- **[dlmod](#with-dlmod-no-mod-manager)**, a 3.6 MB mod manager in the terminal: it installs mods, switches them on and off, browses and downloads mods from GameBanana with previews, replaces game sounds with your own files, and repairs `gameinfo.gi` after game updates.
 
 ## Counter Intelligence HUD
 
 Open the scoreboard or shop to see:
 
-- **Counter items for the enemy lineup.** The three items from the reference counter table that answer the most enemy heroes, with soul price, item category, what the item does against them (for example *Anti-heal* or *CC immunity*), and the enemy heroes it counters. Items you already bought this match are left out.
+- **Counter items for the enemy lineup.** The three items from the reference counter table that answer the most enemy heroes, each with its icon, soul price, what it does against them (for example *Anti-heal* or *CC immunity*), and the portraits of the enemy heroes it counters. Item icons and portraits come from the game's own textures. Items you already own are left out.
 - **What to buy now.** A **BUY NOW** badge marks the first suggestion your souls can pay for, and prices you cannot reach yet turn grey.
 - **What match data says.** Each row shows the estimated change in the buyer's win rate against the current lineup and the minute the item is usually bought, for example `+0.6 WR · ~14m`. A fourth row adds the item with the largest measured gain against the lineup that the table does not already suggest.
 - **Lane counters.** For the first ten minutes the fourth row switches to the best early item against the enemies in your lane.
 - **Patch warnings.** When a game patch changes an enemy hero after the counter table was last reviewed, a **PATCHED** badge appears next to the title; when it changes a suggested item, that row gets a **!** mark. Hover either one to see what changed, taken from Valve's patch notes or, when Valve changed values without notes, from the game data. The warnings stay until the counters are reviewed for that patch.
 - **Enemy counter-purchase alerts.** When an enemy buys an item from the counter list of a hero on your team, a banner names the buyer, the item, and the allies it counters. It stays up for 8 seconds and turns red when the item counters your own hero. Each enemy purchase alerts once per match.
+- **Counters against you.** Items enemies own that are on your own hero's counter list are listed in red under the panel title, for example *Countering you: Healbane (Haze)*.
 
 ## Reference counter table
 
@@ -56,14 +57,14 @@ The suggestion panel sits above the ability bar on the scoreboard and below Quic
 
 - Both teams' heroes come from the player cards, including their rendered hero names. The card marked `LocalPlayer` identifies your side, and enemy cards marked `IsInLocalPlayerLane` are your lane opponents.
 - Your spendable souls come from the shop or HUD balance (`CurrentGoldAmount`), and the match time from the top bar clock (`GameTime`).
-- Items you own come from your card's purchased-items panel (`mod_universal`) and from your own rows in the shop's recent-purchase list. The game creates the item icons at run time, so the mod tries the usual item-name properties and ignores anything that is not a known item.
-- Enemy purchases come from the shop's recent-purchase list, which the mod reads every half second while the shop is open, so alerts appear when you open the shop.
+- Items you own come from the shop's own item cards while the shop is open: the game marks the cards of items you own (or own as part of an upgrade) with `owned` or `usedAsComponent`, and names the item in their `modName` label. Your own rows in the shop's recent-purchase list count too. An owned item stays out of the suggestions for the rest of the match.
+- Enemy purchases come from the shop's recent-purchase list, which the mod reads every half second while the shop is open, so alerts appear when you open the shop. Items enemies already own are read from the item icons on their top-bar cards (`mod_universal`), which the scoreboard shows, through the `{s:mod_name}` dialog variable the shop's cards use. If the game does not give the icons that variable, the *Countering you* line stays empty.
 
-The PATCHED badge and the **!** marks are the only parts of the panel that react to the mouse; everything else lets clicks through to the game. Hovering needs a mouse cursor, which the shop always has.
+The PATCHED badge and the **!** marks are the only parts of the panel that react to the mouse; everything else lets clicks through to the game. They never take keyboard focus (`acceptsfocus="false"`, like Valve's own HUD buttons), so movement and the shop key keep working. Hovering needs a mouse cursor, which the shop always has. The mod's class listener sits in a panel of its own, so the `gShopOpen` and `gScoreboardOpen` classes it needs never reach the game's panels; under the stock HUD panel they once matched a Valve style rule and moved the shop's quick-buy list.
 
 When the enemy lineup changes, the mod treats it as a new match and clears its alert history and owned items. Suggestions are only recomputed when the lineup, the lane phase or your items change; souls only move the badge.
 
-The recommendation engine, HUD state changes, and archive format are covered by local tests. Displaying the HUD in Deadlock still requires in-game verification. If one of the panels above turns out to be named differently in game, its feature switches itself off: no badge without souls, no lane row without lane opponents, and owned items stay listed. The HUD does not track item sales.
+The recommendation engine, HUD state changes, and archive format are covered by local tests. Displaying the HUD in Deadlock still requires in-game verification. If one of the panels above turns out to be named differently in game, its feature switches itself off: no badge without souls, no lane row without lane opponents, and owned items stay listed. The HUD does not track item sales. When the script loads, the console shows `[DCI] Counter items HUD loaded`.
 
 ## Install
 
@@ -71,7 +72,7 @@ Close Deadlock first, and use one install method only: two tools editing the sam
 
 ### With dlmod (no mod manager)
 
-`dlmod` is a 3 MB program in [`tools/dlmod`](tools/dlmod). It uses only Go's standard library and has no installer or background service. It finds Deadlock through Steam, copies mods into `game/citadel/addons` under free `pakNN_dir.vpk` names, and edits `gameinfo.gi` so the game loads that folder. It works with any VPK mod, not just this one, and installs `.zip`, `.rar` and `.7z` downloads. It goes online only when you browse or download mods or update the HUD, through the `curl` that comes with Windows 10 and later, which keeps dlmod half the size it would be with its own HTTPS code. `.rar` and `.7z` archives are opened with the `tar.exe` that also comes with Windows (or 7-Zip, if installed).
+`dlmod` is a 3.6 MB program in [`tools/dlmod`](tools/dlmod). It uses only Go's standard library and has no installer or background service. It finds Deadlock through Steam, copies mods into `game/citadel/addons` under free `pakNN_dir.vpk` names, and edits `gameinfo.gi` so the game loads that folder. It works with any VPK mod, not just this one, and installs `.zip`, `.rar` and `.7z` downloads. It goes online only when you browse or download mods or update the HUD, through the `curl` that comes with Windows 10 and later, which keeps dlmod half the size it would be with its own HTTPS code. `.rar` and `.7z` archives are opened with the `tar.exe` that also comes with Windows (or 7-Zip, if installed).
 
 1. From [GitHub Releases](https://github.com/MrHakan/deadlock-modkit/releases), download the HUD ZIP and `dlmod-windows-amd64.exe` (on Linux, `dlmod-linux-amd64`).
 2. Drag the ZIP onto `dlmod-windows-amd64.exe`.
