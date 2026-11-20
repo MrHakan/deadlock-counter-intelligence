@@ -152,7 +152,7 @@ func clampUnit(f float32, lo float32) float32 {
 }
 
 func writeAttribute(p []byte, a VertexAttribute, v VertexData, i int) error {
-	switch a.Name {
+	switch semantic(a.Name) {
 	case "position":
 		if a.Format != FormatR32G32B32Float && a.Format != FormatR32G32B32A32Float {
 			return fmt.Errorf("positions use format %d, which dlmod does not write", a.Format)
@@ -220,7 +220,7 @@ func writeSkin(p []byte, a VertexAttribute, influences []Influence) error {
 	case FormatR16G16Sint, FormatR16G16Unorm:
 		slots, wide = 2, true
 	default:
-		return fmt.Errorf("bone %s use format %d, which dlmod does not write", a.Name[5:], a.Format)
+		return fmt.Errorf("bone %s use format %d, which dlmod does not write", semantic(a.Name)[5:], a.Format)
 	}
 	influences = influences[:min(len(influences), slots)]
 	unit := 255
@@ -234,7 +234,7 @@ func writeSkin(p []byte, a VertexAttribute, influences []Influence) error {
 			bone, weight = influences[k].Bone, quantized[k]
 		}
 		value := bone
-		if a.Name == "blendweights" {
+		if semantic(a.Name) == "blendweights" {
 			value = weight
 		}
 		if wide {

@@ -91,7 +91,7 @@ func SampleHero() []byte {
 		Set("m_refLODGroupMasks", NewArray(NewUint32(1), NewUint32(1)))
 
 	layout := func(fields ...[3]int) *Value { // name index, format, offset
-		semantic := []string{"position", "normal", "texcoord", "blendindices", "blendweights"}
+		semantic := []string{"POSITION", "NORMAL", "TEXCOORD", "BLENDINDICES", "blendweight"} // as the game spells them
 		var out []*Value
 		for _, f := range fields {
 			out = append(out, NewObject().Set("m_pSemanticName", NewString(semantic[f[0]])).

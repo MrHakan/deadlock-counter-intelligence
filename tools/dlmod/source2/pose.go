@@ -344,6 +344,33 @@ func blend(weights [limbCount]float64, matrices [limbCount]mat34) mat34 {
 	return out
 }
 
+// unbend moves a point and its normal from a pose back into the bind pose: each limb's own turn
+// is undone and the results are mixed by how much the point follows each limb. Undoing the mixed
+// transform instead blows up where opposite limbs mix: averaging both arms lowered by 88 degrees
+// leaves a nearly flat matrix, and its inverse throws a cape's points hundreds of units away.
+func unbend(weights [limbCount]float64, inverses [limbCount]mat34, p, n [3]float64) ([3]float64, [3]float64) {
+	var position, normal [3]float64
+	total := 0.0
+	for limb, w := range weights {
+		if w == 0 {
+			continue
+		}
+		q, r := inverses[limb].apply(p), inverses[limb].rotate(n)
+		for k := 0; k < 3; k++ {
+			position[k] += q[k] * w
+			normal[k] += r[k] * w
+		}
+		total += w
+	}
+	if total == 0 {
+		return p, n
+	}
+	for k := 0; k < 3; k++ {
+		position[k] /= total
+	}
+	return position, normalize(normal)
+}
+
 func posedSamples(samples []heroSample, matrices [limbCount]mat34) []heroSample {
 	out := make([]heroSample, len(samples))
 	for i, s := range samples {
@@ -549,6 +576,10 @@ func (m *Model) AutoRig(fitted *ImportedMesh, opts ImportOptions, pose *Pose, ma
 		fixed := rigidParts(fitted, out.Skin, labels, distances, math.Max(hi[2]-lo[2], 1), skeleton)
 		smoothWeights(fitted, out.Skin, fixed, 8, maxBones)
 	}
+	var inverses [limbCount]mat34
+	for limb := range inverses {
+		inverses[limb], _ = matrices[limb].inverse() // turns, which always have one
+	}
 	for i, p := range fitted.Positions {
 		var normal [3]float64
 		if i < len(fitted.Normals) {
@@ -564,9 +595,7 @@ func (m *Model) AutoRig(fitted *ImportedMesh, opts ImportOptions, pose *Pose, ma
 					follow[limbs[bone]] += float64(b.Weight)
 				}
 			}
-			if inverse, ok := blend(follow, matrices).inverse(); ok {
-				position, n = inverse.apply(position), normalize(inverse.rotate(n))
-			}
+			position, n = unbend(follow, inverses, position, n)
 		}
 		bind.Positions[i] = [3]float32{float32(position[0]), float32(position[1]), float32(position[2])}
 		bind.Normals[i] = [3]float32{float32(n[0]), float32(n[1]), float32(n[2])}

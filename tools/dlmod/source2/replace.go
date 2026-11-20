@@ -344,12 +344,31 @@ func cloneValue(v *Value) *Value {
 	return &c
 }
 
-// boneIndex maps bone names to a mesh's own bone numbers. A bone the mesh lacks falls back to its
-// nearest ancestor the mesh has, through the model's skeleton.
+// boneLimit is the highest bone number a mesh's first vertex buffer can store: one byte per bone
+// in most layouts, though Wraith's body lists 347 bones (the ones past 255 are cloth, which only
+// her other buffers with 16-bit indices use).
+func boneLimit(mesh *Mesh) int {
+	if len(mesh.VertexBuffers) == 0 {
+		return 0
+	}
+	if a := mesh.VertexBuffers[0].Attribute("blendindices", 0); a != nil {
+		switch a.Format {
+		case FormatR8G8B8A8Uint, FormatR16G16B16A16Uint:
+			return 255
+		}
+	}
+	return 65535
+}
+
+// boneIndex maps bone names to a mesh's own bone numbers. A bone the mesh lacks, or cannot store
+// (see boneLimit), falls back to its nearest ancestor the mesh has, through the model's skeleton.
 func (m *Model) boneIndex(mesh *Mesh) func(string) int {
 	own := map[string]int{}
+	limit := boneLimit(mesh)
 	for i, name := range mesh.Bones {
-		own[name] = i
+		if i <= limit {
+			own[name] = i
+		}
 	}
 	parents := map[string]string{}
 	if skeleton := m.Data.Get("m_modelSkeleton"); skeleton != nil {
@@ -376,12 +395,31 @@ func (m *Model) boneIndex(mesh *Mesh) func(string) int {
 }
 
 // Replace writes the model with the fitted, rigged mesh in place of the parts it replaces: the
-// mesh is drawn by the biggest replaced part at every level of detail and the other replaced
+// mesh is drawn by one replaced part at every level of detail and the other replaced
 // parts are emptied. Skeleton, animations, hitboxes, physics and attachments stay the hero's.
 func (m *Model) Replace(raw []byte, fitted *ImportedMesh, skin [][]BoneWeight, opts ImportOptions) ([]byte, error) {
 	fresh, err := LoadModel(raw) // edit a copy so the caller's model stays as it was
 	if err != nil {
 		return nil, err
+	}
+	// A level of detail is drawn by the part whose own bones carry most of the new skin's weight,
+	// then the biggest. A bone a mesh lacks falls back to an ancestor and stops moving on its own,
+	// and no part has them all: Wraith's body has no forearm or finger bones, her arms no neck.
+	// Picking by size chose her body at LOD0 but her arms at LOD1, so the model changed with distance.
+	used := map[string]float64{}
+	for _, bones := range skin {
+		for _, b := range bones {
+			used[b.Bone] += float64(b.Weight)
+		}
+	}
+	covers := map[*Mesh]float64{}
+	for _, mesh := range fresh.Meshes {
+		limit := boneLimit(mesh)
+		for i, name := range mesh.Bones {
+			if i <= limit {
+				covers[mesh] += used[name]
+			}
+		}
 	}
 	targets := map[*Mesh]bool{}
 	covered := 0
@@ -398,7 +436,7 @@ func (m *Model) Replace(raw []byte, fitted *ImportedMesh, skin [][]BoneWeight, o
 			if vb.Attribute("position", 0) == nil || vb.Attribute("blendindices", 0) == nil || vb.Attribute("normal", 0) == nil {
 				continue
 			}
-			if best == nil || vertexCount(mesh) > vertexCount(best) {
+			if best == nil || covers[mesh] > covers[best] || (covers[mesh] == covers[best] && vertexCount(mesh) > vertexCount(best)) {
 				best = mesh
 			}
 		}

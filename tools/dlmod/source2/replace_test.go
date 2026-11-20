@@ -115,6 +115,74 @@ func TestImportModelOntoHero(t *testing.T) {
 	}
 }
 
+// A point of a cape following both arms, with the arms lowered nearly 90 degrees: undoing the
+// mixed turn would throw it hundreds of units away, undoing each arm's turn keeps it in place.
+// A point following one limb comes back exactly.
+func TestUnbendWhereOppositeArmsMix(t *testing.T) {
+	var matrices, inverses [limbCount]mat34
+	for limb := range matrices {
+		matrices[limb] = identity34()
+	}
+	matrices[limbArmL] = rotationAbout([3]float64{1, 0, 0}, 88, [3]float64{0, 15, 60})
+	matrices[limbArmR] = rotationAbout([3]float64{1, 0, 0}, -88, [3]float64{0, -15, 60})
+	for limb := range inverses {
+		inverses[limb], _ = matrices[limb].inverse()
+	}
+	var both [limbCount]float64
+	both[limbArmL], both[limbArmR] = 0.5, 0.5
+	cape := [3]float64{-5, 0, 40}
+	got, _ := unbend(both, inverses, cape, [3]float64{-1, 0, 0})
+	if d := distance64(got, cape); d > 60 {
+		t.Errorf("the cape point moved %.0f units", d)
+	}
+	var left [limbCount]float64
+	left[limbArmL] = 1
+	hand := [3]float64{0, 45, 60}
+	posed := matrices[limbArmL].apply(hand)
+	back, n := unbend(left, inverses, posed, matrices[limbArmL].rotate([3]float64{0, 0, 1}))
+	if distance64(back, hand) > 1e-6 || math.Abs(n[2]-1) > 1e-6 {
+		t.Errorf("a hand bent and unbent ends at %v facing %v", back, n)
+	}
+}
+
+func distance64(a, b [3]float64) float64 {
+	return math.Sqrt((a[0]-b[0])*(a[0]-b[0]) + (a[1]-b[1])*(a[1]-b[1]) + (a[2]-b[2])*(a[2]-b[2]))
+}
+
+// Deadlock's models spell attributes POSITION and blendweight, other compiled models position and
+// blendweights; both must read and write the same.
+func TestAttributeSpellings(t *testing.T) {
+	for _, names := range [][4]string{
+		{"POSITION", "NORMAL", "BLENDINDICES", "blendweight"},
+		{"position", "normal", "blendindices", "blendweights"},
+	} {
+		vb := &VertexBuffer{Count: 1, Stride: 24, Attributes: []VertexAttribute{
+			{Name: names[0], Format: FormatR32G32B32Float, Offset: 0},
+			{Name: names[1], Format: FormatR32Uint, Offset: 12},
+			{Name: names[2], Format: FormatR8G8B8A8Uint, Offset: 16},
+			{Name: names[3], Format: FormatR8G8B8A8Unorm, Offset: 20},
+		}}
+		data, err := vb.Encode(VertexData{
+			Positions: [][3]float32{{1, 2, 3}},
+			Normals:   [][3]float32{{0, 0, 1}},
+			Skin:      [][]Influence{{{Bone: 7, Weight: 0.75}, {Bone: 3, Weight: 0.25}}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		vb.Data = data
+		position := vb.Attribute("position", 0)
+		if position == nil || vb.Attribute("blendweights", 0) == nil {
+			t.Fatalf("%v: attributes not found", names)
+		}
+		positions, _ := vb.Floats(position)
+		skin, _ := vb.Skin()
+		if positions[0] != [4]float32{1, 2, 3, 0} || len(skin[0]) != 2 || skin[0][0].Bone != 7 || skin[0][1].Bone != 3 {
+			t.Errorf("%v: wrote %v and %v", names, positions[0], skin[0])
+		}
+	}
+}
+
 func keysOf(m map[string][]byte) []string {
 	var out []string
 	for k := range m {
