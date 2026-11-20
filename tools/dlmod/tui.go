@@ -14,6 +14,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/MrHakan/deadlock-modkit/tools/dlmod/source2"
 )
 
 var errNoTUI = errors.New("this console cannot show the full-screen interface")
@@ -234,6 +236,7 @@ const (
 	modeHelp
 	modeQuestion
 	modeBrowse
+	modeSounds
 )
 
 const (
@@ -275,6 +278,7 @@ type tui struct {
 	ticks         int
 
 	browse      *browser
+	sounds      *soundScreen
 	previewDone chan previewResult
 	loadImage   func(string) (image.Image, error) // tests replace the download
 	imageAt     imageArea
@@ -386,7 +390,7 @@ func (t *tui) handle(data []byte) bool {
 		return false
 	}
 	typed, pasted, ok := splitPaste(data)
-	if !ok && t.mode == modeList && looksPasted(data) {
+	if !ok && (t.mode == modeList || t.mode == modeSounds) && looksPasted(data) {
 		typed, pasted, ok = nil, string(data), true
 	}
 	if ok {
@@ -406,6 +410,20 @@ func (t *tui) paste(text string) {
 		t.input = append(t.input, []rune(strings.TrimSpace(text))...)
 		return
 	}
+	if t.mode == modeSounds || (t.mode == modePrompt && t.purpose == "sound") {
+		// A sound file dropped on the sounds screen replaces the selected sound at once.
+		files := droppedFiles(text)
+		if t.mode == modeSounds && t.currentSound() != "" {
+			t.sounds.replacing = t.currentSound()
+		}
+		if len(files) == 1 && isFile(files[0]) && source2.IsSoundFile(files[0]) {
+			t.replaceWith(files[0])
+			return
+		}
+		t.mode, t.purpose = modePrompt, "sound"
+		t.input = append(t.input, []rune(strings.TrimRight(text, "\r\n"))...)
+		return
+	}
 	if t.mode != modeList && t.mode != modePrompt {
 		return
 	}
@@ -413,7 +431,7 @@ func (t *tui) paste(text string) {
 	ready := len(files) > 0
 	for _, file := range files {
 		extension := strings.ToLower(filepath.Ext(file))
-		ready = ready && isFile(file) && (extension == ".zip" || extension == ".vpk")
+		ready = ready && isFile(file) && (extension == ".zip" || extension == ".vpk" || extension == ".rar" || extension == ".7z")
 	}
 	if ready {
 		t.install(files)
@@ -430,6 +448,9 @@ func (t *tui) press(k key) bool {
 		if t.under == modeBrowse && t.browse != nil {
 			t.mode = modeBrowse
 		}
+		if t.under == modeSounds && t.sounds != nil {
+			t.mode = modeSounds
+		}
 		t.under = modeList
 		return false
 	case modeBrowse:
@@ -438,6 +459,8 @@ func (t *tui) press(k key) bool {
 			return false
 		}
 		return t.pressBrowse(k)
+	case modeSounds:
+		return t.pressSounds(k)
 	case modePrompt:
 		switch k.name {
 		case "char":
@@ -465,6 +488,13 @@ func (t *tui) press(k key) bool {
 			}
 			files := droppedFiles(string(t.input))
 			t.input = nil
+			if t.purpose == "sound" {
+				t.mode = modeSounds
+				if len(files) > 0 {
+					t.replaceWith(files[0])
+				}
+				return false
+			}
 			if len(files) == 0 {
 				t.mode = modeList
 				return false
@@ -472,6 +502,9 @@ func (t *tui) press(k key) bool {
 			t.install(files)
 		case "esc", "ctrl+c":
 			t.mode, t.input = modeList, nil
+			if t.purpose == "sound" {
+				t.mode = modeSounds
+			}
 		}
 		return false
 	}
@@ -520,6 +553,8 @@ func (t *tui) press(k key) bool {
 			t.play()
 		case 'b':
 			t.openBrowser(false)
+		case 's':
+			t.openSounds()
 		case '?', 'h':
 			t.mode, t.under = modeHelp, modeList
 		}
@@ -920,6 +955,8 @@ func (t *tui) lines() []string {
 	case t.showingBrowser():
 		t.drawBrowse(middle, room)
 		t.imageAt.row += len(top.lines)
+	case t.sounds != nil && (t.mode == modeSounds || (t.under == modeSounds && (t.mode == modeQuestion || t.mode == modePrompt))):
+		t.drawSounds(middle, room)
 	default:
 		t.drawList(middle, room, compact)
 	}
@@ -1117,6 +1154,8 @@ func (t *tui) drawBottom(c *canvas, compact bool) {
 	case modePrompt:
 		if t.purpose == "profile" {
 			c.line(seg{" Name for the new profile (the mods that are on now):", p.bold})
+		} else if t.purpose == "sound" && t.sounds != nil {
+			c.line(seg{" Replace " + filepath.Base(t.sounds.replacing) + ": drag a .wav or .mp3 file into this window, or type its path.", p.bold})
 		} else {
 			c.line(seg{" Install a mod: drag a .zip or .vpk file into this window, or type its path.", p.bold})
 		}
@@ -1168,8 +1207,10 @@ func (t *tui) drawBottom(c *canvas, compact bool) {
 		hints = [][2]string{{"any key", "back"}}
 	case modeBrowse:
 		hints = t.browseHints()
+	case modeSounds:
+		hints = t.soundHints()
 	default:
-		hints = [][2]string{{"↑↓", "select"}, {"Space", "on/off"}, {"b", "browse online"}, {"i", "install"}, {"d", "delete"},
+		hints = [][2]string{{"↑↓", "select"}, {"Space", "on/off"}, {"b", "browse online"}, {"s", "sounds"}, {"i", "install"}, {"d", "delete"},
 			{"f", "profiles"}, {"u", "update HUD"}, {"r", "repair"}, {"p", "play"}, {"?", "help"}, {"q", "quit"}}
 	}
 	full := 0
@@ -1192,10 +1233,38 @@ func (t *tui) drawBottom(c *canvas, compact bool) {
 
 func (t *tui) drawHelp(c *canvas) {
 	p := t.p
+	// The online browser and the sounds screen explain their own keys.
+	if t.under == modeBrowse {
+		c.line(seg{" In the online browser (b)", p.bold})
+		for _, row := range [][2]string{
+			{"← →", "choose a hero; c and C cycle the category (Skins first)"},
+			{"/", "search by name or author; Enter or Esc ends typing"},
+			{"Enter", "download the selected mod, check its MD5 and install it"},
+			{"v  Space", "big preview: the picture fills the screen (much sharper as blocks)"},
+			{"m", "preview mode: blocks (any terminal), sixel (Windows Terminal 1.22+, WezTerm, foot), kitty, off"},
+			{"n  R", "show NSFW mods; download the catalog again (it is kept for six hours)"},
+		} {
+			c.line(seg{"   " + pad(row[0], 14), p.cyan}, seg{row[1], ""})
+		}
+		return
+	}
+	if t.under == modeSounds {
+		c.line(seg{" In the sounds screen (s)", p.bold})
+		for _, row := range [][2]string{
+			{"← →  /", "choose a hero, or search all 95,000 sounds by name"},
+			{"Enter  p", "play the game's sound, or yours, in your default player"},
+			{"r  or drop", "replace the selected sound: drop a .wav (16-bit) or .mp3 on the window"},
+			{"x", "restore the game's sound"},
+		} {
+			c.line(seg{"   " + pad(row[0], 14), p.cyan}, seg{row[1], ""})
+		}
+		return
+	}
 	rows := [][2]string{
 		{"↑ ↓  j k", "move between mods"},
 		{"Space  Enter", "switch the selected mod on or off"},
 		{"b", "browse mods online (the Deadlock Mod Manager catalog, from GameBanana) and install them"},
+		{"s", "sounds: listen to any game sound and replace it with your own .wav or .mp3"},
 		{"i", "install a mod; dragging a .zip, .rar, .7z or .vpk file into the window works too"},
 		{"d  Delete", "delete the selected mod"},
 		{"f", "profiles: switch between saved sets of mods, or save the current one"},
@@ -1207,18 +1276,6 @@ func (t *tui) drawHelp(c *canvas) {
 	}
 	c.line(seg{" Keys", p.bold})
 	for _, row := range rows {
-		c.line(seg{"   " + pad(row[0], 14), p.cyan}, seg{row[1], ""})
-	}
-	c.blank()
-	c.line(seg{" In the online browser (b)", p.bold})
-	for _, row := range [][2]string{
-		{"← →", "choose a hero; c and C cycle the category (Skins first)"},
-		{"/", "search by name or author; Enter or Esc ends typing"},
-		{"Enter", "download the selected mod, check its MD5 and install it"},
-		{"v  Space", "big preview: the picture fills the screen (much sharper as blocks)"},
-		{"m", "preview mode: blocks (any terminal), sixel (Windows Terminal 1.22+, WezTerm, foot), kitty, off"},
-		{"n  R", "show NSFW mods; download the catalog again (it is kept for six hours)"},
-	} {
 		c.line(seg{"   " + pad(row[0], 14), p.cyan}, seg{row[1], ""})
 	}
 	c.blank()

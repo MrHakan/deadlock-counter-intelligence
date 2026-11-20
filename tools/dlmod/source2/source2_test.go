@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
+	"os"
 	"testing"
 )
 
@@ -116,5 +117,38 @@ func TestCompileMP3(t *testing.T) {
 	}
 	if _, _, err := CompileSound([]byte("not audio at all")); err == nil {
 		t.Fatal("other files are refused")
+	}
+}
+
+func TestVPKWriteReadAndPlayback(t *testing.T) {
+	sound, _, err := CompileSound(wav(1, 16, 22050, []int16{5, 6, 7, 8}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string][]byte{
+		"sounds/vo/haze/haze_kill_01.vsnd_c": sound,
+		"sounds/vo/haze/haze_kill_02.vsnd_c": []byte("x"),
+		"readme.txt":                         []byte("hello"),
+	}
+	dir := t.TempDir() + "/pak01_dir.vpk"
+	if err := os.WriteFile(dir, WriteVPK(files), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	index, err := OpenVPK(dir)
+	if err != nil || len(index.Files) != 3 {
+		t.Fatalf("index: %v %v", err, index)
+	}
+	for name, want := range files {
+		got, err := index.Read(name)
+		if err != nil || !bytes.Equal(got, want) {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	playable, extension, err := PlayableSound(sound)
+	if err != nil || extension != ".wav" || string(playable[:4]) != "RIFF" || len(playable) != 44+8 {
+		t.Fatalf("playback: %v %s %d", err, extension, len(playable))
+	}
+	if _, info, err := CompileSound(playable); err != nil || info.Samples != 4 || info.Rate != 22050 {
+		t.Fatalf("the WAV made for playback compiles back to the same sound: %v %+v", err, info)
 	}
 }

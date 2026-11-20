@@ -87,6 +87,7 @@ Double-click dlmod to open its full-screen view of every mod, with its slot, fil
 | `Space` or `Enter` | Switch the selected mod on or off. It keeps its place in the list. |
 | Drag a file into the window | Install it straight away. `i` lets you type a path instead. |
 | `b` | Browse mods online and install them (see below) |
+| `s` | Listen to the game's sounds and replace them with your own (see below) |
 | `d` | Delete the selected mod, after a confirmation |
 | `f` | Profiles: switch to a saved set of mods, save the mods that are on now, or delete a profile |
 | `u` | Download the Counter Intelligence HUD for your game build and replace the old one (asks first) |
@@ -113,6 +114,12 @@ The selected mod's preview is drawn in the terminal. dlmod draws pictures itself
 dlmod starts with kitty in kitty and Ghostty and sixel in WezTerm and foot. Elsewhere it starts with blocks and asks the terminal which graphics it draws (its device attributes). Windows Terminal 1.22 and later answer that they draw sixel, and previews switch to full resolution on their own. `v` (or `Space`) shows a big preview that fills the screen, which makes block pictures much sharper; a smaller terminal font gives more cells and sharper blocks too. Set `DLMOD_IMAGES=sixel` (or `blocks`, `kitty`, `off`) to choose a mode. Previews are cached in `game/dlmod/catalog/previews`.
 
 ![dlmod's big preview in block mode](docs/images/dlmod-preview.png)
+
+#### Replacing sounds
+
+`s` lists every sound in the game (about 95,000), grouped by hero: voice lines in `sounds/vo/<hero>` and ability sounds in `sounds/abilities/<hero>`. `←` `→` pick a hero and `/` searches by name. `Enter` plays the game's sound in your default player. To replace the selected sound, drop a `.wav` (8- or 16-bit PCM, mono or stereo) or `.mp3` file onto the window, or press `r` and type its path. `p` plays your version and `x` restores the original.
+
+dlmod compiles the file into the game's sound format itself, with no Valve tools, Blender or Source 2 Viewer. The format follows [ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat): an empty `DATA` block, a `CTRL` block describing the audio in binary KeyValues3, and the audio after it. Compiling the MP3 inside one of Valve's own sounds reproduces every field Valve's compiler wrote. All replacements go into one mod, *Custom sounds*, which dlmod rebuilds and reinstalls after every change. The list of replaced sounds is kept in `game/dlmod/sounds`.
 
 Deadlock updates and Steam's *Verify integrity of game files* replace `gameinfo.gi`, which turns all mods off. The screen then shows **MODS OFF**: press `r`, or start the game with `dlmod play`, which repairs first. Consoles older than Windows 10 get a numbered menu instead, which `-plain` also selects.
 
