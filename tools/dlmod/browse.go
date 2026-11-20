@@ -38,6 +38,7 @@ type browser struct {
 	imageMode             int
 	autoMode              bool // DLMOD_IMAGES did not choose, so the terminal's answer may upgrade blocks
 	fullPreview           bool
+	cellExact             bool // the terminal told its cell size itself
 	pictures              map[string]image.Image
 	failed                map[string]string
 	pending               string
@@ -102,7 +103,7 @@ func (t *tui) openBrowser(refresh bool) {
 	t.mode = modeBrowse
 	t.notes = nil
 	if t.browse.imageMode == imagesSixel {
-		t.out.WriteString("\x1b[16t") // ask the terminal for its cell size in pixels
+		t.out.WriteString("\x1b[16t\x1b[14t") // ask the terminal for its cell size in pixels
 		t.out.Flush()
 	}
 	t.requestPreview()
@@ -110,6 +111,7 @@ func (t *tui) openBrowser(refresh bool) {
 
 var (
 	cellSizeReply   = regexp.MustCompile(`\x1b\[6;(\d+);(\d+)t`)
+	windowSizeReply = regexp.MustCompile(`\x1b\[4;(\d+);(\d+)t`)
 	attributesReply = regexp.MustCompile(`\x1b\[\?([\d;]*)c`)
 )
 
@@ -121,8 +123,18 @@ func (t *tui) takeCellSize(data []byte) []byte {
 		if b := t.browse; b != nil && b.autoMode && b.imageMode == imagesBlocks && strings.Contains(attributes, ";4;") {
 			b.imageMode, b.payloadKey = imagesSixel, ""
 			t.note(toneInfo, "This terminal draws sixel graphics, so previews are shown at full resolution (m changes it).")
-			t.out.WriteString("\x1b[16t")
+			t.out.WriteString("\x1b[16t\x1b[14t")
 			t.out.Flush()
+		}
+		data = append(append([]byte(nil), data[:match[0]]...), data[match[1]:]...)
+	}
+	// Some terminals answer only the window size in pixels (CSI 14 t); the cell size follows from
+	// the number of rows and columns. A direct cell-size answer wins when both arrive.
+	if match := windowSizeReply.FindSubmatchIndex(data); match != nil {
+		height, _ := strconv.Atoi(string(data[match[2]:match[3]]))
+		width, _ := strconv.Atoi(string(data[match[4]:match[5]]))
+		if b := t.browse; b != nil && !b.cellExact && t.width > 0 && t.height > 0 && width > 0 && height > 0 {
+			b.cellWidth, b.cellHeight, b.payloadKey = max(1, width/t.width), max(1, height/t.height), ""
 		}
 		data = append(append([]byte(nil), data[:match[0]]...), data[match[1]:]...)
 	}
@@ -134,7 +146,7 @@ func (t *tui) takeCellSize(data []byte) []byte {
 		height, _ := strconv.Atoi(string(data[match[2]:match[3]]))
 		width, _ := strconv.Atoi(string(data[match[4]:match[5]]))
 		if width > 0 && height > 0 {
-			t.browse.cellWidth, t.browse.cellHeight = width, height
+			t.browse.cellWidth, t.browse.cellHeight, t.browse.cellExact = width, height, true
 			t.browse.payloadKey = ""
 		}
 	}
@@ -269,7 +281,7 @@ func (t *tui) pressBrowse(k key) bool {
 			t.note(toneInfo, "Previews: "+imageModeNames[b.imageMode]+
 				" (set DLMOD_IMAGES="+imageModeNames[b.imageMode]+" to start with it)")
 			if b.imageMode == imagesSixel {
-				t.out.WriteString("\x1b[16t")
+				t.out.WriteString("\x1b[16t\x1b[14t")
 				t.out.Flush()
 			}
 			t.requestPreview()

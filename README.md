@@ -100,7 +100,7 @@ The selected mod's preview is drawn in the terminal. dlmod draws pictures itself
 | Preview mode (`m`) | Where it works |
 | --- | --- |
 | blocks | Any terminal with 24-bit colour: Windows Terminal, the Windows 10+ console, macOS and Linux terminals. Each character shows two pixels with `▀`, so pictures are coarse. |
-| sixel | Full resolution in Windows Terminal 1.22 or later, WezTerm, foot, mlterm and xterm (`-ti vt340`). |
+| sixel | Full resolution in Windows Terminal 1.22 or later, WezTerm, foot, mlterm and xterm (`-ti vt340`). Each picture gets its own 256-colour palette (median cut) with Floyd–Steinberg dithering, and is drawn at the pane's exact pixel size, which dlmod asks the terminal for. |
 | kitty | Full resolution in kitty, Ghostty and WezTerm. |
 
 dlmod starts with kitty in kitty and Ghostty and sixel in WezTerm and foot. Elsewhere it starts with blocks and asks the terminal which graphics it draws (its device attributes). Windows Terminal 1.22 and later answer that they draw sixel, and previews switch to full resolution on their own. `v` (or `Space`) shows a big preview that fills the screen, which makes block pictures much sharper; a smaller terminal font gives more cells and sharper blocks too. Set `DLMOD_IMAGES=sixel` (or `blocks`, `kitty`, `off`) to choose a mode. Previews are cached in `game/dlmod/catalog/previews`.

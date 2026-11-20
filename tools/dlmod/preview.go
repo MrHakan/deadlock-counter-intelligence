@@ -13,6 +13,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -140,37 +141,170 @@ func blockLines(picture image.Image, cols, rows int) [][]seg {
 	return lines
 }
 
-// sixelPalette is 6 levels of red and blue and 7 of green (252 colours), indexed directly.
-func sixelIndex(c color.RGBA) int {
-	return int(c.R)*6/256*42 + int(c.G)*7/256*6 + int(c.B)*6/256
+// quantize picks up to n colours for the picture by median cut: the pixels start as one box
+// in colour space, and the box with the widest spread is split at its median until there are n
+// boxes; each box's average colour goes into the palette. A palette made for the picture keeps
+// skin tones and gradients that a fixed palette turns into bands.
+func quantize(pixels *image.RGBA, n int) []color.RGBA {
+	// A 5-bit-per-channel histogram keeps the work small for any picture size.
+	type entry struct {
+		c     [3]int // the bucket, for splitting
+		sum   [3]int // the real colours in it, for the palette
+		count int
+	}
+	buckets := map[uint16]*entry{}
+	for i := 0; i < len(pixels.Pix); i += 4 {
+		r, g, b := int(pixels.Pix[i]), int(pixels.Pix[i+1]), int(pixels.Pix[i+2])
+		key := uint16(r>>3)<<10 | uint16(g>>3)<<5 | uint16(b>>3)
+		e := buckets[key]
+		if e == nil {
+			e = &entry{c: [3]int{r >> 3 << 3, g >> 3 << 3, b >> 3 << 3}}
+			buckets[key] = e
+		}
+		e.sum[0], e.sum[1], e.sum[2], e.count = e.sum[0]+r, e.sum[1]+g, e.sum[2]+b, e.count+1
+	}
+	all := make([]entry, 0, len(buckets))
+	for _, e := range buckets {
+		all = append(all, *e)
+	}
+	sort.Slice(all, func(a, b int) bool { // deterministic output for the same picture
+		return all[a].c[0]<<16|all[a].c[1]<<8|all[a].c[2] < all[b].c[0]<<16|all[b].c[1]<<8|all[b].c[2]
+	})
+	spread := func(box []entry) (int, int) {
+		lo, hi := [3]int{255, 255, 255}, [3]int{}
+		for _, e := range box {
+			for ch := 0; ch < 3; ch++ {
+				lo[ch], hi[ch] = min(lo[ch], e.c[ch]), max(hi[ch], e.c[ch])
+			}
+		}
+		best := 0
+		for ch := 1; ch < 3; ch++ {
+			if hi[ch]-lo[ch] > hi[best]-lo[best] {
+				best = ch
+			}
+		}
+		return best, hi[best] - lo[best]
+	}
+	boxes := [][]entry{all}
+	for len(boxes) < n {
+		widest, width, channel := -1, 0, 0
+		for i, box := range boxes {
+			if len(box) < 2 {
+				continue
+			}
+			ch, w := spread(box)
+			if w > width {
+				widest, width, channel = i, w, ch
+			}
+		}
+		if widest < 0 {
+			break
+		}
+		box := boxes[widest]
+		sort.Slice(box, func(a, b int) bool { return box[a].c[channel] < box[b].c[channel] })
+		total, half, cut := 0, 0, 1
+		for _, e := range box {
+			total += e.count
+		}
+		for i, e := range box {
+			half += e.count
+			if half*2 >= total {
+				cut = max(1, min(i+1, len(box)-1))
+				break
+			}
+		}
+		boxes = append(boxes[:widest], append([][]entry{box[:cut], box[cut:]}, boxes[widest+1:]...)...)
+	}
+	palette := make([]color.RGBA, 0, len(boxes))
+	for _, box := range boxes {
+		var sum [3]int
+		weight := 0
+		for _, e := range box {
+			for ch := 0; ch < 3; ch++ {
+				sum[ch] += e.sum[ch]
+			}
+			weight += e.count
+		}
+		palette = append(palette, color.RGBA{uint8((sum[0] + weight/2) / weight), uint8((sum[1] + weight/2) / weight),
+			uint8((sum[2] + weight/2) / weight), 255})
+	}
+	return palette
 }
 
-func sixelLevel(index, levels int) int { return (index*100 + (levels-1)/2) / (levels - 1) }
+// ditherIndexes maps every pixel to a palette entry with Floyd–Steinberg error diffusion, which
+// spreads each pixel's rounding error to its neighbours so gradients stay smooth.
+func ditherIndexes(pixels *image.RGBA, palette []color.RGBA) []int {
+	width, height := pixels.Rect.Dx(), pixels.Rect.Dy()
+	nearest := map[int]int{}
+	lookup := func(r, g, b int) int {
+		key := r>>2<<12 | g>>2<<6 | b>>2 // 6 bits per channel is plenty for the choice
+		if index, ok := nearest[key]; ok {
+			return index
+		}
+		best, bestDistance := 0, 1<<30
+		for i, c := range palette {
+			dr, dg, db := r-int(c.R), g-int(c.G), b-int(c.B)
+			// Green counts most and blue least, roughly as the eye weighs them.
+			if d := 3*dr*dr + 4*dg*dg + 2*db*db; d < bestDistance {
+				best, bestDistance = i, d
+			}
+		}
+		nearest[key] = best
+		return best
+	}
+	errs := make([][3]int, (width+2)*2) // two rows of accumulated error, with a margin
+	indexes := make([]int, width*height)
+	for y := 0; y < height; y++ {
+		current, next := errs[:width+2], errs[width+2:]
+		for x := 0; x < width; x++ {
+			c := pixels.RGBAAt(x, y)
+			value := [3]int{int(c.R), int(c.G), int(c.B)}
+			for ch := 0; ch < 3; ch++ {
+				value[ch] = max(0, min(255, value[ch]+current[x+1][ch]/16))
+			}
+			index := lookup(value[0], value[1], value[2])
+			indexes[y*width+x] = index
+			chosen := palette[index]
+			for ch, have := range [3]int{int(chosen.R), int(chosen.G), int(chosen.B)} {
+				e := value[ch] - have
+				current[x+2][ch] += e * 7
+				next[x][ch] += e * 3
+				next[x+1][ch] += e * 5
+				next[x+2][ch] += e
+			}
+		}
+		copy(current, next)
+		for i := range next {
+			next[i] = [3]int{}
+		}
+	}
+	return indexes
+}
 
-// encodeSixel writes the picture as a sixel image of width x height pixels.
+// encodeSixel writes the picture as a sixel image of width x height pixels with a palette made
+// for it.
 func encodeSixel(picture image.Image, width, height int) string {
 	pixels := scale(picture, width, height)
+	palette := quantize(pixels, 256)
+	indexes := ditherIndexes(pixels, palette)
 	var b strings.Builder
 	b.WriteString("\x1bP0;1;0q") // keep the background, square pixels
 	fmt.Fprintf(&b, "\"1;1;%d;%d", width, height)
-	for i := 0; i < 252; i++ {
-		fmt.Fprintf(&b, "#%d;2;%d;%d;%d", i, sixelLevel(i/42, 6), sixelLevel(i/6%7, 7), sixelLevel(i%6, 6))
+	for i, c := range palette {
+		fmt.Fprintf(&b, "#%d;2;%d;%d;%d", i, (int(c.R)*100+127)/255, (int(c.G)*100+127)/255, (int(c.B)*100+127)/255)
 	}
-	indexes := make([]int, width*height)
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			indexes[y*width+x] = sixelIndex(pixels.RGBAAt(x, y))
-		}
-	}
+	used := make([]bool, len(palette))
 	for band := 0; band < height; band += 6 {
-		used := map[int]bool{}
+		for i := range used {
+			used[i] = false
+		}
 		for y := band; y < min(band+6, height); y++ {
 			for x := 0; x < width; x++ {
 				used[indexes[y*width+x]] = true
 			}
 		}
 		first := true
-		for colour := 0; colour < 252; colour++ {
+		for colour := range palette {
 			if !used[colour] {
 				continue
 			}

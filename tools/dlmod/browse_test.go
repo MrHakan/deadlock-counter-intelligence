@@ -166,8 +166,27 @@ func TestPreviewEncodings(t *testing.T) {
 	if !strings.HasPrefix(sixel, "\x1bP0;1;0q\"1;1;12;12") || !strings.HasSuffix(sixel, "-\x1b\\") || strings.Count(sixel, "-") != 2 {
 		t.Fatalf("sixel: header, two bands of six rows, terminator: %q", sixel[len(sixel)-40:])
 	}
-	if !strings.Contains(sixel, "#210;2;100;0;0") || !strings.Contains(sixel, "#210!12~") {
-		t.Fatalf("red is palette entry 210 and fills the first band: %q", sixel[strings.Index(sixel, "\"1;1"):][:60])
+	// The palette is made for the picture: two colours here, and red fills the whole first band.
+	if strings.Count(sixel, ";2;") != 2 || !strings.Contains(sixel, ";2;100;0;0") || !strings.Contains(sixel, ";2;0;0;100") {
+		t.Fatalf("a two-colour picture gets a two-colour palette: %q", sixel)
+	}
+	red := sixel[strings.Index(sixel, ";2;100;0;0")-2 : strings.Index(sixel, ";2;100;0;0")]
+	if !strings.Contains(sixel, red+"!12~") {
+		t.Fatalf("red fills the first band: %q", sixel)
+	}
+	gradient := image.NewRGBA(image.Rect(0, 0, 64, 12))
+	for x := 0; x < 64; x++ {
+		for y := 0; y < 12; y++ {
+			gradient.SetRGBA(x, y, color.RGBA{uint8(x * 4), uint8(x * 4), uint8(x * 4), 255})
+		}
+	}
+	palette := quantize(gradient, 8)
+	if len(palette) != 8 {
+		t.Fatalf("median cut fills the palette: %d", len(palette))
+	}
+	indexes := ditherIndexes(gradient, palette)
+	if indexes[0] == indexes[63] {
+		t.Fatal("dark and light ends map to different colours")
 	}
 	kitty := encodeKitty(picture, 40, 20, 8, 2)
 	if !strings.Contains(kitty, "a=T,f=100,i=7,q=2,C=1,c=8,r=2") || !strings.HasPrefix(kitty, "\x1b_Ga=d,d=i,i=7") {
@@ -221,7 +240,11 @@ func TestOnlineBrowserScreen(t *testing.T) {
 		t.Fatalf("search while typing:\n%s", screen)
 	}
 	ui.handle([]byte("\r"))
-	ui.handle([]byte("m")) // blocks -> sixel
+	ui.handle([]byte("m"))                // blocks -> sixel
+	ui.handle([]byte("\x1b[4;540;1000t")) // window size first: 1000 / 100 columns, 540 / 30 rows
+	if ui.browse.cellWidth != 10 || ui.browse.cellHeight != 18 {
+		t.Fatalf("the cell size follows from the window size: %d x %d", ui.browse.cellWidth, ui.browse.cellHeight)
+	}
 	ui.handle([]byte("\x1b[6;18;9t"))
 	if ui.browse.cellWidth != 9 || ui.browse.cellHeight != 18 {
 		t.Fatalf("the cell-size answer is read, not typed: %d x %d", ui.browse.cellWidth, ui.browse.cellHeight)
