@@ -65,6 +65,21 @@ func sampleBody() (positions [][3]float32, bones []int, interior []bool) {
 	return
 }
 
+// SampleParticle is a compiled particle system with a constant colour (200, 40, 255), a random
+// colour range in an initializer ((10, 20, 30) to (250, 0, 0)) and a vector that is not a colour.
+func SampleParticle() []byte {
+	rgba := func(r, g, b, a int64) *Value {
+		return NewArray(&Value{Kind: Int32, I: r}, &Value{Kind: Int32, I: g}, &Value{Kind: Int32, I: b}, &Value{Kind: Int32, I: a})
+	}
+	data := NewObject().Set("_class", NewString("CParticleSystemDefinition")).
+		Set("m_ConstantColor", rgba(200, 40, 255, 255)).
+		Set("m_Initializers", NewArray(NewObject().Set("_class", NewString("C_INIT_RandomColor")).
+			Set("m_ColorMin", rgba(10, 20, 30, 128)).Set("m_ColorMax", rgba(250, 0, 0, 255)))).
+		Set("m_vecOffset", NewArray(&Value{Kind: Int32, I: 1}, &Value{Kind: Int32, I: 2}, &Value{Kind: Int32, I: 3}))
+	encoded, _ := WriteKV3(data, FormatGeneric)
+	return (&Resource{Version: 0, Blocks: []Block{{"RED2", encoded}, {"DATA", encoded}}}).Encode()
+}
+
 // SampleInterfaceImage is a compiled texture laid out as the game's interface images (hero cards,
 // portraits, ability icons) are: uncompressed BGRA with mips levels, here all black.
 func SampleInterfaceImage(w, h, mips int) []byte {

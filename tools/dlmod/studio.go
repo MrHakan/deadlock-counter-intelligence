@@ -53,6 +53,7 @@ type studio struct {
 	sounds    *source2.VPKIndex // the game's sounds, read on the Sounds tab's first use
 	allSounds []string
 	images    *source2.VPKIndex // the game's interface images, read on the Images tab's first use
+	particles *source2.VPKIndex // the game's particle systems, read on the Effects tab's first use
 }
 
 // studioOptions are the page's settings, as ImportOptions takes them.
@@ -177,6 +178,9 @@ func (s *studio) routes() http.Handler {
 	api("images/restore", s.imageRestore)
 	api("text", s.textList)
 	api("text/save", s.textSave)
+	api("effects", s.effectList)
+	api("effects/apply", s.effectApply)
+	api("effects/restore", s.effectRestore)
 	return mux
 }
 
