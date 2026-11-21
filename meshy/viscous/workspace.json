@@ -1,0 +1,566 @@
+{
+  "hero": "viscous",
+  "name": "Viscous",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Evasive",
+      "Disruptor",
+      "Gooey"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces Viscous in Deadlock, a stylized third-person hero shooter (Viscous: Rolls around deflecting bullets). Its abilities are Splatter, The Cube, Puddle Punch, Goo Ball. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on Viscous's weapon, Deep Sea Interpreter. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_staging/viscous/viscous.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to Viscous's height (119 units) and rigs it to Viscous's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on Viscous's weapon, Deep Sea Interpreter. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality and its part in a team (rolls around deflecting bullets). Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/viscous_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/viscous_card_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/viscous_card_critical_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/viscous_card_gloat_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/viscous_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/viscous_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/viscous_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "gun",
+      "title": "Weapon picture",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Side view of the weapon or held prop of {{CHARACTER}} from the reference sheet, alone, horizontal, stylized 3D render. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/gun.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/guns/viscous_gun_psd.vtex_c",
+      "size": "600x300",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_splatter",
+      "title": "Ability icon: Splatter",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Splatter\", an ability of {{CHARACTER}} from the reference sheet: Damage enemies and make a mess. Throw a ball of goo that deals damage and leaves puddles of goo behind that apply movement slow to enemies in the radius. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_splatter.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/viscous/viscous_goo_ball_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_the_cube",
+      "title": "Ability icon: The Cube",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"The Cube\", an ability of {{CHARACTER}} from the reference sheet: The Cube is a safe place to be. Encase the target in a cube of restorative goo that protects from damage, and increases health regen. Target is unable to take any new actions while cubed. Can be used on self. Press X to escape early. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_the_cube.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/viscous/viscous_restorative_goo_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_puddle_punch",
+      "title": "Ability icon: Puddle Punch",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Puddle Punch\", an ability of {{CHARACTER}} from the reference sheet: Punch enemies with a giant fist. Materialize a fist in the world that punches everyone in the area, applying X. Punching an enemy deals X and applies X. Enemies can Parry this attack. You and your allies have increased Air Control. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_puddle_punch.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/viscous/viscous_goo_punch_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_goo_ball",
+      "title": "Ability icon: Goo Ball",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Goo Ball\", an ability of {{CHARACTER}} from the reference sheet: Roll around and cause chaos. Morph into a large goo ball that deals damage and stuns enemies on impact. The ball grants large amounts of Bullet and Spirit resist, bounces off walls and can double jump. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_goo_ball.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/viscous/viscous_goo_sphere_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "prop_viscous_cube",
+      "title": "Ability model: viscous_cube",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Viscous's \"viscous cube\" ability model. It is used by \"The Cube\" (The Cube is a safe place to be). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_viscous_cube.glb",
+      "kind": "prop",
+      "target": "models/abilities/viscous_cube.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_viscous_fist_melt",
+      "title": "Ability model: viscous_fist_melt",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Viscous's \"viscous fist melt\" ability model. It is used by \"Puddle Punch\" (Punch enemies with a giant fist). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_viscous_fist_melt.glb",
+      "kind": "prop",
+      "target": "models/abilities/viscous_fist_melt.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_viscous_fist_model",
+      "title": "Ability model: viscous_fist_model",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Viscous's \"viscous fist model\" ability model. It is used by \"Puddle Punch\" (Punch enemies with a giant fist). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_viscous_fist_model.glb",
+      "kind": "prop",
+      "target": "models/abilities/viscous_fist_model.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_viscous_puddle_punch_model",
+      "title": "Ability model: viscous_puddle_punch_model",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Viscous's \"viscous puddle punch model\" ability model. It is used by \"Puddle Punch\" (Punch enemies with a giant fist). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_viscous_puddle_punch_model.glb",
+      "kind": "prop",
+      "target": "models/abilities/viscous_puddle_punch_model.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_viscous_puddle_telegraph_fx",
+      "title": "Ability model: viscous_puddle_telegraph_fx",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Viscous's \"viscous puddle telegraph fx\" ability model. It is used by \"Puddle Punch\" (Punch enemies with a giant fist). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_viscous_puddle_telegraph_fx.glb",
+      "kind": "prop",
+      "target": "models/abilities/viscous_puddle_telegraph_fx.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_viscous_sphere",
+      "title": "Ability model: viscous_sphere",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Viscous's \"viscous sphere\" ability model. Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_viscous_sphere.glb",
+      "kind": "prop",
+      "target": "models/abilities/viscous_sphere.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    }
+  ],
+  "game": {
+    "id": "viscous",
+    "name": "Viscous",
+    "role": "Rolls around deflecting bullets",
+    "playstyle": "Viscous vexes his opponents through clever evasion and strategic uses of healing, enabling him to withstand the most brutal of enemy attacks.",
+    "weapon": "Deep Sea Interpreter",
+    "tags": [
+      "Evasive",
+      "Disruptor",
+      "Gooey"
+    ],
+    "abilities": [
+      {
+        "key": "viscous_goo_grenade",
+        "name": "Splatter",
+        "quip": "Damage enemies and make a mess",
+        "description": "Throw a ball of goo that deals damage and leaves puddles of goo behind that apply movement slow to enemies in the radius.",
+        "icon": "panorama/images/hud/abilities/viscous/viscous_goo_ball_psd.vtex_c",
+        "slug": "goo_grenade",
+        "props": "models/abilities/viscous_puddle_punch_model.vmdl, models/abilities/viscous_puddle_telegraph_fx.vmdl"
+      },
+      {
+        "key": "viscous_restorative_goo",
+        "name": "The Cube",
+        "quip": "The Cube is a safe place to be",
+        "description": "Encase the target in a cube of restorative goo that protects from damage, and increases health regen. Target is unable to take any new actions while cubed. Can be used on self. Press X to escape early.",
+        "icon": "panorama/images/hud/abilities/viscous/viscous_restorative_goo_psd.vtex_c",
+        "slug": "restorative_goo",
+        "props": "models/abilities/viscous_cube.vmdl"
+      },
+      {
+        "key": "viscous_telepunch",
+        "name": "Puddle Punch",
+        "quip": "Punch enemies with a giant fist",
+        "description": "Materialize a fist in the world that punches everyone in the area, applying X. Punching an enemy deals X and applies X. Enemies can Parry this attack. You and your allies have increased Air Control.",
+        "icon": "panorama/images/hud/abilities/viscous/viscous_goo_punch_psd.vtex_c",
+        "slug": "telepunch",
+        "props": "models/abilities/viscous_fist_melt.vmdl, models/abilities/viscous_fist_model.vmdl, models/abilities/viscous_puddle_punch_model.vmdl, models/abilities/viscous_puddle_telegraph_fx.vmdl"
+      },
+      {
+        "key": "viscous_goo_bowling_ball",
+        "name": "Goo Ball",
+        "quip": "Roll around and cause chaos",
+        "description": "Morph into a large goo ball that deals damage and stuns enemies on impact. The ball grants large amounts of Bullet and Spirit resist, bounces off walls and can double jump.",
+        "icon": "panorama/images/hud/abilities/viscous/viscous_goo_sphere_psd.vtex_c",
+        "slug": "goo_bowling_ball"
+      }
+    ],
+    "model": "models/heroes_staging/viscous/viscous.vmdl",
+    "modelFolder": "models/heroes_staging/viscous/",
+    "height": 118.92384839057922,
+    "skeleton": "models/heroes_staging/kelvin_v2/maya/kelvin.vnmskel",
+    "boneMasks": [
+      "FullBody",
+      "Throw_UpperBody",
+      "Reload_Zoomed",
+      "Reload_Idle",
+      "Reload_InAir",
+      "Reload_Slide",
+      "Reload_Haspath",
+      "Reload_HasPathCrouch",
+      "Reload_Crouch",
+      "Turn_LowerBody",
+      "zero",
+      "root",
+      "UpperBodyReplace_InAir",
+      "UpperBodyReplace_Turn",
+      "UpperBodyReplace_Slide",
+      "UpperBodyReplace_AirDash",
+      "UpperBodyReplace_GroundDash",
+      "melee_UpperBody",
+      "melee_dash",
+      "Reload_GunOnly",
+      "Cast_UpperBody",
+      "UpperBodyReplace_Asleep_Channeling",
+      "UpperBodyReplace_Asleep",
+      "UpperBodyReplace_Shopping",
+      "Reload_HasPathCrouch_ALT",
+      "Reload_HasPath_ALT",
+      "Reload_Crouch_ALT",
+      "Parry_UpperBody",
+      "Reload_InAir_ALT",
+      "Reload_Slide_ALT",
+      "Left_Arm_ALL"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/viscous_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/viscous_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/viscous_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/viscous_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/viscous_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/viscous_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/viscous_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      },
+      {
+        "path": "panorama/images/heroes/guns/viscous_gun_psd.vtex_c",
+        "label": "Weapon picture",
+        "width": 600,
+        "height": 300
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/viscous/viscous_goo_ball_psd.vtex_c",
+        "label": "goo ball",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/viscous/viscous_goo_puddle_psd.vtex_c",
+        "label": "goo puddle",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/viscous/viscous_goo_punch_psd.vtex_c",
+        "label": "goo punch",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/viscous/viscous_goo_sphere_psd.vtex_c",
+        "label": "goo sphere",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/viscous/viscous_restorative_goo_psd.vtex_c",
+        "label": "restorative goo",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/viscous_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/viscous.vsvg_c",
+        "panorama/images/heroes/hero_names/viscous_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/viscous.vpk"
+    },
+    "abilityModels": [
+      "models/abilities/viscous_cube.vmdl",
+      "models/abilities/viscous_fist_melt.vmdl",
+      "models/abilities/viscous_fist_model.vmdl",
+      "models/abilities/viscous_puddle_punch_model.vmdl",
+      "models/abilities/viscous_puddle_telegraph_fx.vmdl",
+      "models/abilities/viscous_sphere.vmdl"
+    ],
+    "particleFolders": [
+      "particles/abilities/viscous/",
+      "particles/weapon_fx/viscous/"
+    ],
+    "effects": 284,
+    "nameKeys": [
+      "Steam_RP_hero_viscous",
+      "hero_viscous:n",
+      "hero_viscous_search:n"
+    ],
+    "tagKeys": [
+      "Citadel_Viscous_HeroTag_1",
+      "Citadel_Viscous_HeroTag_2",
+      "Citadel_Viscous_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

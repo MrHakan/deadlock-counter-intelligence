@@ -1,0 +1,503 @@
+{
+  "hero": "nano",
+  "name": "Calico",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Tricksy",
+      "Slippery",
+      "Burst Damage"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces Calico in Deadlock, a stylized third-person hero shooter (Calico: Wreaks havoc from the sidelines). Its abilities are Gloom Bombs, Leaping Slash, Ava, Return to Shadows. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on Calico's weapon, Sweetest Lie. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_staging/nano/nano_v2/nano.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to Calico's height (95 units) and rigs it to Calico's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on Calico's weapon, Sweetest Lie. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality and its part in a team (wreaks havoc from the sidelines). Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/calico_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/nano_card_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/nano_card_critical_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/nano_card_gloat_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/nano_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/nano_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/nano_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "gun",
+      "title": "Weapon picture",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Side view of the weapon or held prop of {{CHARACTER}} from the reference sheet, alone, horizontal, stylized 3D render. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/gun.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/guns/nano_gun_psd.vtex_c",
+      "size": "600x300",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_gloom_bombs",
+      "title": "Ability icon: Gloom Bombs",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Gloom Bombs\", an ability of {{CHARACTER}} from the reference sheet: Throw out cluster bombs. Throw a cluster of bombs that detonate after a delay, dealing X. Enemies hit by multiple bombs take X% damage. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_gloom_bombs.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/nano/nano_clustergrenade_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_leaping_slash",
+      "title": "Ability icon: Leaping Slash",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Leaping Slash\", an ability of {{CHARACTER}} from the reference sheet: Dash forward and slash enemies. Dash forward before slashing all enemies in a circle, dealing X. If the ability hits at least one hero, X a small amount of health. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_leaping_slash.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/nano/nano_dash_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_ava",
+      "title": "Ability icon: Ava",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Ava\", an ability of {{CHARACTER}} from the reference sheet: Take control of Ava. Turn to shadows and possess Ava. You gain X that increases over time, and become hidden on the minimap. Taking damage from an enemy hero resets your bonus move speed and puts Ava on a brief cooldown. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_ava.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/nano/nano_catform_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_return_to_shadows",
+      "title": "Ability icon: Return to Shadows",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Return to Shadows\", an ability of {{CHARACTER}} from the reference sheet: Turn to Shadows, gaining movespeed and dealing delayed damage. Instantly turn to shadows, becoming untargetable, gaining X, and dealing X. After a delay, return from the shadows, dealing X again. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_return_to_shadows.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/nano/nano_shadow_pulse_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "prop_nano_catform_model",
+      "title": "Ability model: nano_catform_model",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Calico's \"nano catform model\" ability model. It is used by \"Ava\" (Take control of Ava). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_nano_catform_model.glb",
+      "kind": "prop",
+      "target": "models/abilities/nano_catform_model.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_nano_ritual_target_swirl",
+      "title": "Ability model: nano_ritual_target_swirl",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Calico's \"nano ritual target swirl\" ability model. Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_nano_ritual_target_swirl.glb",
+      "kind": "prop",
+      "target": "models/abilities/nano_ritual_target_swirl.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    }
+  ],
+  "game": {
+    "id": "nano",
+    "name": "Calico",
+    "role": "Wreaks havoc from the sidelines",
+    "playstyle": "Calico uses the shadows to her advantage, weaving in and out of combat to hunt down her enemies one by one.",
+    "weapon": "Sweetest Lie",
+    "tags": [
+      "Tricksy",
+      "Slippery",
+      "Burst Damage"
+    ],
+    "abilities": [
+      {
+        "key": "ability_nano_clustergrenade",
+        "name": "Gloom Bombs",
+        "quip": "Throw out cluster bombs",
+        "description": "Throw a cluster of bombs that detonate after a delay, dealing X. Enemies hit by multiple bombs take X% damage.",
+        "icon": "panorama/images/hud/abilities/nano/nano_clustergrenade_psd.vtex_c",
+        "slug": "clustergrenade"
+      },
+      {
+        "key": "ability_nano_dash",
+        "name": "Leaping Slash",
+        "quip": "Dash forward and slash enemies",
+        "description": "Dash forward before slashing all enemies in a circle, dealing X. If the ability hits at least one hero, X a small amount of health.",
+        "icon": "panorama/images/hud/abilities/nano/nano_dash_psd.vtex_c",
+        "slug": "dash"
+      },
+      {
+        "key": "ability_nano_catform",
+        "name": "Ava",
+        "quip": "Take control of Ava",
+        "description": "Turn to shadows and possess Ava. You gain X that increases over time, and become hidden on the minimap. Taking damage from an enemy hero resets your bonus move speed and puts Ava on a brief cooldown.",
+        "icon": "panorama/images/hud/abilities/nano/nano_catform_psd.vtex_c",
+        "slug": "catform",
+        "props": "models/abilities/nano_catform_model.vmdl"
+      },
+      {
+        "key": "ability_nano_shadow_pulse",
+        "name": "Return to Shadows",
+        "quip": "Turn to Shadows, gaining movespeed and dealing delayed damage",
+        "description": "Instantly turn to shadows, becoming untargetable, gaining X, and dealing X. After a delay, return from the shadows, dealing X again.",
+        "icon": "panorama/images/hud/abilities/nano/nano_shadow_pulse_psd.vtex_c",
+        "slug": "shadow_pulse"
+      }
+    ],
+    "model": "models/heroes_staging/nano/nano_v2/nano.vmdl",
+    "modelFolder": "models/heroes_staging/nano/nano_v2/",
+    "height": 94.55904084444046,
+    "skeleton": "models/heroes_staging/nano/nano_v2/nano.vnmskel",
+    "boneMasks": [
+      "Cast_UpperBody",
+      "melee_UpperBody",
+      "Parry_UpperBody",
+      "Reload_Crouch",
+      "Reload_Haspath",
+      "Reload_HasPath_ALT",
+      "Reload_HasPathCrouch",
+      "Reload_HasPathCrouch_ALT",
+      "Reload_Idle",
+      "Reload_InAir",
+      "Reload_InAir_ALT",
+      "Reload_Slide",
+      "Throw_UpperBody",
+      "UpperBodyReplace_Asleep",
+      "UpperBodyReplace_InAir",
+      "UpperBodyReplace_Slide",
+      "UpperBodyReplace_Turn",
+      "Cat_Only"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/nano_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/nano_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/nano_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/nano_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/nano_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/nano_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/calico_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      },
+      {
+        "path": "panorama/images/heroes/guns/nano_gun_psd.vtex_c",
+        "label": "Weapon picture",
+        "width": 600,
+        "height": 300
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/nano/nano_catform_psd.vtex_c",
+        "label": "catform",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/nano/nano_clustergrenade_psd.vtex_c",
+        "label": "clustergrenade",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/nano/nano_dash_psd.vtex_c",
+        "label": "dash",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/nano/nano_humanform_psd.vtex_c",
+        "label": "humanform",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/nano/nano_replicate_psd.vtex_c",
+        "label": "replicate",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/nano/nano_roller_bomb_psd.vtex_c",
+        "label": "roller bomb",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/nano/nano_shadow_pulse_psd.vtex_c",
+        "label": "shadow pulse",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/nano/nano_tunnel_vision_psd.vtex_c",
+        "label": "tunnel vision",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/nano/nano_warp_psd.vtex_c",
+        "label": "warp",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/calico_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/calico.vsvg_c",
+        "panorama/images/heroes/hero_names/calico_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/nano.vpk"
+    },
+    "abilityModels": [
+      "models/abilities/nano_catform_model.vmdl",
+      "models/abilities/nano_ritual_target_swirl.vmdl"
+    ],
+    "particleFolders": [
+      "particles/abilities/nano/",
+      "particles/weapon_fx/nano/"
+    ],
+    "effects": 431,
+    "nameKeys": [
+      "Steam_RP_hero_nano",
+      "hero_nano:n",
+      "hero_nano_search:n"
+    ],
+    "tagKeys": [
+      "Citadel_Nano_HeroTag_1",
+      "Citadel_Nano_HeroTag_2",
+      "Citadel_Nano_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

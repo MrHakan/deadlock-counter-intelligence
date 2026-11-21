@@ -1,0 +1,483 @@
+{
+  "hero": "lash",
+  "name": "Lash",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Initiator",
+      "High-Flying",
+      "Arrogant"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces Lash in Deadlock, a stylized third-person hero shooter (Lash: Dives down to stomp his foes). Its abilities are Ground Strike, Grapple, Flog, Death Slam. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on Lash's weapon, Tale of The Tape. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_wip/lash/lash.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to Lash's height (105 units) and rigs it to Lash's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on Lash's weapon, Tale of The Tape. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality and its part in a team (dives down to stomp his foes). Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/lash_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/lash_card_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/lash_card_critical_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/lash_card_gloat_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/lash_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/lash_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/lash_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "gun",
+      "title": "Weapon picture",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Side view of the weapon or held prop of {{CHARACTER}} from the reference sheet, alone, horizontal, stylized 3D render. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/gun.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/guns/lash_gun_psd.vtex_c",
+      "size": "600x300",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_ground_strike",
+      "title": "Ability icon: Ground Strike",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Ground Strike\", an ability of {{CHARACTER}} from the reference sheet: Slam down to the ground, damaging enemies. Stomp the ground beneath you, damaging enemies in front of you. If you perform Ground Strike while airborne, you quickly dive towards the ground. Damage grows slower after 25m. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_ground_strike.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/lash/lash_death_slam_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_grapple",
+      "title": "Ability icon: Grapple",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Grapple\", an ability of {{CHARACTER}} from the reference sheet: Use your whip to pull yourself to an enemy. Pull yourself through the air toward a target. Using Grapple also resets your limit of air jumps and dashes. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_grapple.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/lash/lash_lash_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_flog",
+      "title": "Ability icon: Flog",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Flog\", an ability of {{CHARACTER}} from the reference sheet: Heals from targets ahead of you. Strike enemies in front of you with your whip, X for a portion of the damage dealt. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_flog.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/lash/lash_flog_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_death_slam",
+      "title": "Ability icon: Death Slam",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Death Slam\", an ability of {{CHARACTER}} from the reference sheet: Lift enemies and smash them into the ground. Focus on enemies to connect whips to them. After channeling, connected enemies are lifted and stunned then slammed into the ground. Your victims and any enemies in the landing zone will be damaged and slowed. PressXto. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_death_slam.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/lash/lash_counter_lash_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "prop_lash_flog_whip_fx",
+      "title": "Ability model: lash_flog_whip_fx",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Lash's \"lash flog whip fx\" ability model. It is used by \"Flog\" (Heals from targets ahead of you). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_lash_flog_whip_fx.glb",
+      "kind": "prop",
+      "target": "models/abilities/lash_flog_whip_fx.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_lash_ground_strike_fx",
+      "title": "Ability model: lash_ground_strike_fx",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Lash's \"lash ground strike fx\" ability model. It is used by \"Death Slam\" (Lift enemies and smash them into the ground). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_lash_ground_strike_fx.glb",
+      "kind": "prop",
+      "target": "models/abilities/lash_ground_strike_fx.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    }
+  ],
+  "game": {
+    "id": "lash",
+    "name": "Lash",
+    "role": "Dives down to stomp his foes",
+    "playstyle": "Lash gives his enemies little room to breathe, either by flying in from long distances to initiate combat with unsuspecting enemies, or pursuing said enemies when they try to run.",
+    "weapon": "Tale of The Tape",
+    "tags": [
+      "Initiator",
+      "High-Flying",
+      "Arrogant"
+    ],
+    "abilities": [
+      {
+        "key": "citadel_ability_lash_down_strike",
+        "name": "Ground Strike",
+        "quip": "Slam down to the ground, damaging enemies",
+        "description": "Stomp the ground beneath you, damaging enemies in front of you. If you perform Ground Strike while airborne, you quickly dive towards the ground. Damage grows slower after 25m.",
+        "icon": "panorama/images/hud/abilities/lash/lash_death_slam_psd.vtex_c",
+        "slug": "down_strike",
+        "props": "models/abilities/lash_ground_strike_fx.vmdl"
+      },
+      {
+        "key": "citadel_ability_lash",
+        "name": "Grapple",
+        "quip": "Use your whip to pull yourself to an enemy",
+        "description": "Pull yourself through the air toward a target. Using Grapple also resets your limit of air jumps and dashes.",
+        "icon": "panorama/images/hud/abilities/lash/lash_lash_psd.vtex_c",
+        "slug": "lash",
+        "props": "models/abilities/lash_flog_whip_fx.vmdl"
+      },
+      {
+        "key": "ability_lash_flog",
+        "name": "Flog",
+        "quip": "Heals from targets ahead of you",
+        "description": "Strike enemies in front of you with your whip, X for a portion of the damage dealt.",
+        "icon": "panorama/images/hud/abilities/lash/lash_flog_psd.vtex_c",
+        "slug": "flog",
+        "props": "models/abilities/lash_flog_whip_fx.vmdl, models/abilities/lash_ground_strike_fx.vmdl"
+      },
+      {
+        "key": "citadel_ability_lash_ultimate",
+        "name": "Death Slam",
+        "quip": "Lift enemies and smash them into the ground",
+        "description": "Focus on enemies to connect whips to them. After channeling, connected enemies are lifted and stunned then slammed into the ground. Your victims and any enemies in the landing zone will be damaged and slowed. PressXto throw connected enemies early. Enemies that are not in line of sight or go out of range during the latch time will not be grabbed.",
+        "icon": "panorama/images/hud/abilities/lash/lash_counter_lash_psd.vtex_c",
+        "slug": "ultimate",
+        "props": "models/abilities/lash_ground_strike_fx.vmdl"
+      }
+    ],
+    "model": "models/heroes_wip/lash/lash.vmdl",
+    "modelFolder": "models/heroes_wip/lash/",
+    "height": 105.25933037698269,
+    "skeleton": "models/heroes_wip/lash/lash.vnmskel",
+    "boneMasks": [
+      "Cast_UpperBody",
+      "FullBody",
+      "melee_dash",
+      "melee_UpperBody",
+      "Parry_UpperBody",
+      "Reload_Crouch",
+      "Reload_GunOnly",
+      "Reload_Haspath",
+      "Reload_HasPathCrouch",
+      "Reload_Idle",
+      "Reload_InAir",
+      "Reload_Slide",
+      "Reload_Zoomed",
+      "root",
+      "Throw_UpperBody",
+      "Turn_LowerBody",
+      "UpperBodyReplace_AirDash",
+      "UpperBodyReplace_Asleep",
+      "UpperBodyReplace_Asleep_Channeling",
+      "UpperBodyReplace_GroundDash",
+      "UpperBodyReplace_InAir",
+      "UpperBodyReplace_Shopping",
+      "UpperBodyReplace_Slide",
+      "UpperBodyReplace_Turn",
+      "zero"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/lash_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/lash_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/lash_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/lash_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/lash_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/lash_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/lash_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      },
+      {
+        "path": "panorama/images/heroes/guns/lash_gun_psd.vtex_c",
+        "label": "Weapon picture",
+        "width": 600,
+        "height": 300
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/lash/lash_counter_lash_psd.vtex_c",
+        "label": "counter lash",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/lash/lash_death_slam_psd.vtex_c",
+        "label": "death slam",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/lash/lash_flog_psd.vtex_c",
+        "label": "flog",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/lash/lash_lash_psd.vtex_c",
+        "label": "lash",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/lash_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/lash.vsvg_c",
+        "panorama/images/heroes/hero_names/lash_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/lash.vpk"
+    },
+    "abilityModels": [
+      "models/abilities/lash_flog_whip_fx.vmdl",
+      "models/abilities/lash_ground_strike_fx.vmdl"
+    ],
+    "particleFolders": [
+      "particles/abilities/lash/",
+      "particles/weapon_fx/lash/"
+    ],
+    "effects": 254,
+    "nameKeys": [
+      "Steam_RP_hero_lash",
+      "hero_lash:n",
+      "hero_lash_search:n"
+    ],
+    "tagKeys": [
+      "Citadel_Lash_HeroTag_1",
+      "Citadel_Lash_HeroTag_2",
+      "Citadel_Lash_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

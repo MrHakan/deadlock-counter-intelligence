@@ -1,0 +1,460 @@
+{
+  "hero": "baba",
+  "name": "Baba",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Cackling",
+      "Beady",
+      "Hexing"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces Baba in Deadlock, a stylized third-person hero shooter. Its abilities are Threadsap, Granny Long Legs, Baba's Brew, Feed The Birds. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on Baba's weapon, Bunko-Night Special. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_wip/baba/baba.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to Baba's height (104 units) and rigs it to Baba's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on Baba's weapon, Bunko-Night Special. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality. Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/baba_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/baba_card_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/baba_card_critical_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/baba_card_gloat_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/baba_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/baba_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/baba_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "gun",
+      "title": "Weapon picture",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Side view of the weapon or held prop of {{CHARACTER}} from the reference sheet, alone, horizontal, stylized 3D render. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/gun.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/guns/baba_gun_psd.vtex_c",
+      "size": "600x300",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_threadsap",
+      "title": "Ability icon: Threadsap",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Threadsap\", an ability of {{CHARACTER}} from the reference sheet: Threadsap. Weave a scraggly thread that follows your crosshair before bursting along its path, dealing X and stealing enemy X, increased in effectiveness for Baba. While holding stolen X, Baba deals X with every bullet. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_threadsap.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/baba/threadsap_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_granny_long_legs",
+      "title": "Ability icon: Granny Long Legs",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Granny Long Legs\", an ability of {{CHARACTER}} from the reference sheet: Granny Long Legs: jump high and kick anyone nearby with spirit-charged legs. Your bench's legs extend, granting X, higher jumps, Debuff Resistance and Melee Resistance. Light Melee: Perform a kick that knocks enemies back. Heavy Melee: Perform a ground pound that applies X, X, and deals X. Hold. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_granny_long_legs.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/baba/strafing_run_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_baba_s_brew",
+      "title": "Ability icon: Baba's Brew",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Baba's Brew\", an ability of {{CHARACTER}} from the reference sheet: Brew Baba's special pot of tea, then throw it to ignite or silence enemies, or shield allies. Brew a pot of tea that applies a magical effect in an area when thrown, cycling over time in a random order between a soothing X, X, or scalding burn that deals X and reduces X. Press X to pause or resume brewing. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_baba_s_brew.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/baba/teapot_brew_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_feed_the_birds",
+      "title": "Ability icon: Feed The Birds",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Feed The Birds\", an ability of {{CHARACTER}} from the reference sheet: Cover targets in front of you with bread, adding a stacking X . When the channel ends a flock of pigeons bombard the targets, dealing X and hexing each target into a pigeon, increasing in both damage and duration based. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_feed_the_birds.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/baba/pigeon_launcher_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "prop_baba_model_teapot_fx",
+      "title": "Ability model: baba_model_teapot_fx",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Baba's \"baba model teapot fx\" ability model. Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_baba_model_teapot_fx.glb",
+      "kind": "prop",
+      "target": "models/abilities/baba_model_teapot_fx.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    }
+  ],
+  "game": {
+    "id": "baba",
+    "name": "Baba",
+    "weapon": "Bunko-Night Special",
+    "tags": [
+      "Cackling",
+      "Beady",
+      "Hexing"
+    ],
+    "abilities": [
+      {
+        "key": "ability_baba_bubbling_brew",
+        "name": "Threadsap",
+        "quip": "Threadsap",
+        "description": "Weave a scraggly thread that follows your crosshair before bursting along its path, dealing X and stealing enemy X, increased in effectiveness for Baba. While holding stolen X, Baba deals X with every bullet.",
+        "icon": "panorama/images/hud/abilities/baba/threadsap_psd.vtex_c",
+        "slug": "bubbling_brew"
+      },
+      {
+        "key": "ability_baba_bench_run",
+        "name": "Granny Long Legs",
+        "quip": "Granny Long Legs: jump high and kick anyone nearby with spirit-charged legs.",
+        "description": "Your bench's legs extend, granting X, higher jumps, Debuff Resistance and Melee Resistance. Light Melee: Perform a kick that knocks enemies back. Heavy Melee: Perform a ground pound that applies X, X, and deals X. Hold X to charge a high jump, release to jump.",
+        "icon": "panorama/images/hud/abilities/baba/strafing_run_psd.vtex_c",
+        "slug": "bench_run"
+      },
+      {
+        "key": "ability_baba_hexing_brew",
+        "name": "Baba's Brew",
+        "quip": "Brew Baba's special pot of tea, then throw it to ignite or silence enemies, or shield allies",
+        "description": "Brew a pot of tea that applies a magical effect in an area when thrown, cycling over time in a random order between a soothing X, X, or scalding burn that deals X and reduces X. Press X to pause or resume brewing.",
+        "icon": "panorama/images/hud/abilities/baba/teapot_brew_psd.vtex_c",
+        "slug": "hexing_brew"
+      },
+      {
+        "key": "ability_baba_ultimate_2",
+        "name": "Feed The Birds",
+        "description": "Cover targets in front of you with bread, adding a stacking X . When the channel ends a flock of pigeons bombard the targets, dealing X and hexing each target into a pigeon, increasing in both damage and duration based on bread count.",
+        "icon": "panorama/images/hud/abilities/baba/pigeon_launcher_psd.vtex_c",
+        "slug": "ultimate_2"
+      }
+    ],
+    "model": "models/heroes_wip/baba/baba.vmdl",
+    "modelFolder": "models/heroes_wip/baba/",
+    "height": 104.01826548576355,
+    "skeleton": "models/heroes_wip/baba/baba.vnmskel",
+    "boneMasks": [
+      "Throw_UpperBody",
+      "melee_UpperBody",
+      "Reload_Idle",
+      "Reload_Haspath",
+      "threadsap_Haspath",
+      "UpperBodyReplace_Turn",
+      "Reload_Crouch",
+      "Reload_HasPathCrouch",
+      "Parry_UpperBody",
+      "hexing_brew_Haspath",
+      "melee_FullBody",
+      "melee_BenchAndBabaPelvis",
+      "UpperBodyReplace_Asleep",
+      "Cast_UpperBody",
+      "UpperBodyReplace_Slide",
+      "Reload_Slide",
+      "Reload_InAir_01",
+      "Reload_InAir",
+      "Pigeon_only",
+      "Pigeon_only_01"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/baba_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/baba_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/baba_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/baba_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/baba_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/baba_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/baba_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      },
+      {
+        "path": "panorama/images/heroes/guns/baba_gun_psd.vtex_c",
+        "label": "Weapon picture",
+        "width": 600,
+        "height": 300
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/baba/pigeon_hex_psd.vtex_c",
+        "label": "pigeon hex",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/baba/pigeon_launcher_psd.vtex_c",
+        "label": "pigeon launcher",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/baba/strafing_run_psd.vtex_c",
+        "label": "strafing run",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/baba/teapot_brew_psd.vtex_c",
+        "label": "teapot brew",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/baba/threadsap_psd.vtex_c",
+        "label": "threadsap",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/baba_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/baba.vsvg_c",
+        "panorama/images/heroes/hero_names/baba_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/baba.vpk"
+    },
+    "abilityModels": [
+      "models/abilities/baba_model_teapot_fx.vmdl"
+    ],
+    "particleFolders": [
+      "particles/abilities/baba/",
+      "particles/weapon_fx/baba/"
+    ],
+    "effects": 266,
+    "nameKeys": [
+      "Steam_RP_hero_baba",
+      "hero_baba:n",
+      "hero_baba_search:n",
+      "hero_baba_sort:n"
+    ],
+    "tagKeys": [
+      "Citadel_Baba_HeroTag_1",
+      "Citadel_Baba_HeroTag_2",
+      "Citadel_Baba_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

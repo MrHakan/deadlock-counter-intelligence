@@ -44,6 +44,12 @@ Usage:
   dlmod model <hero> <file> [-keep gun] [-move gun=X,Y,Z] [-scale 1] [-yaw 0] [-zup]
   dlmod image <game image> <picture> [...]  put pictures over game images (panorama/images/...vtex_c)
   dlmod text KEY=VALUE [...]           change lines of the English hero text (KEY= restores one)
+  dlmod select <hero> [bg=PIC] [name=TEXT] [logo=SVG] [tags=A,B,C] [colors=#rrggbb,...] [scene=hide]
+                               the hero select screen: background, name logo, tags, tag colours, 3D scene
+  dlmod icons <hero> [ICON=PIC ...]  list or replace ability icons (pictures become white glyphs)
+  dlmod meshy <hero|all> [folder] [concept=...]
+                               write a Meshy workspace: per-hero prompts for a full replacement character
+  dlmod apply <workspace folder>  install the generated files of a hero's Meshy workspace
   dlmod prop <game model> <file> [particle ...] [-scale 1]  put a model in place of an ability prop (a thrown bomb)
   dlmod effects <hero> <#rrggbb|palette> [strength|name]  recolour a hero's ability and weapon particles (or: restore)
   dlmod paint <hero> [palette|restore] [-skip NAME]  repaint a hero's ability particles, materials and textures
@@ -180,7 +186,7 @@ var commands = map[string]bool{
 	"install": true, "list": true, "status": true, "on": true, "enable": true, "off": true,
 	"disable": true, "remove": true, "uninstall": true, "patch": true, "repair": true,
 	"unpatch": true, "play": true, "help": true, "update": true, "profile": true, "profiles": true,
-	"search": true, "get": true, "extract": true, "model": true, "image": true, "prop": true, "effects": true, "paint": true, "text": true, "studio": true,
+	"search": true, "get": true, "extract": true, "model": true, "image": true, "prop": true, "effects": true, "paint": true, "text": true, "select": true, "icons": true, "meshy": true, "apply": true, "studio": true,
 }
 
 // palette holds escape sequences; every field is empty when colours are off (NO_COLOR, old consoles).
@@ -454,6 +460,14 @@ func execute(ui *UI, game Game, command string, args []string, opts options) err
 		return nil
 	case "model":
 		return modelCommand(ui, store, game, args, opts)
+	case "select":
+		return selectCommand(ui, game, args)
+	case "icons":
+		return iconsCommand(ui, store, game, args)
+	case "meshy":
+		return meshyCommand(ui, game, args)
+	case "apply":
+		return applyCommand(ui, store, game, args, opts)
 	case "text":
 		return textCommand(ui, game, args)
 	case "image":

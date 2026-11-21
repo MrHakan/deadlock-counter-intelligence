@@ -297,6 +297,20 @@ func (s *studio) rebuildText(p *webPrompter, project *textProject) error {
 
 // buildTextMod lays the edits over the game's current files and installs them as one mod.
 func buildTextMod(p prompter, game Game, project *textProject) error {
+	files := map[string][]byte{}
+	for file, edits := range project.Edits {
+		data, err := os.ReadFile(filepath.Join(game.Citadel(), filepath.FromSlash(file)))
+		if err != nil {
+			return fmt.Errorf("the game's %s could not be read: %v", file, err)
+		}
+		files[file] = []byte(applyEdits(string(data), edits))
+	}
+	return installGeneratedMod(p, game, customTextName, game.textDir(), files)
+}
+
+// installGeneratedMod installs files dlmod built as one mod, in place of the mod of that name:
+// with no files, the mod is only removed.
+func installGeneratedMod(p prompter, game Game, name, dir string, files map[string][]byte) error {
 	store, err := openStore(game)
 	if err != nil {
 		return err
@@ -306,33 +320,25 @@ func buildTextMod(p prompter, game Game, project *textProject) error {
 		return err
 	}
 	for _, entry := range entries {
-		if entry.Mod != nil && entry.Mod.Name == customTextName {
+		if entry.Mod != nil && entry.Mod.Name == name {
 			if err := store.remove(entry); err != nil {
 				return err
 			}
 		}
 	}
-	if len(project.Edits) == 0 {
-		p.say("No text is changed any more; the %s mod is removed.", customTextName)
+	if len(files) == 0 {
+		p.say("Nothing is changed any more; the %s mod is removed.", name)
 		return nil
 	}
-	files := map[string][]byte{}
-	for file, edits := range project.Edits {
-		data, err := os.ReadFile(filepath.Join(game.Citadel(), filepath.FromSlash(file)))
-		if err != nil {
-			return fmt.Errorf("the game's %s could not be read: %v", file, err)
-		}
-		files[file] = []byte(applyEdits(string(data), edits))
-	}
-	if err := os.MkdirAll(game.textDir(), 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	vpk := filepath.Join(game.textDir(), "pak01_dir.vpk")
+	vpk := filepath.Join(dir, "pak01_dir.vpk")
 	if err := os.WriteFile(vpk, source2.WriteVPK(files), 0o644); err != nil {
 		return err
 	}
 	defer os.Remove(vpk)
-	if err := store.install(p, vpk, customTextName); err != nil {
+	if err := store.install(p, vpk, name); err != nil {
 		return err
 	}
 	return ensurePatched(p, game)

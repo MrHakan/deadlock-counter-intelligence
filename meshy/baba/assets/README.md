@@ -1,0 +1,1 @@
+Put each generated file here under the name its step gives (model.glb, select.png, card.png, icon_<ability>.png, prop_<model>.glb), and logo.svg for a name logo of your own (white, filled paths), then run `dlmod apply` on the hero's folder.

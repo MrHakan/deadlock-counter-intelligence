@@ -157,7 +157,32 @@ The hero keeps its skeleton, animations, hitboxes, physics and abilities; only w
 - **Materials.** Each material of the model becomes a material for Deadlock's hero shader (`pbr.vfx`, with its outlines and status effects), and its colour texture is compressed to BC1 or BC3. WebP textures are not read: export with PNG or JPEG.
 - **Files.** dlmod rewrites the hero's `.vmdl_c` around the new mesh. Its blocks are decoded and written as [ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat) reads them: binary KeyValues3 (versions 4 and 5), meshoptimizer-compressed vertex and index buffers, the external reference list. Everything but the mesh blocks is copied unchanged.
 
-Without the browser: `dlmod model wraith model.glb`, with `-keep gun,cards` (parts to keep), `-scale 1.05`, `-yaw 90` or `-zup`.
+Without the browser: `dlmod model wraith model.glb`, with `-keep gun,cards` (parts to keep), `-scale 1.05`, `-yaw 90` or `-zup`. `-keep none` drops the hero's own gun, and `-move muzzle_flash=X,Y,Z` moves where shots and muzzle flashes start, for a character that holds something else.
+
+#### A whole replacement character
+
+A model is one piece of a hero. dlmod also replaces the rest, each with its own command, and each kind goes into one mod that dlmod rebuilds after every change:
+
+| Piece | Command | Notes |
+| --- | --- | --- |
+| Hero select screen | `dlmod select haze bg=art.png name=SHADE tags=Sneaky,Swift,Deadly colors=#7A3CFF,#FFB020 scene=hide` | The background picture, the big name logo (drawn from the name with a built-in stroke font, or `logo=file.svg`), the three tags and their colours. `scene=hide` empties the hero's 3D scene so the picture shows on its own, and the left of the picture fades to black under the hero grid. Mod *Hero select*; the name and tags go into *Custom text*. `dlmod select haze restore` undoes it. |
+| Cards and portraits | `dlmod image panorama/images/heroes/haze_card_psd.vtex_c card.png` | Any interface picture, scaled to cover the game's size. Mod *Custom images*. |
+| Ability icons | `dlmod icons haze` lists them, `dlmod icons haze 1=dagger.png` replaces one | Pictures become white glyphs on transparency, as the game's icons are: draw them white on black. |
+| Ability models | `dlmod prop models/abilities/ivy_thornbomb_model.vmdl bomb.glb` | A thrown or placed ability model, pinned to its root bone. |
+| Ability effects | `dlmod paint haze`, or `dlmod effects haze #7A3CFF` | Recolours particles, and with `paint` their textures and materials, to a palette. |
+| Wording | `dlmod text hero_haze:n=Shade` | Any line of the English hero text. |
+
+#### Meshy workspace
+
+[`meshy/`](meshy/) has a folder for every hero with the [Meshy](https://www.meshy.ai) prompts that make a full replacement character, written for that hero's role, weapon and four abilities: a design sheet, front, side and back views, the 3D model, an optional rig and weapon, hero select art, the cards and portraits at the game's sizes, one icon per ability and the ability models. Each step names its Meshy tool, model, aspect ratio and cost, the file to save it as, and the game file it replaces. The hero's `README.md` lists the hero's game files (model, skeleton, clips, pictures, icons, name logo, hero select scene, ability models, effects, text keys) and what the game does to its animations: melee and reloads are laid over the movement through bone masks, and both arms are solved by IK towards the gun, so a replacement is rigged to the bones the game leaves alone.
+
+```powershell
+dlmod meshy all meshy
+dlmod meshy haze meshy concept="Rook, a hulking stone golem with glowing blue runes"
+dlmod apply meshy/haze
+```
+
+`dlmod meshy` writes the folders from the installed game, and fills a character's description into the prompts. Generated files go into the hero's `assets/` under the names the prompts give; `dlmod apply` then installs every one that is there: the model, the hero select screen with the name, tags and colours set in `workspace.json`, the cards (a flat green background is keyed out), the icons and the ability models. The abilities' slots and icons come from [`tools/dlmod/hero_abilities.go`](tools/dlmod/hero_abilities.go), generated from deadlock-api's copy of the game data with `go run ./internal/genabilities <build>`, since the game keeps them in a compressed file dlmod does not read.
 
 Deadlock updates and Steam's *Verify integrity of game files* replace `gameinfo.gi`, which turns all mods off. The screen then shows **MODS OFF**: press `r`, or start the game with `dlmod play`, which repairs first. Consoles older than Windows 10 get a numbered menu instead, which `-plain` also selects.
 
@@ -176,6 +201,10 @@ The full-screen view needs about 5–8 MB of memory. While it waits it checks fo
 | `dlmod get <id or GameBanana address>` | Download and install a mod, for example `dlmod get https://gamebanana.com/mods/634614`. |
 | `dlmod studio`, or drop a model on dlmod | Open the model studio to put a `.glb`, `.gltf` or `.obj` model on a hero (see *Custom models*). |
 | `dlmod model <hero> <file>` | Put a model on a hero without the studio. |
+| `dlmod select <hero> [bg=… name=… logo=… tags=… colors=… scene=hide]` | Set the hero select screen for a replacement character. |
+| `dlmod image <game image> <picture>` / `dlmod icons <hero> [n=picture]` | Replace cards, portraits and ability icons. |
+| `dlmod prop <game model> <file>` / `dlmod paint <hero>` / `dlmod text KEY=VALUE` | Replace an ability model, recolour ability effects, change hero text. |
+| `dlmod meshy <hero or all> [folder] [concept=…]` / `dlmod apply <folder>` | Write per-hero Meshy prompts for a full replacement character, and install what was generated. |
 | `dlmod extract <path> [folder]` | Copy files out of the game's archive, for example `dlmod extract models/heroes_staging/haze`. |
 | `dlmod profile save <name>` / `use <name>` / `delete <name>` | Remember which mods are on, switch on exactly that set later (everything else is switched off, not deleted), or forget a profile. `dlmod profile` lists them. |
 
