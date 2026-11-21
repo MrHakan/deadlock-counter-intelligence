@@ -11,7 +11,7 @@ One folder per hero with the [Meshy](https://www.meshy.ai) prompts that make a f
 
 ## Heroes
 
-| Hero | Folder | Abilities | Icons | Cards | Ability models | Credits |
+| Hero | Folder | Abilities | Icons | Pictures | Ability models | Credits |
 | --- | --- | --- | --- | --- | --- | --- |
 | Abrams | [abrams](abrams/) | 4 | 4 | 8 | 0 | 156 |
 | Apollo | [apollo](apollo/) | 4 | 5 | 7 | 3 | 147 |
@@ -60,18 +60,20 @@ One folder per hero with the [Meshy](https://www.meshy.ai) prompts that make a f
 
 ## Where it lives in the repository
 
+The code is in [tools/dlmod](../tools/dlmod). Each hero's README lists that hero's game files: model, skeleton, clips, pictures, icons, name logo, hero select scene, ability models and effects.
+
 | File | What it does |
 | --- | --- |
-| `tools/dlmod/meshy_command.go` | Writes these folders: the steps, prompts and README of each hero. |
-| `tools/dlmod/workspace.go` | Reads a hero from the game: model, skeleton, clips, bone masks, pictures, icons, ability models, effects, text. |
-| `tools/dlmod/apply_command.go` | `dlmod apply`: installs the generated files of a hero's folder. |
-| `tools/dlmod/models.go` | Hero model paths and `dlmod model`. |
-| `tools/dlmod/source2/replace.go` | Rewrites a hero's `.vmdl_c` around a new mesh, fitted and rigged to the hero's bones. |
-| `tools/dlmod/source2/anim.go` | Reads the hero's animation skeleton and clips. |
-| `tools/dlmod/heroselect.go` | `dlmod select`: hero select background, name logo, tags, tag colours, hidden 3D scene. |
-| `tools/dlmod/source2/heroscene.go` | Panorama text files (SVG logos, stylesheets) and the hero select scene. |
-| `tools/dlmod/logo.go` | The stroke font that draws name logos. |
-| `tools/dlmod/icons_command.go, glyph.go` | `dlmod icons`: ability icons as white glyphs. |
-| `tools/dlmod/image_command.go, chroma.go` | `dlmod image`: cards and portraits; green-screen keying. |
-| `tools/dlmod/prop_command.go, source2/prop.go, source2/legacy.go` | `dlmod prop`: ability models. |
-| `tools/dlmod/paint_command.go, palette.go` | `dlmod paint`: ability effects, materials and textures recoloured. |
+| [meshy_command.go](../tools/dlmod/meshy_command.go) | Writes these folders: the steps, prompts and README of each hero. |
+| [workspace.go](../tools/dlmod/workspace.go) | Reads a hero from the game: model, skeleton, clips, bone masks, pictures, icons, ability models, effects, text. |
+| [apply_command.go](../tools/dlmod/apply_command.go) | `dlmod apply`: installs the generated files of a hero's folder. |
+| [models.go](../tools/dlmod/models.go) | Hero model paths and `dlmod model`. |
+| [source2/replace.go](../tools/dlmod/source2/replace.go) | Rewrites a hero's `.vmdl_c` around a new mesh, fitted and rigged to the hero's bones. |
+| [source2/anim.go](../tools/dlmod/source2/anim.go) | Reads the hero's animation skeleton and clips. |
+| [heroselect.go](../tools/dlmod/heroselect.go) | `dlmod select`: hero select background, name logo, tags, tag colours, hidden 3D scene. |
+| [source2/heroscene.go](../tools/dlmod/source2/heroscene.go) | Panorama text files (SVG logos, stylesheets) and the hero select scene. |
+| [logo.go](../tools/dlmod/logo.go) | The stroke font that draws name logos. |
+| [icons_command.go](../tools/dlmod/icons_command.go), [glyph.go](../tools/dlmod/glyph.go) | `dlmod icons`: ability icons as white glyphs. |
+| [image_command.go](../tools/dlmod/image_command.go), [chroma.go](../tools/dlmod/chroma.go) | `dlmod image`: cards and portraits; green-screen keying. |
+| [prop_command.go](../tools/dlmod/prop_command.go), [source2/prop.go](../tools/dlmod/source2/prop.go), [source2/legacy.go](../tools/dlmod/source2/legacy.go) | `dlmod prop`: ability models. |
+| [paint_command.go](../tools/dlmod/paint_command.go), [palette.go](../tools/dlmod/palette.go) | `dlmod paint`: ability effects, materials and textures recoloured. |

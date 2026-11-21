@@ -330,13 +330,13 @@ func workspaceIndex(all []*workspace) string {
 	b.WriteString("2. Generate the steps of `prompts.md` in order with the Meshy MCP tools or the Meshy site: the design sheet first, then everything else from it. Save each result in the hero's `assets/` under the name its step gives.\n")
 	b.WriteString("3. Close the game and run `dlmod apply meshy/<hero>`. It installs the model, the hero select screen (art, name logo, tags, colours, with the 3D scene hidden), the cards with their green keyed out, the ability icons as white glyphs and the ability models, each step whose file is in `assets/`.\n")
 	b.WriteString("4. `dlmod paint <hero>` recolours the ability effects to a palette.\n\n")
-	b.WriteString("## Heroes\n\n| Hero | Folder | Abilities | Icons | Cards | Ability models | Credits |\n| --- | --- | --- | --- | --- | --- | --- |\n")
+	b.WriteString("## Heroes\n\n| Hero | Folder | Abilities | Icons | Pictures | Ability models | Credits |\n| --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, w := range all {
 		a := w.Game
 		_, required := w.credits()
 		fmt.Fprintf(&b, "| %s | [%s](%s/) | %d | %d | %d | %d | %d |\n", a.Name, slugify(a.Name), slugify(a.Name), len(a.Abilities), len(a.Icons), len(a.Images), len(a.Props), required)
 	}
-	b.WriteString("\n## Where it lives in the repository\n\n")
+	b.WriteString("\n## Where it lives in the repository\n\nThe code is in [tools/dlmod](../tools/dlmod). Each hero's README lists that hero's game files: model, skeleton, clips, pictures, icons, name logo, hero select scene, ability models and effects.\n\n")
 	b.WriteString("| File | What it does |\n| --- | --- |\n")
 	for _, row := range [][2]string{
 		{"tools/dlmod/meshy_command.go", "Writes these folders: the steps, prompts and README of each hero."},
@@ -348,12 +348,16 @@ func workspaceIndex(all []*workspace) string {
 		{"tools/dlmod/heroselect.go", "`dlmod select`: hero select background, name logo, tags, tag colours, hidden 3D scene."},
 		{"tools/dlmod/source2/heroscene.go", "Panorama text files (SVG logos, stylesheets) and the hero select scene."},
 		{"tools/dlmod/logo.go", "The stroke font that draws name logos."},
-		{"tools/dlmod/icons_command.go, glyph.go", "`dlmod icons`: ability icons as white glyphs."},
-		{"tools/dlmod/image_command.go, chroma.go", "`dlmod image`: cards and portraits; green-screen keying."},
-		{"tools/dlmod/prop_command.go, source2/prop.go, source2/legacy.go", "`dlmod prop`: ability models."},
-		{"tools/dlmod/paint_command.go, palette.go", "`dlmod paint`: ability effects, materials and textures recoloured."},
+		{"tools/dlmod/icons_command.go tools/dlmod/glyph.go", "`dlmod icons`: ability icons as white glyphs."},
+		{"tools/dlmod/image_command.go tools/dlmod/chroma.go", "`dlmod image`: cards and portraits; green-screen keying."},
+		{"tools/dlmod/prop_command.go tools/dlmod/source2/prop.go tools/dlmod/source2/legacy.go", "`dlmod prop`: ability models."},
+		{"tools/dlmod/paint_command.go tools/dlmod/palette.go", "`dlmod paint`: ability effects, materials and textures recoloured."},
 	} {
-		fmt.Fprintf(&b, "| `%s` | %s |\n", row[0], row[1])
+		var links []string
+		for _, file := range strings.Fields(row[0]) {
+			links = append(links, fmt.Sprintf("[%s](../%s)", strings.TrimPrefix(file, "tools/dlmod/"), file))
+		}
+		fmt.Fprintf(&b, "| %s | %s |\n", strings.Join(links, ", "), row[1])
 	}
 	return b.String()
 }
