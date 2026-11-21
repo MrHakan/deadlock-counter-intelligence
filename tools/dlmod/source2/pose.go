@@ -453,8 +453,15 @@ type Rigged struct {
 // onHeroBones reports whether a rigged model's joints are the hero's own bones: named like them,
 // limbs among them, and every one within 3% of the hero's height of the bone of its name.
 func onHeroBones(mesh *ImportedMesh, skeleton *Skeleton, height float64) bool {
+	named, limb := heroJoints(mesh, skeleton, height)
+	return named >= 4 && limb
+}
+
+// heroJoints counts a rigged model's skinned joints that are the hero's bones where they stand, and
+// tells whether a limb is among them; none when any skinned joint is not.
+func heroJoints(mesh *ImportedMesh, skeleton *Skeleton, height float64) (int, bool) {
 	if len(mesh.Joints) != len(mesh.Positions) || len(mesh.JointPositions) != len(mesh.JointNames) || height <= 0 {
-		return false
+		return 0, false
 	}
 	skinned := map[int]bool{}
 	for _, joints := range mesh.Joints {
@@ -468,21 +475,21 @@ func onHeroBones(mesh *ImportedMesh, skeleton *Skeleton, height float64) bool {
 	named, limb := 0, false
 	for joint := range skinned {
 		if joint < 0 || joint >= len(mesh.JointNames) {
-			return false
+			return 0, false
 		}
 		bone, ok := skeleton.index[mesh.JointNames[joint]]
 		if !ok {
-			return false
+			return 0, false
 		}
 		p, _ := skeleton.position(mesh.JointNames[joint])
 		q := vec64(mesh.JointPositions[joint])
 		if math.Sqrt(dot(sub(p, q), sub(p, q))) > 0.03*height {
-			return false
+			return 0, false
 		}
 		named++
 		limb = limb || limbs[bone] != limbNone
 	}
-	return named >= 4 && limb
+	return named, limb
 }
 
 // PaintStroke sets how much vertices follow a bone, as painted in the studio: weight 1 makes

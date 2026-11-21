@@ -1,6 +1,7 @@
 package source2
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -67,6 +68,141 @@ type ImportOptions struct {
 	JointMap map[string]string // a rigged model's joint (by name) -> hero bone, over the automatic choice
 	Pins     map[int]string    // a piece of the model (see Pieces) -> the one hero bone it follows
 	Paint    []PaintStroke     // painted weights, in order
+
+	// Kept parts moved, by part name, in the model's space at rest (game units): a weapon pulled
+	// out of a wider body. The part still follows its bones, so the move turns with them.
+	KeptShift map[string][3]float64
+	// Bones moved at rest, by name, in the model's space: only bones the animations leave alone
+	// (a muzzle, which follows its parent as it rests), to go with a moved part.
+	BoneShift map[string][3]float64
+}
+
+// moveBones shifts bones at rest in the model's skeleton and in its animation group's decode
+// key, keeping their parents; the game places a bone no clip animates from these.
+func (m *Model) moveBones(blocks []Block, shift map[string][3]float64) error {
+	if len(shift) == 0 {
+		return nil
+	}
+	sk, err := m.Skeleton()
+	if err != nil {
+		return err
+	}
+	local := map[string][3]float64{} // each move in its parent's space
+	for name, s := range shift {
+		i, ok := sk.index[name]
+		if !ok {
+			return fmt.Errorf("there is no bone %s to move", name)
+		}
+		if p := sk.Parent[i]; p >= 0 {
+			r := sk.World[p]
+			s = [3]float64{
+				r[0]*s[0] + r[4]*s[1] + r[8]*s[2],
+				r[1]*s[0] + r[5]*s[1] + r[9]*s[2],
+				r[2]*s[0] + r[6]*s[1] + r[10]*s[2],
+			}
+		}
+		local[name] = s
+	}
+	rewrite := func(kind string, edit func(root *Value) int) error {
+		for i := range blocks {
+			if blocks[i].Type != kind {
+				continue
+			}
+			root, format, err := ReadKV3(blocks[i].Data)
+			if err != nil {
+				return err
+			}
+			if edit(root) == 0 {
+				continue
+			}
+			data, err := WriteKV3(root, format)
+			if err != nil {
+				return err
+			}
+			blocks[i].Data = data
+		}
+		return nil
+	}
+	moved := 0
+	err = rewrite("DATA", func(root *Value) int {
+		skel := root.Get("m_modelSkeleton")
+		if skel == nil || skel.Get("m_boneName") == nil || skel.Get("m_bonePosParent") == nil {
+			return 0
+		}
+		n := 0
+		for i, name := range skel.Get("m_boneName").Items {
+			if s, ok := local[name.S]; ok && i < len(skel.Get("m_bonePosParent").Items) {
+				pos := skel.Get("m_bonePosParent").Items[i]
+				for k := 0; k < 3 && k < len(pos.Items); k++ {
+					pos.Items[k].F += s[k]
+				}
+				n++
+			}
+		}
+		moved = n
+		return n
+	})
+	if err != nil {
+		return err
+	}
+	if moved != len(local) {
+		return fmt.Errorf("moved %d of %d bones in the skeleton", moved, len(local))
+	}
+	return rewrite("AGRP", func(root *Value) int {
+		key := root.Get("m_decodeKey")
+		if key == nil || key.Get("m_boneArray") == nil {
+			return 0
+		}
+		n := 0
+		for _, bone := range key.Get("m_boneArray").Items {
+			if name := bone.Get("m_name"); name != nil {
+				if s, ok := local[name.S]; ok && bone.Get("m_pos") != nil {
+					for k := 0; k < 3 && k < len(bone.Get("m_pos").Items); k++ {
+						bone.Get("m_pos").Items[k].F += s[k]
+					}
+					n++
+				}
+			}
+		}
+		return n
+	})
+}
+
+// shiftKept moves a kept mesh's vertices at rest, and its bounds, by shift.
+func shiftKept(mesh *Mesh, shift [3]float64, setBlock func(int, []byte) error, plain func(*Value, int, int)) error {
+	for _, vb := range mesh.VertexBuffers {
+		at := vb.Attribute("position", 0)
+		if at == nil {
+			continue
+		}
+		if at.Format != FormatR32G32B32Float && at.Format != FormatR32G32B32A32Float {
+			return fmt.Errorf("%s: positions in format %d cannot be moved", mesh.Name, at.Format)
+		}
+		data := append([]byte{}, vb.Data...)
+		for i := 0; i < vb.Count; i++ {
+			p := data[i*vb.Stride+at.Offset:]
+			for k := 0; k < 3; k++ {
+				v := math.Float32frombits(binary.LittleEndian.Uint32(p[4*k:])) + float32(shift[k])
+				binary.LittleEndian.PutUint32(p[4*k:], math.Float32bits(v))
+			}
+		}
+		plain(vb.Desc, vb.Count, vb.Stride)
+		if err := setBlock(vb.Block, data); err != nil {
+			return err
+		}
+	}
+	if objects := mesh.Render.Get("m_sceneObjects"); objects != nil {
+		for _, object := range objects.Items {
+			for _, key := range []string{"m_vMinBounds", "m_vMaxBounds"} {
+				if v := object.Get(key); v != nil && len(v.Items) == 3 {
+					for k := 0; k < 3; k++ {
+						v.Items[k].F += shift[k]
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (o ImportOptions) kept(name string) bool { return o.Keep[baseName(name)] }
@@ -179,6 +315,29 @@ func (m *Model) Fit(in *ImportedMesh, opts ImportOptions) (*ImportedMesh, error)
 	if height <= 0 {
 		return nil, errors.New("the model is flat: it has no height")
 	}
+	if (opts.Scale == 0 || opts.Scale == 1) && m.inHeroSpace(in, turn, hi[2]-lo[2]) {
+		// Rigged on the hero's own bones where they stand: already in the hero's space, where a
+		// rig made for the hero's motion must stay. Fitting would move it off its bones.
+		out.Positions = make([][3]float32, len(turned))
+		for i, p := range turned {
+			for k := 0; k < 3; k++ {
+				out.Positions[i][k] = float32(p[k] + opts.Offset[k])
+			}
+		}
+		out.Normals = make([][3]float32, len(in.Normals))
+		for i, n := range in.Normals {
+			t := normalize(turn(n))
+			out.Normals[i] = [3]float32{float32(t[0]), float32(t[1]), float32(t[2])}
+		}
+		out.JointPositions = make([][3]float32, len(in.JointPositions))
+		for i, p := range in.JointPositions {
+			t := turn(p)
+			for k := 0; k < 3; k++ {
+				out.JointPositions[i][k] = float32(t[k] + opts.Offset[k])
+			}
+		}
+		return out, nil
+	}
 	scale := (hi[2] - lo[2]) / height
 	if opts.Scale > 0 {
 		scale *= opts.Scale
@@ -211,6 +370,27 @@ func (m *Model) Fit(in *ImportedMesh, opts ImportOptions) (*ImportedMesh, error)
 		}
 	}
 	return out, nil
+}
+
+// inHeroSpace tells whether a rigged model's joints, turned into the hero's axes, sit on the
+// hero's bones of the same names, as they do in a model rigged for this hero.
+func (m *Model) inHeroSpace(in *ImportedMesh, turn func([3]float32) [3]float64, height float64) bool {
+	if len(in.JointPositions) == 0 || len(in.Joints) != len(in.Positions) {
+		return false
+	}
+	skeleton, err := m.Skeleton()
+	if err != nil {
+		return false
+	}
+	probe := &ImportedMesh{Joints: in.Joints, JointNames: in.JointNames, Positions: in.Positions,
+		JointPositions: make([][3]float32, len(in.JointPositions))}
+	for i, p := range in.JointPositions {
+		t := turn(p)
+		probe.JointPositions[i] = [3]float32{float32(t[0]), float32(t[1]), float32(t[2])}
+	}
+	// No limb needed here: a rig on the body's bones alone is still placed on the hero.
+	named, _ := heroJoints(probe, skeleton, height)
+	return named >= 4
 }
 
 // BoneWeight is a bone, by name, and how much a vertex follows it.
@@ -585,6 +765,20 @@ func (m *Model) Replace(raw []byte, fitted *ImportedMesh, skin [][]BoneWeight, o
 	}
 	for _, mesh := range fresh.Meshes {
 		if opts.kept(mesh.Name) {
+			shift, ok := opts.KeptShift[baseName(mesh.Name)]
+			if !ok || shift == ([3]float64{}) {
+				continue
+			}
+			if err := shiftKept(mesh, shift, setBlock, plain); err != nil {
+				return nil, err
+			}
+			format := [16]byte{}
+			copy(format[:], blocks[mesh.DataBlock].Data[4:20])
+			encoded, err := WriteKV3(mesh.Render, format)
+			if err != nil {
+				return nil, err
+			}
+			blocks[mesh.DataBlock].Data = encoded
 			continue
 		}
 		setNumber(mesh.Desc, "m_nMorphBlock", -1)
@@ -635,6 +829,9 @@ func (m *Model) Replace(raw []byte, fitted *ImportedMesh, skin [][]BoneWeight, o
 		return nil, err
 	}
 	blocks[ctrlIndex].Data = ctrl
+	if err := fresh.moveBones(blocks, opts.BoneShift); err != nil {
+		return nil, err
+	}
 	if err := fresh.addReferences(blocks, opts); err != nil {
 		return nil, err
 	}

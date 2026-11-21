@@ -224,6 +224,13 @@ func modelCommand(ui *UI, store *Store, game Game, args []string, opts options) 
 		return fmt.Errorf("%s's model: %v", heroDisplayName(id), err)
 	}
 	importOpts := source2.ImportOptions{Keep: map[string]bool{}, Scale: opts.scale, Yaw: opts.yaw, ZUp: opts.zup}
+	if len(opts.material) > 0 {
+		importOpts.Materials = map[string]string{}
+		for part, mat := range opts.material {
+			importOpts.Materials[part] = mat
+			ui.say("  part %s is drawn with %s", part, mat)
+		}
+	}
 	keepList := strings.Split(opts.keep, ",")
 	for _, part := range model.Parts() {
 		keep := part.Keep
@@ -236,11 +243,48 @@ func modelCommand(ui *UI, store *Store, game Game, args []string, opts options) 
 			}
 		}
 		importOpts.Keep[part.Name] = keep
+		for name, shift := range opts.move {
+			if keep && strings.Contains(strings.ToLower(part.Name), name) {
+				if importOpts.KeptShift == nil {
+					importOpts.KeptShift = map[string][3]float64{}
+				}
+				importOpts.KeptShift[part.Name] = shift
+			}
+		}
 		state := "replaced"
 		if keep {
 			state = "kept"
+			if s, ok := importOpts.KeptShift[part.Name]; ok {
+				state = fmt.Sprintf("kept, moved %.1f %.1f %.1f", s[0], s[1], s[2])
+			}
 		}
 		ui.say("  %-32s %8d vertices  %s", part.Name, part.Vertices, state)
+	}
+	// A -move naming a bone moves that bone at rest: a muzzle, to stay at the end of a moved gun.
+	if len(opts.move) > 0 {
+		if sk, err := model.Skeleton(); err == nil {
+			for _, bone := range sk.Names {
+				if shift, ok := opts.move[strings.ToLower(bone)]; ok {
+					if importOpts.BoneShift == nil {
+						importOpts.BoneShift = map[string][3]float64{}
+					}
+					importOpts.BoneShift[bone] = shift
+					ui.say("  bone %-27s moved %.1f %.1f %.1f", bone, shift[0], shift[1], shift[2])
+				}
+			}
+		}
+		for name := range opts.move {
+			used := false
+			for part := range importOpts.KeptShift {
+				used = used || strings.Contains(strings.ToLower(part), name)
+			}
+			for bone := range importOpts.BoneShift {
+				used = used || strings.ToLower(bone) == name
+			}
+			if !used {
+				return fmt.Errorf("-move %s: no kept part or bone of that name", name)
+			}
+		}
 	}
 	ui.say("Fitting and rigging %s (%d triangles) onto %s...", filepath.Base(args[1]), mesh.TriangleCount(), heroDisplayName(id))
 	result, err := source2.ImportModel(raw, modelPath, mesh, importOpts, nil)

@@ -27,12 +27,13 @@ func (g Game) effectsDir() string { return filepath.Join(g.StateDir(), "effects"
 // effectSettings say how a hero's effects are recoloured. The page shows the same arithmetic
 // on the hero's colours before applying (recolor in studio.html).
 type effectSettings struct {
-	Hue        float64 `json:"hue"`        // degrees to turn the colour wheel
-	Saturation float64 `json:"saturation"` // 1 keeps it
-	Brightness float64 `json:"brightness"` // 1 keeps it
-	Tint       string  `json:"tint"`       // "#rrggbb" to pull colours towards, or ""
-	Strength   float64 `json:"strength"`   // how far towards the tint, 0 to 1
-	Weapon     bool    `json:"weapon"`     // also the weapon's muzzle flashes and tracers
+	Palette    string  `json:"palette,omitempty"` // named multi-tone palette (e.g. "cobalt"), or ""
+	Hue        float64 `json:"hue"`               // degrees to turn the colour wheel
+	Saturation float64 `json:"saturation"`        // 1 keeps it
+	Brightness float64 `json:"brightness"`        // 1 keeps it
+	Tint       string  `json:"tint"`              // "#rrggbb" to pull colours towards, or ""
+	Strength   float64 `json:"strength"`          // how far towards the tint, 0 to 1
+	Weapon     bool    `json:"weapon"`            // also the weapon's muzzle flashes and tracers
 }
 
 func rgbToHSV(c [3]float64) (h, s, v float64) {
@@ -94,20 +95,27 @@ func parseHex(text string) ([3]float64, bool) {
 	return [3]float64{float64(n >> 16 & 255), float64(n >> 8 & 255), float64(n & 255)}, true
 }
 
-// recolor applies settings to one colour: the tint first (its hue reached along the shorter way
-// round, its saturation blended in, so white sparks take the tint too), then the turn of the
-// hue, saturation and brightness.
+// recolor applies settings to one colour: a named palette when set, or the tint first (its hue
+// reached along the shorter way round, its saturation blended in, so white sparks take the tint
+// too), then the turn of the hue, saturation and brightness.
 func (e effectSettings) recolor(c [3]float64) [3]float64 {
-	h, s, v := rgbToHSV(c)
-	if tint, ok := parseHex(e.Tint); ok && e.Strength > 0 {
-		th, ts, _ := rgbToHSV(tint)
-		t := math.Min(1, e.Strength)
-		if s < 0.05 {
-			h = th // a grey has no hue of its own to turn from: it takes the tint's
-		} else {
-			h += (math.Mod(th-h+540, 360) - 180) * t
+	if e.Palette != "" {
+		if pal, err := LookupPalette(e.Palette); err == nil {
+			c = pal.Recolor(c)
 		}
-		s += (ts - s) * t
+	}
+	h, s, v := rgbToHSV(c)
+	if e.Palette == "" {
+		if tint, ok := parseHex(e.Tint); ok && e.Strength > 0 {
+			th, ts, _ := rgbToHSV(tint)
+			t := math.Min(1, e.Strength)
+			if s < 0.05 {
+				h = th // a grey has no hue of its own to turn from: it takes the tint's
+			} else {
+				h += (math.Mod(th-h+540, 360) - 180) * t
+			}
+			s += (ts - s) * t
+		}
 	}
 	h += e.Hue
 	s = math.Max(0, math.Min(1, s*e.Saturation))
@@ -117,7 +125,9 @@ func (e effectSettings) recolor(c [3]float64) [3]float64 {
 
 func (e effectSettings) describe() string {
 	var parts []string
-	if e.Tint != "" && e.Strength > 0 {
+	if e.Palette != "" {
+		parts = append(parts, "palette "+e.Palette)
+	} else if e.Tint != "" && e.Strength > 0 {
 		parts = append(parts, fmt.Sprintf("tinted %s %d%%", e.Tint, int(e.Strength*100+0.5)))
 	}
 	if e.Hue != 0 {

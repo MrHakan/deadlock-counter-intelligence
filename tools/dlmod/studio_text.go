@@ -290,9 +290,14 @@ func (s *studio) textSave(r *http.Request) (any, error) {
 	return map[string]any{"messages": p.messages}, nil
 }
 
-// rebuildText lays the edits over the game's current files and installs them as one mod.
+// rebuildText installs the studio's text edits.
 func (s *studio) rebuildText(p *webPrompter, project *textProject) error {
-	store, err := openStore(s.game)
+	return buildTextMod(p, s.game, project)
+}
+
+// buildTextMod lays the edits over the game's current files and installs them as one mod.
+func buildTextMod(p prompter, game Game, project *textProject) error {
+	store, err := openStore(game)
 	if err != nil {
 		return err
 	}
@@ -313,16 +318,16 @@ func (s *studio) rebuildText(p *webPrompter, project *textProject) error {
 	}
 	files := map[string][]byte{}
 	for file, edits := range project.Edits {
-		data, err := os.ReadFile(filepath.Join(s.game.Citadel(), filepath.FromSlash(file)))
+		data, err := os.ReadFile(filepath.Join(game.Citadel(), filepath.FromSlash(file)))
 		if err != nil {
 			return fmt.Errorf("the game's %s could not be read: %v", file, err)
 		}
 		files[file] = []byte(applyEdits(string(data), edits))
 	}
-	if err := os.MkdirAll(s.game.textDir(), 0o755); err != nil {
+	if err := os.MkdirAll(game.textDir(), 0o755); err != nil {
 		return err
 	}
-	vpk := filepath.Join(s.game.textDir(), "pak01_dir.vpk")
+	vpk := filepath.Join(game.textDir(), "pak01_dir.vpk")
 	if err := os.WriteFile(vpk, source2.WriteVPK(files), 0o644); err != nil {
 		return err
 	}
@@ -330,5 +335,5 @@ func (s *studio) rebuildText(p *webPrompter, project *textProject) error {
 	if err := store.install(p, vpk, customTextName); err != nil {
 		return err
 	}
-	return ensurePatched(p, s.game)
+	return ensurePatched(p, game)
 }

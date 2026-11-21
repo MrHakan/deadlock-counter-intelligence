@@ -240,3 +240,111 @@ func pngOf(t *testing.T, img image.Image) []byte {
 	}
 	return b.Bytes()
 }
+
+// A kept part can be moved at rest, out of a wider body; everything else about it stays.
+func TestImportMovesKeptPart(t *testing.T) {
+	raw := SampleHero()
+	model, err := LoadModel(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var before [][4]float32
+	for _, mesh := range model.Meshes {
+		if mesh.Name == "gun_model" {
+			vb := mesh.VertexBuffers[0]
+			before, _ = vb.Floats(vb.Attribute("position", 0))
+		}
+	}
+	body, _, _ := sampleBody()
+	mesh := &ImportedMesh{YUp: true}
+	for _, p := range body {
+		mesh.Positions = append(mesh.Positions, [3]float32{p[1], p[2], p[0]})
+		mesh.UVs = append(mesh.UVs, [2]float32{0.5, 0.5})
+	}
+	var tris []uint32
+	for i := 0; i+2 < len(body); i += 3 {
+		tris = append(tris, uint32(i), uint32(i+1), uint32(i+2))
+	}
+	mesh.Parts = []ImportedPart{{Name: "Skin", Indices: tris, Color: [4]float32{1, 1, 1, 1}}}
+	mesh.Normals = computeNormals(mesh)
+	shift := [3]float64{12, -3, 1.5}
+	opts := ImportOptions{Keep: map[string]bool{"gun_model": true}, KeptShift: map[string][3]float64{"gun_model": shift}}
+	result, err := ImportModel(raw, "models/sample/sample.vmdl", mesh, opts, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	built, err := LoadModel(result.Files["models/sample/sample.vmdl_c"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	gun := built.Meshes[1]
+	vb := gun.VertexBuffers[0]
+	after, err := vb.Floats(vb.Attribute("position", 0))
+	if err != nil || len(after) != len(before) || len(before) == 0 {
+		t.Fatalf("the gun has %d vertices, had %d (%v)", len(after), len(before), err)
+	}
+	for i := range after {
+		for k := 0; k < 3; k++ {
+			if math.Abs(float64(after[i][k]-before[i][k])-shift[k]) > 1e-4 {
+				t.Fatalf("gun vertex %d moved %v -> %v, want %v", i, before[i], after[i], shift)
+			}
+		}
+	}
+	if gun.DrawCalls[0].Material != "models/sample/gun.vmat" {
+		t.Error("the moved gun lost its material")
+	}
+}
+
+// A bone no clip animates can be moved at rest with the part it carries.
+func TestImportMovesBone(t *testing.T) {
+	raw := SampleHero()
+	model, err := LoadModel(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sk, err := model.Skeleton()
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := sk.Names[len(sk.Names)-1]
+	before, _ := sk.Position(name)
+	body, _, _ := sampleBody()
+	mesh := &ImportedMesh{YUp: true}
+	for _, p := range body {
+		mesh.Positions = append(mesh.Positions, [3]float32{p[1], p[2], p[0]})
+		mesh.UVs = append(mesh.UVs, [2]float32{0.5, 0.5})
+	}
+	var tris []uint32
+	for i := 0; i+2 < len(body); i += 3 {
+		tris = append(tris, uint32(i), uint32(i+1), uint32(i+2))
+	}
+	mesh.Parts = []ImportedPart{{Name: "Skin", Indices: tris, Color: [4]float32{1, 1, 1, 1}}}
+	mesh.Normals = computeNormals(mesh)
+	shift := [3]float64{4, -2, 7}
+	opts := ImportOptions{Keep: map[string]bool{"gun_model": true}, BoneShift: map[string][3]float64{name: shift}}
+	result, err := ImportModel(raw, "models/sample/sample.vmdl", mesh, opts, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	built, err := LoadModel(result.Files["models/sample/sample.vmdl_c"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved, err := built.Skeleton()
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, _ := moved.Position(name)
+	for k := 0; k < 3; k++ {
+		if math.Abs(after[k]-before[k]-shift[k]) > 1e-4 {
+			t.Fatalf("bone %s moved from %v to %v, want %v", name, before, after, shift)
+		}
+	}
+	for i, other := range sk.Names[:len(sk.Names)-1] {
+		p, _ := moved.Position(other)
+		q, _ := sk.Position(other)
+		if p != q {
+			t.Errorf("bone %d %s moved too", i, other)
+		}
+	}
+}

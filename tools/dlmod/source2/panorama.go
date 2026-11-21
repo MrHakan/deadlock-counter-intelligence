@@ -20,6 +20,7 @@ const (
 type TextureInfo struct {
 	Width, Height, Mips int
 	Format              int
+	Flags               uint16
 }
 
 // TextureHeader reads a compiled texture's size and format from its first bytes (see
@@ -39,8 +40,13 @@ func textureHeader(r *Resource) (TextureInfo, error) {
 	if len(h) < 40 {
 		return TextureInfo{}, errors.New("not a compiled texture")
 	}
-	info := TextureInfo{Width: int(binary.LittleEndian.Uint16(h[20:])), Height: int(binary.LittleEndian.Uint16(h[22:])),
-		Format: int(h[26]), Mips: max(1, int(h[27]))}
+	info := TextureInfo{
+		Width:  int(binary.LittleEndian.Uint16(h[20:])),
+		Height: int(binary.LittleEndian.Uint16(h[22:])),
+		Format: int(h[26]),
+		Mips:   max(1, int(h[27])),
+		Flags:  binary.LittleEndian.Uint16(h[2:]),
+	}
 	if depth := binary.LittleEndian.Uint16(h[24:]); depth > 1 {
 		return info, errors.New("3D textures are not supported")
 	}
@@ -59,9 +65,9 @@ func mipSizes(w, h, mips int) [][2]int {
 
 func blockBytes(format int) int {
 	switch format {
-	case textureDXT1:
+	case textureDXT1, textureATI1N:
 		return 8
-	case textureDXT5:
+	case textureDXT5, textureBC7, textureATI2N:
 		return 16
 	}
 	return 0
@@ -72,14 +78,31 @@ func mipBytes(format, w, h int) (int, error) {
 	switch format {
 	case textureRGBA8888, textureBGRA8888:
 		return w * h * 4, nil
-	case textureDXT1, textureDXT5:
+	case textureDXT1, textureDXT5, textureBC7, textureATI2N, textureATI1N:
 		return ((w + 3) / 4) * ((h + 3) / 4) * blockBytes(format), nil
 	}
 	return 0, fmt.Errorf("texture format %d is not supported", format)
 }
 
+func hasCompressedMips(h []byte) bool {
+	if len(h) < 40 {
+		return false
+	}
+	extraCount := int(binary.LittleEndian.Uint32(h[36:]))
+	if extraCount <= 0 {
+		return false
+	}
+	extraOff := 32 + int(binary.LittleEndian.Uint32(h[32:]))
+	for i := 0; i < extraCount && extraOff+12*i+12 <= len(h); i++ {
+		if binary.LittleEndian.Uint32(h[extraOff+12*i:]) == 4 {
+			return true
+		}
+	}
+	return false
+}
+
 // DecodeTexture reads the largest mip level of a compiled texture: uncompressed RGBA or BGRA
-// (interface images) or BC1 and BC3 (what dlmod writes for materials).
+// (interface images), or block-compressed BC1 (DXT1), BC3 (DXT5), BC4 (ATI1N), BC5 (ATI2N), or BC7.
 func DecodeTexture(data []byte) (image.Image, TextureInfo, error) {
 	r, err := DecodeResource(data)
 	if err != nil {
@@ -88,6 +111,9 @@ func DecodeTexture(data []byte) (image.Image, TextureInfo, error) {
 	info, err := textureHeader(r)
 	if err != nil {
 		return nil, info, err
+	}
+	if hasCompressedMips(r.Block("DATA")) {
+		return nil, info, errors.New("texture uses LZ4-compressed mips, which dlmod does not read")
 	}
 	size, err := mipBytes(info.Format, info.Width, info.Height)
 	if err != nil {
@@ -115,53 +141,56 @@ func DecodeTexture(data []byte) (image.Image, TextureInfo, error) {
 func decodeBlocks(data []byte, img *image.NRGBA, format int) {
 	w, h := img.Rect.Dx(), img.Rect.Dy()
 	bw, size := (w+3)/4, blockBytes(format)
+	var decoded [16]color.NRGBA
 	for b := 0; (b+1)*size <= len(data); b++ {
-		block := data[b*size:]
-		var alpha [16]uint8
-		for i := range alpha {
-			alpha[i] = 255
-		}
-		if format == textureDXT5 {
-			a0, a1 := float64(block[0]), float64(block[1])
-			palette := [8]float64{a0, a1}
-			for i := 1; i < 7; i++ {
-				if a0 > a1 {
-					palette[i+1] = (float64(7-i)*a0 + float64(i)*a1) / 7
-				} else if i < 5 {
-					palette[i+1] = (float64(5-i)*a0 + float64(i)*a1) / 5
+		block := data[b*size : (b+1)*size]
+		switch format {
+		case textureATI1N:
+			decodeBC4Block(block, &decoded)
+		case textureATI2N:
+			decodeBC5Block(block, &decoded)
+		case textureBC7:
+			decodeBC7Block(block, &decoded)
+		default:
+			var alpha [16]uint8
+			for i := range alpha {
+				alpha[i] = 255
+			}
+			cblock := block
+			if format == textureDXT5 {
+				alpha = decodeBC4Channel(block[:8])
+				cblock = block[8:]
+			}
+			c0, c1 := binary.LittleEndian.Uint16(cblock), binary.LittleEndian.Uint16(cblock[2:])
+			p0, p1 := from565(c0), from565(c1)
+			palette := [4][3]float64{p0, p1}
+			transparent := format == textureDXT1 && c0 <= c1
+			for k := 0; k < 3; k++ {
+				if !transparent {
+					palette[2][k] = (2*p0[k] + p1[k]) / 3
+					palette[3][k] = (p0[k] + 2*p1[k]) / 3
+				} else {
+					palette[2][k] = (p0[k] + p1[k]) / 2
 				}
 			}
-			if a0 <= a1 {
-				palette[6], palette[7] = 0, 255
-			}
-			var bits uint64
-			for k := 0; k < 6; k++ {
-				bits |= uint64(block[2+k]) << (8 * k)
-			}
-			for i := range alpha {
-				alpha[i] = uint8(math.Round(palette[bits>>(3*i)&7]))
-			}
-			block = block[8:]
-		}
-		c0, c1 := binary.LittleEndian.Uint16(block), binary.LittleEndian.Uint16(block[2:])
-		p0, p1 := from565(c0), from565(c1)
-		palette := [4][3]float64{p0, p1}
-		for k := 0; k < 3; k++ {
-			if c0 > c1 || format == textureDXT5 {
-				palette[2][k] = (2*p0[k] + p1[k]) / 3
-				palette[3][k] = (p0[k] + 2*p1[k]) / 3
-			} else {
-				palette[2][k] = (p0[k] + p1[k]) / 2
+			indices := binary.LittleEndian.Uint32(cblock[4:])
+			for i := 0; i < 16; i++ {
+				idx := indices >> (2 * i) & 3
+				a := alpha[i]
+				if transparent && idx == 3 {
+					a = 0
+				}
+				c := palette[idx]
+				decoded[i] = color.NRGBA{uint8(math.Round(c[0])), uint8(math.Round(c[1])), uint8(math.Round(c[2])), a}
 			}
 		}
-		indices := binary.LittleEndian.Uint32(block[4:])
+		bx, by := (b%bw)*4, (b/bw)*4
 		for i := 0; i < 16; i++ {
-			x, y := (b%bw)*4+i%4, (b/bw)*4+i/4
+			x, y := bx+i%4, by+i/4
 			if x >= w || y >= h {
 				continue
 			}
-			c := palette[indices>>(2*i)&3]
-			img.SetNRGBA(x, y, color.NRGBA{uint8(math.Round(c[0])), uint8(math.Round(c[1])), uint8(math.Round(c[2])), alpha[i]})
+			img.SetNRGBA(x, y, decoded[i])
 		}
 	}
 }
