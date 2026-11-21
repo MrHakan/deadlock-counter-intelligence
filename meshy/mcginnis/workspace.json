@@ -1,0 +1,497 @@
+{
+  "hero": "forge",
+  "name": "McGinnis",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Inventor",
+      "Support",
+      "Disruption"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces McGinnis in Deadlock, a stylized third-person hero shooter (McGinnis: Controls the battle with combat turrets). Its abilities are Mini Turret, Medicinal Specter, Spectral Wall, Heavy Barrage. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on McGinnis's weapon, Services Rendered. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_wip/mcginnis/mcginnis.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to McGinnis's height (109 units) and rigs it to McGinnis's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on McGinnis's weapon, Services Rendered. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality and its part in a team (controls the battle with combat turrets). Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/mcginnis_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/engineer_card_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/engineer_card_critical_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/engineer_card_gloat_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/engineer_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/engineer_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/engineer_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "gun",
+      "title": "Weapon picture",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Side view of the weapon or held prop of {{CHARACTER}} from the reference sheet, alone, horizontal, stylized 3D render. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/gun.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/guns/engineer_gun_psd.vtex_c",
+      "size": "600x300",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_mini_turret",
+      "title": "Ability icon: Mini Turret",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Mini Turret\", an ability of {{CHARACTER}} from the reference sheet: Deploy an automated turret. Deploy a turret that shoots enemies, dealing X. The turret expires after a limited lifetime. Turrets deal reduced damage to troopers and objectives. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_mini_turret.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/engineer_turret_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_medicinal_specter",
+      "title": "Ability icon: Medicinal Specter",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Medicinal Specter\", an ability of {{CHARACTER}} from the reference sheet: Deploy a healing spirit. Deploy a spirit that provides X to nearby allies. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_medicinal_specter.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/engineer_resupply_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_spectral_wall",
+      "title": "Ability icon: Spectral Wall",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Spectral Wall\", an ability of {{CHARACTER}} from the reference sheet: Conjure a wall to block your foes. Cast a wall that applies slow on enemies it passes through. Erupt the wall to divide the terrain in half and damage nearby enemies. After casting, pressXorXto erupt the wall early. Can be Destroyed with Melee Attacks. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_spectral_wall.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/engineer_fissure_2_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_heavy_barrage",
+      "title": "Ability icon: Heavy Barrage",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Heavy Barrage\", an ability of {{CHARACTER}} from the reference sheet: Bombard an area with rockets. Unleashes a volley of rockets that home in on a targeted location. X is slowed and is still able to use stamina. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_heavy_barrage.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/engineer_rockets_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "prop_engineer_wall",
+      "title": "Ability model: engineer_wall",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces McGinnis's \"engineer wall\" ability model. It is used by \"Spectral Wall\" (Conjure a wall to block your foes). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_engineer_wall.glb",
+      "kind": "prop",
+      "target": "models/abilities/engineer_wall.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_engineer_wall_physics",
+      "title": "Ability model: engineer_wall_physics",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces McGinnis's \"engineer wall physics\" ability model. It is used by \"Spectral Wall\" (Conjure a wall to block your foes). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_engineer_wall_physics.glb",
+      "kind": "prop",
+      "target": "models/abilities/engineer_wall_physics.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    }
+  ],
+  "game": {
+    "id": "forge",
+    "name": "McGinnis",
+    "role": "Controls the battle with combat turrets",
+    "playstyle": "Precise placement is everything for McGinnis, whether she's creating a killzone or splitting the enemy team. She can help keep her team running making them hard to dislodge when entrenched.",
+    "weapon": "Services Rendered",
+    "tags": [
+      "Inventor",
+      "Support",
+      "Disruption"
+    ],
+    "abilities": [
+      {
+        "key": "citadel_ability_shieldedsentry",
+        "name": "Mini Turret",
+        "quip": "Deploy an automated turret",
+        "description": "Deploy a turret that shoots enemies, dealing X. The turret expires after a limited lifetime. Turrets deal reduced damage to troopers and objectives.",
+        "icon": "panorama/images/hud/abilities/engineer_turret_psd.vtex_c",
+        "slug": "shieldedsentry"
+      },
+      {
+        "key": "citadel_ability_mobile_resupply",
+        "name": "Medicinal Specter",
+        "quip": "Deploy a healing spirit",
+        "description": "Deploy a spirit that provides X to nearby allies.",
+        "icon": "panorama/images/hud/abilities/engineer_resupply_psd.vtex_c",
+        "slug": "mobile_resupply"
+      },
+      {
+        "key": "citadel_ability_fissure_wall",
+        "name": "Spectral Wall",
+        "quip": "Conjure a wall to block your foes",
+        "description": "Cast a wall that applies slow on enemies it passes through. Erupt the wall to divide the terrain in half and damage nearby enemies. After casting, pressXorXto erupt the wall early. Can be Destroyed with Melee Attacks",
+        "icon": "panorama/images/hud/abilities/engineer_fissure_2_psd.vtex_c",
+        "slug": "fissure_wall",
+        "props": "models/abilities/engineer_wall.vmdl, models/abilities/engineer_wall_physics.vmdl"
+      },
+      {
+        "key": "citadel_ability_rocket_barrage",
+        "name": "Heavy Barrage",
+        "quip": "Bombard an area with rockets",
+        "description": "Unleashes a volley of rockets that home in on a targeted location. X is slowed and is still able to use stamina.",
+        "icon": "panorama/images/hud/abilities/engineer_rockets_psd.vtex_c",
+        "slug": "rocket_barrage"
+      }
+    ],
+    "model": "models/heroes_wip/mcginnis/mcginnis.vmdl",
+    "modelFolder": "models/heroes_wip/mcginnis/",
+    "height": 108.74274826049805,
+    "skeleton": "models/heroes_wip/mcginnis/mcginnis.vnmskel",
+    "boneMasks": [
+      "Ability_idle",
+      "Cast_UpperBody",
+      "FullBody",
+      "melee_UpperBody",
+      "Parry_UpperBody",
+      "Reload_Crouch",
+      "Reload_GunOnly",
+      "Reload_Haspath",
+      "Reload_HasPathCrouch",
+      "Reload_Idle",
+      "Reload_InAir",
+      "Reload_Slide",
+      "Reload_Zoomed",
+      "root",
+      "Throw_UpperBody",
+      "Turn_LowerBody",
+      "UpperBody_Fidget",
+      "UpperBodyReplace_AirDash",
+      "UpperBodyReplace_Asleep",
+      "UpperBodyReplace_Asleep_Channeling",
+      "UpperBodyReplace_Shopping",
+      "UpperBodyReplace_Slide",
+      "UpperBodyReplace_Turn",
+      "zero",
+      "Rocket_Pack",
+      "Rocket_Pack_Start",
+      "Ability_UpperBody",
+      "Ability_Upperbody_Toss",
+      "Ability_idle_sentry",
+      "Ability_idle_arm_adjust",
+      "Ability_Upperbody_HasPath",
+      "UpperBodyReplace_InAir",
+      "UpperBodyReplace_GroundDash"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/engineer_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/engineer_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/engineer_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/engineer_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/engineer_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/engineer_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/mcginnis_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      },
+      {
+        "path": "panorama/images/heroes/guns/engineer_gun_psd.vtex_c",
+        "label": "Weapon picture",
+        "width": 600,
+        "height": 300
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/engineer_fissure_2_activate_psd.vtex_c",
+        "label": "fissure 2 activate",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/engineer_fissure_2_psd.vtex_c",
+        "label": "fissure 2",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/engineer_resupply_psd.vtex_c",
+        "label": "resupply",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/engineer_rockets_psd.vtex_c",
+        "label": "rockets",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/engineer_turret_psd.vtex_c",
+        "label": "turret",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/mcginnis_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/mcginnis.vsvg_c",
+        "panorama/images/heroes/hero_names/mcginnis_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/forge.vpk"
+    },
+    "abilityModels": [
+      "models/abilities/engineer_wall.vmdl",
+      "models/abilities/engineer_wall_physics.vmdl"
+    ],
+    "particleFolders": [
+      "particles/abilities/engineer/",
+      "particles/abilities/mcginnis/",
+      "particles/weapon_fx/engineer/",
+      "particles/weapon_fx/forge/",
+      "particles/weapon_fx/mcginnis/"
+    ],
+    "effects": 201,
+    "nameKeys": [
+      "Steam_RP_hero_forge",
+      "hero_forge:n",
+      "hero_forge_search:n"
+    ],
+    "tagKeys": [
+      "Citadel_Engineer_HeroTag_1",
+      "Citadel_Engineer_HeroTag_2",
+      "Citadel_Engineer_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

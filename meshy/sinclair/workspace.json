@@ -1,0 +1,464 @@
+{
+  "hero": "magician",
+  "name": "Sinclair",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Trickster",
+      "Copycat",
+      "Versatile"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces Sinclair in Deadlock, a stylized third-person hero shooter (Sinclair: Misdirect and hex enemies). Its abilities are Vexing Bolt, Spectral Assistant, Rabbit Hex, Audience Participation. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on Sinclair's weapon, The Prestige. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_staging/magician_v2/magician.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to Sinclair's height (105 units) and rigs it to Sinclair's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on Sinclair's weapon, The Prestige. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality and its part in a team (misdirect and hex enemies). Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/magician_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/magician_card_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/magician_card_critical_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/magician_card_gloat_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/magician_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/magician_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/magician_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_vexing_bolt",
+      "title": "Ability icon: Vexing Bolt",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Vexing Bolt\", an ability of {{CHARACTER}} from the reference sheet: Launch a guided bolt of magic. Fire a bolt of magic that deals Damage, increasing as it travels. If you have an Assistant, they also cast Vexing Bolt at reduced damage. Press X to redirect the bolt towards your crosshairs. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_vexing_bolt.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/magician/magician_magicbolt_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_spectral_assistant",
+      "title": "Ability icon: Spectral Assistant",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Spectral Assistant\", an ability of {{CHARACTER}} from the reference sheet: Summon your faithful assistant. Summon an Assistant at the targeted location. The Assistant attacks whenever you fire your weapon, dealing Damage. While the Assistant is out, you can press X to swap positions with your Assistant. Casting Spectral. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_spectral_assistant.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/magician/magician_cloneturret_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_rabbit_hex",
+      "title": "Ability icon: Rabbit Hex",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Rabbit Hex\", an ability of {{CHARACTER}} from the reference sheet: Hex a target area and transform all enemies into a Rabbit for a limited duration. Rabbits are small and move faster, but take increased Damage and are unable to perform most actions. Hex does not interrupt abilities. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_rabbit_hex.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/magician/magician_animalcurse_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_audience_participation",
+      "title": "Ability icon: Audience Participation",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Audience Participation\", an ability of {{CHARACTER}} from the reference sheet: Copy an enemy's Ultimate for a limited time. Copy the Ultimate of an enemy hero for a limited time. Reactivating the ability will use the Copied Ultimate instead. Copies will inherit this ability's upgrade points. Audience Participation will also copy the cooldown. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_audience_participation.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/magician/magician_copyult_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "prop_magician_animalcurse",
+      "title": "Ability model: magician_animalcurse",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Sinclair's \"magician animalcurse\" ability model. It is used by \"Rabbit Hex\" (Hex a target area and transform all enemies into a Rabbit for a limited duration. Rabbits are small and move faster…). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_magician_animalcurse.glb",
+      "kind": "prop",
+      "target": "models/abilities/magician_animalcurse.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_magician_cloneturret_model",
+      "title": "Ability model: magician_cloneturret_model",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Sinclair's \"magician cloneturret model\" ability model. It is used by \"Spectral Assistant\" (Summon your faithful assistant). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_magician_cloneturret_model.glb",
+      "kind": "prop",
+      "target": "models/abilities/magician_cloneturret_model.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_magician_rabbit_model",
+      "title": "Ability model: magician_rabbit_model",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Sinclair's \"magician rabbit model\" ability model. It is used by \"Rabbit Hex\" (Hex a target area and transform all enemies into a Rabbit for a limited duration. Rabbits are small and move faster…). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_magician_rabbit_model.glb",
+      "kind": "prop",
+      "target": "models/abilities/magician_rabbit_model.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    }
+  ],
+  "game": {
+    "id": "magician",
+    "name": "Sinclair",
+    "role": "Misdirect and hex enemies",
+    "playstyle": "With the help of their unwilling assistant, The Magnificent Sinclair can confuse enemies with curving hexes and rapid bolts.",
+    "weapon": "The Prestige",
+    "tags": [
+      "Trickster",
+      "Copycat",
+      "Versatile"
+    ],
+    "abilities": [
+      {
+        "key": "ability_magician_magicbolt",
+        "name": "Vexing Bolt",
+        "quip": "Launch a guided bolt of magic",
+        "description": "Fire a bolt of magic that deals Damage, increasing as it travels. If you have an Assistant, they also cast Vexing Bolt at reduced damage. Press X to redirect the bolt towards your crosshairs.",
+        "icon": "panorama/images/hud/abilities/magician/magician_magicbolt_psd.vtex_c",
+        "slug": "magicbolt"
+      },
+      {
+        "key": "ability_magician_cloneturret",
+        "name": "Spectral Assistant",
+        "quip": "Summon your faithful assistant",
+        "description": "Summon an Assistant at the targeted location. The Assistant attacks whenever you fire your weapon, dealing Damage. While the Assistant is out, you can press X to swap positions with your Assistant. Casting Spectral Assistant also reloads your weapon.",
+        "icon": "panorama/images/hud/abilities/magician/magician_cloneturret_psd.vtex_c",
+        "slug": "cloneturret",
+        "props": "models/abilities/magician_cloneturret_model.vmdl"
+      },
+      {
+        "key": "ability_magician_animalhexarea",
+        "name": "Rabbit Hex",
+        "description": "Hex a target area and transform all enemies into a Rabbit for a limited duration. Rabbits are small and move faster, but take increased Damage and are unable to perform most actions. Hex does not interrupt abilities.",
+        "icon": "panorama/images/hud/abilities/magician/magician_animalcurse_psd.vtex_c",
+        "slug": "animalhexarea",
+        "props": "models/abilities/magician_animalcurse.vmdl, models/abilities/magician_rabbit_model.vmdl"
+      },
+      {
+        "key": "ability_magician_copyult",
+        "name": "Audience Participation",
+        "quip": "Copy an enemy's Ultimate for a limited time",
+        "description": "Copy the Ultimate of an enemy hero for a limited time. Reactivating the ability will use the Copied Ultimate instead. Copies will inherit this ability's upgrade points. Audience Participation will also copy the cooldown.",
+        "icon": "panorama/images/hud/abilities/magician/magician_copyult_psd.vtex_c",
+        "slug": "copyult"
+      }
+    ],
+    "model": "models/heroes_staging/magician_v2/magician.vmdl",
+    "modelFolder": "models/heroes_staging/magician_v2/",
+    "height": 104.61796760559082,
+    "skeleton": "models/heroes_staging/magician_v2/magician.vnmskel",
+    "boneMasks": [
+      "Cast_UpperBody",
+      "Throw_UpperBody",
+      "Reload_Idle",
+      "Reload_Haspath",
+      "Reload_InAir",
+      "melee_UpperBody",
+      "UpperBodyReplace_Turn",
+      "Reload_Crouch",
+      "Reload_HasPathCrouch",
+      "Parry_UpperBody",
+      "shoot"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/magician_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/magician_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/magician_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/magician_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/magician_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/magician_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/magician_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/magician/magician_animalcurse_psd.vtex_c",
+        "label": "animalcurse",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/magician/magician_cloneturret_psd.vtex_c",
+        "label": "cloneturret",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/magician/magician_copyult_psd.vtex_c",
+        "label": "copyult",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/magician/magician_magicbolt_psd.vtex_c",
+        "label": "magicbolt",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/magician_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/sinclair.vsvg_c",
+        "panorama/images/heroes/hero_names/sinclair_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/magician.vpk"
+    },
+    "abilityModels": [
+      "models/abilities/magician_animalcurse.vmdl",
+      "models/abilities/magician_cloneturret_model.vmdl",
+      "models/abilities/magician_rabbit_model.vmdl"
+    ],
+    "particleFolders": [
+      "particles/abilities/magician/",
+      "particles/weapon_fx/magician/"
+    ],
+    "effects": 117,
+    "nameKeys": [
+      "Steam_RP_hero_magician",
+      "hero_magician:n",
+      "hero_magician_search:n",
+      "hero_magician_sort:n"
+    ],
+    "tagKeys": [
+      "Citadel_Magician_HeroTag_1",
+      "Citadel_Magician_HeroTag_2",
+      "Citadel_Magician_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

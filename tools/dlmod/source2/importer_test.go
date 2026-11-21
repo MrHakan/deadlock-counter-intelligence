@@ -124,6 +124,77 @@ func TestLoadGLB(t *testing.T) {
 		},
 		"buffers": []any{map[string]any{"byteLength": len(bin)}},
 	}
+	mesh, err := LoadMesh("model.glb", glbOf(doc, bin), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mesh.Positions) != 3 || mesh.Positions[1] != [3]float32{12, 0, 0} || mesh.Positions[2] != [3]float32{10, 2, 0} {
+		t.Fatalf("positions %v", mesh.Positions)
+	}
+	if len(mesh.Parts) != 1 || mesh.Parts[0].Name != "Coat" || mesh.Parts[0].Color != [4]float32{1, 0, 0, 1} {
+		t.Fatalf("parts %+v", mesh.Parts)
+	}
+}
+
+// A skinned triangle under an armature moved up 5 and scaled 2x, with a hip joint and a head
+// joint above it: each vertex keeps the joint it follows, and each joint where it stands in the
+// scene, the armature's scale included.
+func TestLoadSkinnedGLB(t *testing.T) {
+	var bin []byte
+	floats := func(values ...float32) {
+		for _, f := range values {
+			bin = binary.LittleEndian.AppendUint32(bin, math.Float32bits(f))
+		}
+	}
+	floats(0, 0, 0, 1, 0, 0, 0, 1, 0)         // positions
+	bin = append(bin, 0, 0, 0, 0, 1, 0, 0, 0) // joints: vertex 0 the hip, 1 and 2 the head
+	bin = append(bin, 1, 0, 0, 0)
+	floats(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0) // weights
+	bin = append(bin, 0, 0, 1, 0, 2, 0, 0, 0)  // indices, padded
+	doc := map[string]any{
+		"asset":  map[string]any{"version": "2.0"},
+		"scene":  0,
+		"scenes": []any{map[string]any{"nodes": []int{0}}},
+		"nodes": []any{
+			map[string]any{"name": "Armature", "children": []int{1, 3}, "translation": []float64{0, 0, 5}, "scale": []float64{2, 2, 2}},
+			map[string]any{"name": "Bone_000", "children": []int{2}, "translation": []float64{0, 1, 0}},
+			map[string]any{"name": "Bone_001", "translation": []float64{0, 2, 0}},
+			map[string]any{"name": "Body", "mesh": 0, "skin": 0},
+		},
+		"skins": []any{map[string]any{"joints": []int{1, 2}}},
+		"meshes": []any{map[string]any{"primitives": []any{map[string]any{
+			"attributes": map[string]int{"POSITION": 0, "JOINTS_0": 1, "WEIGHTS_0": 2}, "indices": 3}}}},
+		"accessors": []any{
+			map[string]any{"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"},
+			map[string]any{"bufferView": 1, "componentType": 5121, "count": 3, "type": "VEC4"},
+			map[string]any{"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC4"},
+			map[string]any{"bufferView": 3, "componentType": 5123, "count": 3, "type": "SCALAR"},
+		},
+		"bufferViews": []any{
+			map[string]any{"buffer": 0, "byteOffset": 0, "byteLength": 36},
+			map[string]any{"buffer": 0, "byteOffset": 36, "byteLength": 12},
+			map[string]any{"buffer": 0, "byteOffset": 48, "byteLength": 48},
+			map[string]any{"buffer": 0, "byteOffset": 96, "byteLength": 6},
+		},
+		"buffers": []any{map[string]any{"byteLength": len(bin)}},
+	}
+	mesh, err := LoadMesh("model.glb", glbOf(doc, bin), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mesh.Joints) != 3 || mesh.Joints[0][0].Joint != 1 || mesh.Joints[2][0].Joint != 2 {
+		t.Fatalf("joints %v", mesh.Joints)
+	}
+	if mesh.JointNames[2] != "Bone_001" || mesh.JointParents[2] != 1 || mesh.JointParents[1] != 0 {
+		t.Fatalf("skeleton %v %v", mesh.JointNames, mesh.JointParents)
+	}
+	if mesh.JointPositions[1] != [3]float32{0, 2, 5} || mesh.JointPositions[2] != [3]float32{0, 6, 5} {
+		t.Fatalf("joint positions %v", mesh.JointPositions)
+	}
+}
+
+// glbOf packs a glTF document and its binary chunk into a .glb file.
+func glbOf(doc map[string]any, bin []byte) []byte {
 	text, _ := json.Marshal(doc)
 	for len(text)%4 != 0 {
 		text = append(text, ' ')
@@ -134,17 +205,7 @@ func TestLoadGLB(t *testing.T) {
 	glb = binary.LittleEndian.AppendUint32(glb, uint32(len(text)))
 	glb = append(append(glb, "JSON"...), text...)
 	glb = binary.LittleEndian.AppendUint32(glb, uint32(len(bin)))
-	glb = append(append(glb, "BIN\x00"...), bin...)
-	mesh, err := LoadMesh("model.glb", glb, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(mesh.Positions) != 3 || mesh.Positions[1] != [3]float32{12, 0, 0} || mesh.Positions[2] != [3]float32{10, 2, 0} {
-		t.Fatalf("positions %v", mesh.Positions)
-	}
-	if len(mesh.Parts) != 1 || mesh.Parts[0].Name != "Coat" || mesh.Parts[0].Color != [4]float32{1, 0, 0, 1} {
-		t.Fatalf("parts %+v", mesh.Parts)
-	}
+	return append(append(glb, "BIN\x00"...), bin...)
 }
 
 func TestCompileTexture(t *testing.T) {

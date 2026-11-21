@@ -1,0 +1,440 @@
+{
+  "hero": "vampirebat",
+  "name": "Mina",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Harasser",
+      "Nimble",
+      "Vexing"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces Mina in Deadlock, a stylized third-person hero shooter. Its abilities are Rake, Sanguine Retreat, Love Bites, Nox Nostra. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on Mina's weapon, New Money. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_wip/vampirebat/vampirebat.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to Mina's height (101 units) and rigs it to Mina's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on Mina's weapon, New Money. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality. Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/mina_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/vampirebat_card_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/vampirebat_card_critical_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/vampirebat_card_gloat_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/vampirebat_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/vampirebat_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/vampirebat_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "gun",
+      "title": "Weapon picture",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Side view of the weapon or held prop of {{CHARACTER}} from the reference sheet, alone, horizontal, stylized 3D render. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/gun.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/guns/vampirebat_gun_psd.vtex_c",
+      "size": "600x300",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_rake",
+      "title": "Ability icon: Rake",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Rake\", an ability of {{CHARACTER}} from the reference sheet: Active: Slash with your umbrella, dealing X, increasing with their missing health. Receive a X for every target killed. Passive: Holding X causes you to briefly float. Rake executes non-heroes below X health. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_rake.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/vampirebat/vampirebat_rake_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_sanguine_retreat",
+      "title": "Ability icon: Sanguine Retreat",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Sanguine Retreat\", an ability of {{CHARACTER}} from the reference sheet: Briefly disperse, becoming untargetable and flying to a target location. Can be recast within a brief window. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_sanguine_retreat.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/vampirebat/vampirebat_sanguine_retreat_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_love_bites",
+      "title": "Ability icon: Love Bites",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Love Bites\", an ability of {{CHARACTER}} from the reference sheet: Your bullets apply additional X. Dealing damage with your abilities builds up to a vicious bite, dealing a burst of X. Love Bites has a unique cooldown per target. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_love_bites.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/vampirebat/vampirebat_love_bites_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_nox_nostra",
+      "title": "Ability icon: Nox Nostra",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Nox Nostra\", an ability of {{CHARACTER}} from the reference sheet: Active: Unleash a cloud of bats that seek out targets, each dealing X and applying X. Passive: Triggering Love Bites against heroes permanently increases the number of bats released. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_nox_nostra.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/vampirebat/vampirebat_nox_nostra_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    }
+  ],
+  "game": {
+    "id": "vampirebat",
+    "name": "Mina",
+    "weapon": "New Money",
+    "tags": [
+      "Harasser",
+      "Nimble",
+      "Vexing"
+    ],
+    "abilities": [
+      {
+        "key": "ability_vampirebat_steallife",
+        "name": "Rake",
+        "description": "Active: Slash with your umbrella, dealing X, increasing with their missing health. Receive a X for every target killed. Passive: Holding X causes you to briefly float. Rake executes non-heroes below X health.",
+        "icon": "panorama/images/hud/abilities/vampirebat/vampirebat_rake_psd.vtex_c",
+        "slug": "steallife"
+      },
+      {
+        "key": "ability_vampirebat_batblink",
+        "name": "Sanguine Retreat",
+        "description": "Briefly disperse, becoming untargetable and flying to a target location. Can be recast within a brief window.",
+        "icon": "panorama/images/hud/abilities/vampirebat/vampirebat_sanguine_retreat_psd.vtex_c",
+        "slug": "batblink"
+      },
+      {
+        "key": "ability_vampirebat_lovebites",
+        "name": "Love Bites",
+        "description": "Your bullets apply additional X. Dealing damage with your abilities builds up to a vicious bite, dealing a burst of X. Love Bites has a unique cooldown per target.",
+        "icon": "panorama/images/hud/abilities/vampirebat/vampirebat_love_bites_psd.vtex_c",
+        "slug": "lovebites"
+      },
+      {
+        "key": "ability_vampirebat_batswarm",
+        "name": "Nox Nostra",
+        "description": "Active: Unleash a cloud of bats that seek out targets, each dealing X and applying X. Passive: Triggering Love Bites against heroes permanently increases the number of bats released.",
+        "icon": "panorama/images/hud/abilities/vampirebat/vampirebat_nox_nostra_psd.vtex_c",
+        "slug": "batswarm"
+      }
+    ],
+    "model": "models/heroes_wip/vampirebat/vampirebat.vmdl",
+    "modelFolder": "models/heroes_wip/vampirebat/",
+    "height": 100.90619611740112,
+    "skeleton": "models/heroes_wip/vampirebat/vampirebat.vnmskel",
+    "boneMasks": [
+      "Reload_Idle",
+      "Reload_InAir",
+      "Reload_Slide",
+      "Reload_Haspath",
+      "Reload_HasPathCrouch",
+      "melee_UpperBody",
+      "Reload_Crouch",
+      "Parry_UpperBody",
+      "melee_dash",
+      "FullBody",
+      "Cast_UpperBody",
+      "root",
+      "Throw_UpperBody",
+      "Turn_LowerBody",
+      "UpperBodyReplace_AirDash",
+      "UpperBodyReplace_Asleep",
+      "UpperBodyReplace_Asleep_Channeling",
+      "UpperBodyReplace_GroundDash",
+      "UpperBodyReplace_InAir",
+      "UpperBodyReplace_Shopping",
+      "UpperBodyReplace_Slide",
+      "UpperBodyReplace_Turn",
+      "zero"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/vampirebat_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/vampirebat_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/vampirebat_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/vampirebat_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/vampirebat_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/vampirebat_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/mina_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      },
+      {
+        "path": "panorama/images/heroes/guns/vampirebat_gun_psd.vtex_c",
+        "label": "Weapon picture",
+        "width": 600,
+        "height": 300
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/vampirebat/love_bites_psd.vtex_c",
+        "label": "love bites",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/vampirebat/vampirebat_love_bites_psd.vtex_c",
+        "label": "love bites",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/vampirebat/vampirebat_nox_nostra_psd.vtex_c",
+        "label": "nox nostra",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/vampirebat/vampirebat_rake_psd.vtex_c",
+        "label": "rake",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/vampirebat/vampirebat_sanguine_retreat_psd.vtex_c",
+        "label": "sanguine retreat",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/mina_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/mina.vsvg_c",
+        "panorama/images/heroes/hero_names/mina_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/vampirebat.vpk"
+    },
+    "particleFolders": [
+      "particles/abilities/vampirebat/",
+      "particles/weapon_fx/vampirebat/"
+    ],
+    "effects": 138,
+    "nameKeys": [
+      "Steam_RP_hero_vampirebat",
+      "hero_vampirebat:n",
+      "hero_vampirebat_search:n",
+      "hero_vampirebat_sort:n"
+    ],
+    "tagKeys": [
+      "Citadel_VampireBat_HeroTag_1",
+      "Citadel_VampireBat_HeroTag_2",
+      "Citadel_VampireBat_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

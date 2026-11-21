@@ -65,6 +65,40 @@ func sampleBody() (positions [][3]float32, bones []int, interior []bool) {
 	return
 }
 
+// SampleParticle is a compiled particle system with a constant colour (200, 40, 255), a random
+// colour range in an initializer ((10, 20, 30) to (250, 0, 0)) and a vector that is not a colour.
+func SampleParticle() []byte {
+	rgba := func(r, g, b, a int64) *Value {
+		return NewArray(&Value{Kind: Int32, I: r}, &Value{Kind: Int32, I: g}, &Value{Kind: Int32, I: b}, &Value{Kind: Int32, I: a})
+	}
+	data := NewObject().Set("_class", NewString("CParticleSystemDefinition")).
+		Set("m_ConstantColor", rgba(200, 40, 255, 255)).
+		Set("m_Initializers", NewArray(NewObject().Set("_class", NewString("C_INIT_RandomColor")).
+			Set("m_ColorMin", rgba(10, 20, 30, 128)).Set("m_ColorMax", rgba(250, 0, 0, 255)))).
+		Set("m_vecOffset", NewArray(&Value{Kind: Int32, I: 1}, &Value{Kind: Int32, I: 2}, &Value{Kind: Int32, I: 3}))
+	encoded, _ := WriteKV3(data, FormatGeneric)
+	return (&Resource{Version: 0, Blocks: []Block{{"RED2", encoded}, {"DATA", encoded}}}).Encode()
+}
+
+// SampleInterfaceImage is a compiled texture laid out as the game's interface images (hero cards,
+// portraits, ability icons) are: uncompressed BGRA with mips levels, here all black.
+func SampleInterfaceImage(w, h, mips int) []byte {
+	header := make([]byte, 40)
+	binary.LittleEndian.PutUint16(header, 1)
+	binary.LittleEndian.PutUint16(header[2:], 8)
+	binary.LittleEndian.PutUint16(header[20:], uint16(w))
+	binary.LittleEndian.PutUint16(header[22:], uint16(h))
+	binary.LittleEndian.PutUint16(header[24:], 1)
+	header[26], header[27] = textureBGRA8888, byte(mips)
+	var streaming []byte
+	sizes := mipSizes(w, h, mips)
+	for i := len(sizes) - 1; i >= 0; i-- {
+		streaming = append(streaming, make([]byte, sizes[i][0]*sizes[i][1]*4)...)
+	}
+	editInfo, _ := WriteKV3(NewObject().Set("m_name", NewString("card")), FormatGeneric)
+	return (&Resource{Version: 1, Blocks: []Block{{"RED2", editInfo}, {"DATA", header}}, Streaming: streaming}).Encode()
+}
+
 func SampleHero() []byte {
 	write := func(v *Value) []byte {
 		data, _ := WriteKV3(v, FormatGeneric) // these values always encode
@@ -91,7 +125,7 @@ func SampleHero() []byte {
 		Set("m_refLODGroupMasks", NewArray(NewUint32(1), NewUint32(1)))
 
 	layout := func(fields ...[3]int) *Value { // name index, format, offset
-		semantic := []string{"position", "normal", "texcoord", "blendindices", "blendweights"}
+		semantic := []string{"POSITION", "NORMAL", "TEXCOORD", "BLENDINDICES", "blendweight"} // as the game spells them
 		var out []*Value
 		for _, f := range fields {
 			out = append(out, NewObject().Set("m_pSemanticName", NewString(semantic[f[0]])).

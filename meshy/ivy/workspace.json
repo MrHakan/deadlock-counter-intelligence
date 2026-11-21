@@ -1,0 +1,483 @@
+{
+  "hero": "tengu",
+  "name": "Ivy",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Team-up",
+      "Disruptor",
+      "Rock Solid"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces Ivy in Deadlock, a stylized third-person hero shooter (Ivy: Sets up a power duo with a lucky ally). Its abilities are Entangling Thorns, Kudzu Connection, Stone Form, Air Drop. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on Ivy's weapon, Protector's Hand. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_wip/ivy/ivy.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to Ivy's height (112 units) and rigs it to Ivy's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on Ivy's weapon, Protector's Hand. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality and its part in a team (sets up a power duo with a lucky ally). Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/ivy_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/tengu_card_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/tengu_card_critical_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/tengu_card_gloat_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/tengu_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/tengu_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/tengu_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "gun",
+      "title": "Weapon picture",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Side view of the weapon or held prop of {{CHARACTER}} from the reference sheet, alone, horizontal, stylized 3D render. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/gun.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/guns/ivy_gun_psd.vtex_c",
+      "size": "600x300",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_entangling_thorns",
+      "title": "Ability icon: Entangling Thorns",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Entangling Thorns\", an ability of {{CHARACTER}} from the reference sheet: Damage and slow enemies in the area. Summon a patch of choking thorns that damages and slows enemies in its radius. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_entangling_thorns.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/tengu/tengu_storm_flask_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_kudzu_connection",
+      "title": "Ability icon: Kudzu Connection",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Kudzu Connection\", an ability of {{CHARACTER}} from the reference sheet: Empower yourself and a nearby ally. Connect with a nearby ally to gain bonuses, replicated healing, and ignore the move speed penalty while shooting. Receive 50% of Bonuses with no connection Connection requires line of sight. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_kudzu_connection.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/tengu/tengu_tether_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_stone_form",
+      "title": "Ability icon: Stone Form",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Stone Form\", an ability of {{CHARACTER}} from the reference sheet: Turn into impervious stone and stun enemies nearby. Turn yourself into impervious stone and smash into the ground, stunning and damaging enemies nearby. Heals you for a percentage of your max health. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_stone_form.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/tengu/tengu_stone_form_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_air_drop",
+      "title": "Ability icon: Air Drop",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Air Drop\", an ability of {{CHARACTER}} from the reference sheet: Death from Above! Fly and drop an ally on enemies. Grab an ally and take flight with them. Drop your ally to cause an explosion, dealing X. You and your ally gain increased Outgoing Damage when flying ends. Cooldown reduced by X% when used on allies. Taking damage. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_air_drop.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/tengu/tengu_lightning_crash_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "prop_ivy_bramble_model_fx",
+      "title": "Ability model: ivy_bramble_model_fx",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Ivy's \"ivy bramble model fx\" ability model. Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_ivy_bramble_model_fx.glb",
+      "kind": "prop",
+      "target": "models/abilities/ivy_bramble_model_fx.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_ivy_thornbomb_model",
+      "title": "Ability model: ivy_thornbomb_model",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Ivy's \"ivy thornbomb model\" ability model. It is used by \"Entangling Thorns\" (Damage and slow enemies in the area). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_ivy_thornbomb_model.glb",
+      "kind": "prop",
+      "target": "models/abilities/ivy_thornbomb_model.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    }
+  ],
+  "game": {
+    "id": "tengu",
+    "name": "Ivy",
+    "role": "Sets up a power duo with a lucky ally",
+    "playstyle": "Ivy has disruptive combat tricks that slow and stun enemies. She's most effective when linking up with an ally, empowering her and her ally's guns as well as sharing heals.",
+    "weapon": "Protector's Hand",
+    "tags": [
+      "Team-up",
+      "Disruptor",
+      "Rock Solid"
+    ],
+    "abilities": [
+      {
+        "key": "citadel_ability_tengu_urn",
+        "name": "Entangling Thorns",
+        "quip": "Damage and slow enemies in the area",
+        "description": "Summon a patch of choking thorns that damages and slows enemies in its radius.",
+        "icon": "panorama/images/hud/abilities/tengu/tengu_storm_flask_psd.vtex_c",
+        "slug": "urn",
+        "props": "models/abilities/ivy_thornbomb_model.vmdl"
+      },
+      {
+        "key": "citadel_ability_tangotether",
+        "name": "Kudzu Connection",
+        "quip": "Empower yourself and a nearby ally",
+        "description": "Connect with a nearby ally to gain bonuses, replicated healing, and ignore the move speed penalty while shooting. Receive 50% of Bonuses with no connection Connection requires line of sight.",
+        "icon": "panorama/images/hud/abilities/tengu/tengu_tether_psd.vtex_c",
+        "slug": "tangotether"
+      },
+      {
+        "key": "citadel_ability_tengu_stone_form",
+        "name": "Stone Form",
+        "quip": "Turn into impervious stone and stun enemies nearby",
+        "description": "Turn yourself into impervious stone and smash into the ground, stunning and damaging enemies nearby. Heals you for a percentage of your max health.",
+        "icon": "panorama/images/hud/abilities/tengu/tengu_stone_form_psd.vtex_c",
+        "slug": "stone_form"
+      },
+      {
+        "key": "citadel_ability_tengu_airlift",
+        "name": "Air Drop",
+        "quip": "Death from Above! Fly and drop an ally on enemies",
+        "description": "Grab an ally and take flight with them. Drop your ally to cause an explosion, dealing X. You and your ally gain increased Outgoing Damage when flying ends. Cooldown reduced by X% when used on allies. Taking damage briefly disables using the ability. While lifted, your ally cannot attack and deals X% damage.",
+        "icon": "panorama/images/hud/abilities/tengu/tengu_lightning_crash_psd.vtex_c",
+        "slug": "airlift"
+      }
+    ],
+    "model": "models/heroes_wip/ivy/ivy.vmdl",
+    "modelFolder": "models/heroes_wip/ivy/",
+    "height": 111.93546390533447,
+    "skeleton": "models/heroes_staging/tengu/tengu_v2/dmx/mesh/ivy.vnmskel",
+    "clipFolder": "models/heroes_staging/tengu/tengu_v2/clips/",
+    "clips": 188,
+    "keyClips": [
+      "weapon_idle",
+      "out_of_combat_idle",
+      "weapon_run_n",
+      "weapon_crouch_idle",
+      "melee_quick_1",
+      "melee_hit",
+      "reload_stand_idle",
+      "weapon_shoot"
+    ],
+    "boneMasks": [
+      "Throw_UpperBody",
+      "Cast_UpperBody",
+      "Reload_Crouch",
+      "Reload_Haspath",
+      "Reload_HasPathCrouch",
+      "Reload_Idle",
+      "Reload_InAir",
+      "Reload_Slide",
+      "melee_UpperBody",
+      "UpperBodyReplace_Asleep",
+      "UpperBodyReplace_GroundDash",
+      "UpperBodyReplace_InAir",
+      "UpperBodyReplace_Shopping",
+      "UpperBodyReplace_Slide",
+      "UpperBodyReplace_Turn",
+      "Parry_UpperBody"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/tengu_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/tengu_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/tengu_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/tengu_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/tengu_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/tengu_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/ivy_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      },
+      {
+        "path": "panorama/images/heroes/guns/ivy_gun_psd.vtex_c",
+        "label": "Weapon picture",
+        "width": 600,
+        "height": 300
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/tengu/tengu_lightning_crash_psd.vtex_c",
+        "label": "lightning crash",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/tengu/tengu_stone_form_psd.vtex_c",
+        "label": "stone form",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/tengu/tengu_storm_flask_psd.vtex_c",
+        "label": "storm flask",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/tengu/tengu_tether_psd.vtex_c",
+        "label": "tether",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/ivy_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/ivy.vsvg_c",
+        "panorama/images/heroes/hero_names/ivy_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/tengu.vpk"
+    },
+    "abilityModels": [
+      "models/abilities/ivy_bramble_model_fx.vmdl",
+      "models/abilities/ivy_thornbomb_model.vmdl"
+    ],
+    "particleFolders": [
+      "particles/abilities/tengu/",
+      "particles/weapon_fx/tengu/"
+    ],
+    "effects": 206,
+    "nameKeys": [
+      "Steam_RP_hero_tengu",
+      "hero_tengu:n",
+      "hero_tengu_search:n"
+    ],
+    "tagKeys": [
+      "Citadel_Tengu_HeroTag_1",
+      "Citadel_Tengu_HeroTag_2",
+      "Citadel_Tengu_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

@@ -1,2 +1,6 @@
 __pycache__/
 dist/
+
+# Files generated with Meshy go into each hero's assets folder and stay local.
+meshy/*/assets/*
+!meshy/*/assets/README.md

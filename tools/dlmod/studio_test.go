@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
@@ -35,15 +37,19 @@ func TestStudioPutsAModelOnAHero(t *testing.T) {
 	game.write("game/citadel/pak01_dir.vpk", source2.WriteVPK(map[string][]byte{
 		heroModels["wraith"] + "_c": source2.SampleHero(),
 	}))
-	store, err := openStore(game.Game)
-	if err != nil {
-		t.Fatal(err)
-	}
 	index, err := openHeroModels(game.Game)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &studio{game: game.Game, store: store, index: index, token: "secret"}
+	s := &studio{game: game.Game, index: index, token: "secret"}
+	entries := func() []*Entry {
+		store, err := openStore(game.Game) // the studio writes the mod list itself
+		if err != nil {
+			t.Fatal(err)
+		}
+		list, _ := store.entries()
+		return list
+	}
 	server := httptest.NewServer(s.routes())
 	defer server.Close()
 	call := func(name string, body any, into any) int {
@@ -131,11 +137,35 @@ func TestStudioPutsAModelOnAHero(t *testing.T) {
 
 	options := studioOptions{Keep: map[string]bool{"sample_body": false, "gun_model": true}}
 	var rig struct {
-		Pose      source2.Pose
-		Positions string
+		Pose       source2.Pose
+		Positions  string
+		Skeleton   struct{ Names []string }
+		Bones      string
+		PieceCount int
 	}
-	if code := call("rig", options, &rig); code != 200 || rig.Positions == "" {
+	if code := call("rig", options, &rig); code != 200 || rig.Positions == "" || len(rig.Skeleton.Names) == 0 || rig.Bones == "" || rig.PieceCount != 1 {
 		t.Fatalf("rig: %d %+v", code, rig)
+	}
+	// Pinning the box (piece 0) to the head makes every vertex follow the head alone.
+	pinned := options
+	pinned.Pins = map[int]string{0: "head"}
+	if code := call("rig", pinned, &rig); code != 200 {
+		t.Fatalf("rig with a pin: %d", code)
+	}
+	head := 0
+	for i, name := range rig.Skeleton.Names {
+		if name == "head" {
+			head = i
+		}
+	}
+	bones, _ := base64.StdEncoding.DecodeString(rig.Bones)
+	for v := 0; v+8 <= len(bones); v += 8 {
+		if int(binary.LittleEndian.Uint16(bones[v:])) != head {
+			t.Fatalf("vertex %d does not follow the head", v/8)
+		}
+	}
+	if code := call("rig", options, &rig); code != 200 { // back to the automatic weights for the rest
+		t.Fatalf("rig: %d", code)
 	}
 	var bent struct{ Positions string }
 	if code := call("bend", source2.Pose{Legs: 20}, &bent); code != 200 || bent.Positions == "" || bent.Positions == rig.Positions {
@@ -148,9 +178,8 @@ func TestStudioPutsAModelOnAHero(t *testing.T) {
 	if code := call("install", options, &installed); code != 200 {
 		t.Fatalf("install: %d %+v", code, installed)
 	}
-	entries, _ := store.entries()
-	if len(entries) != 1 || entries[0].Name() != "Custom model: Wraith" {
-		t.Fatalf("the custom model is installed as a mod: %v (%v)", entries, installed.Messages)
+	if list := entries(); len(list) != 1 || list[0].Name() != "Custom model: Wraith" {
+		t.Fatalf("the custom model is installed as a mod: %v (%v)", list, installed.Messages)
 	}
 	vpk, err := source2.OpenVPK(filepath.Join(game.Addons(), "pak01_dir.vpk"))
 	if err != nil {
@@ -164,8 +193,60 @@ func TestStudioPutsAModelOnAHero(t *testing.T) {
 	// Installing again replaces the hero's previous custom model instead of adding a second.
 	options.Scale = 0.9
 	call("install", options, &installed)
-	if entries, _ = store.entries(); len(entries) != 1 {
-		t.Fatalf("a second import replaces the first: %v %v", entries, installed.Messages)
+	if list := entries(); len(list) != 1 {
+		t.Fatalf("a second import replaces the first: %v %v", list, installed.Messages)
+	}
+}
+
+// m in the full-screen view starts the studio in the background and opens it in the browser;
+// pressing it again reopens the same studio.
+func TestStudioFromTheFullScreenView(t *testing.T) {
+	game := newFakeGame(t)
+	game.write("game/citadel/pak01_dir.vpk", source2.WriteVPK(map[string][]byte{
+		heroModels["wraith"] + "_c": source2.SampleHero(),
+	}))
+	var opened []string
+	saved := openInPlayer
+	openInPlayer = func(url string) error { opened = append(opened, url); return nil }
+	defer func() { openInPlayer = saved }()
+
+	ui := newTestTUI(t, game.Game)
+	ui.handle([]byte("m"))
+	if len(opened) != 1 || !strings.Contains(ui.screen(), "model studio is open") {
+		t.Fatalf("m opens the studio: %v\n%s", opened, ui.screen())
+	}
+	response, err := http.Get(opened[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != 200 {
+		t.Fatalf("the studio answers at %s: %d", opened[0], response.StatusCode)
+	}
+	ui.handle([]byte("m"))
+	if len(opened) != 2 || opened[1] != opened[0] {
+		t.Fatalf("m again reopens the same studio: %v", opened)
+	}
+}
+
+// A hero's new custom model replaces the last one even when its files differ (other materials).
+func TestNewModelReplacesTheLast(t *testing.T) {
+	game := newFakeGame(t)
+	store, err := openStore(game.Game)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, files := range []map[string][]byte{
+		{heroModels["tengu"] + "_c": []byte("one"), "models/dlmod/ivy/material_0.vmat_c": []byte("m")},
+		{heroModels["tengu"] + "_c": []byte("two"), "models/dlmod/ivy/body.vmat_c": []byte("b"), "models/dlmod/ivy/nose.vmat_c": []byte("n")},
+	} {
+		if err := installModel(quietUI(""), store, "tengu", &source2.ImportResult{Files: files}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, _ := store.entries()
+	if len(entries) != 1 || !strings.Contains(strings.Join(entries[0].Paths, " "), "body.vmat_c") {
+		t.Fatalf("one custom model, the new one: %v", entries)
 	}
 }
 

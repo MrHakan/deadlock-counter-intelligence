@@ -1,0 +1,433 @@
+{
+  "hero": "chrono",
+  "name": "Paradox",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Calculated",
+      "Disruptor",
+      "Tactician"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces Paradox in Deadlock, a stylized third-person hero shooter (Paradox: Manipulates Space and Time). Its abilities are Pulse Grenade, Time Wall, Kinetic Carbine, Paradoxical Swap. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on Paradox's weapon, Trade Secret. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_staging/chrono/chrono.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to Paradox's height (101 units) and rigs it to Paradox's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on Paradox's weapon, Trade Secret. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality and its part in a team (manipulates space and time). Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/paradox_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/chrono_card_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/chrono_card_critical_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/chrono_card_gloat_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/chrono_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/chrono_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/chrono_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "gun",
+      "title": "Weapon picture",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Side view of the weapon or held prop of {{CHARACTER}} from the reference sheet, alone, horizontal, stylized 3D render. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/gun.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/guns/chrono_gun_psd.vtex_c",
+      "size": "600x300",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_pulse_grenade",
+      "title": "Ability icon: Pulse Grenade",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Pulse Grenade\", an ability of {{CHARACTER}} from the reference sheet: Throw a grenade that pulses, dealing damage and time slowing. Throw a grenade that begins pulsing when it lands. Each pulse expands the radius and applies X, time slow, and stacking X for X against the victim. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_pulse_grenade.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/chrono/chrono_time_bomb_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_time_wall",
+      "title": "Ability icon: Time Wall",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Time Wall\", an ability of {{CHARACTER}} from the reference sheet: Create a wall that greatly slows projectiles. Create a time warping wall that stops time for all enemy projectiles and bullets that touch it and increases the speed and damage of friendly bullets. Enemies that touch the wall will be briefly slowed. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_time_wall.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/chrono/chrono_time_wall_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_kinetic_carbine",
+      "title": "Ability icon: Kinetic Carbine",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Kinetic Carbine\", an ability of {{CHARACTER}} from the reference sheet: Charge up your weapon to deal high damage and timestop. Charge up a powerful shot of time energy, dealing X and applying a Time-Stop to enemies hit. The damage dealt increases with X. Move speed is increased while charging. While in the air and charging, X to timeslow your. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_kinetic_carbine.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/duo/duo_attack_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_paradoxical_swap",
+      "title": "Ability icon: Paradoxical Swap",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Paradoxical Swap\", an ability of {{CHARACTER}} from the reference sheet: Swap positions with an enemy hero. Fire a projectile that swaps your position with the target enemy hero. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_paradoxical_swap.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/chrono/chrono_swap_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    }
+  ],
+  "game": {
+    "id": "chrono",
+    "name": "Paradox",
+    "role": "Manipulates Space and Time",
+    "playstyle": "Manipulating time lets Paradox outpace an enemy in one on one combat. She thrives by subjecting her enemies to timely swaps into a waiting pulse grenade, her wall, or into the middle of her teammates.",
+    "weapon": "Trade Secret",
+    "tags": [
+      "Calculated",
+      "Disruptor",
+      "Tactician"
+    ],
+    "abilities": [
+      {
+        "key": "citadel_ability_chrono_pulse_grenade",
+        "name": "Pulse Grenade",
+        "quip": "Throw a grenade that pulses, dealing damage and time slowing",
+        "description": "Throw a grenade that begins pulsing when it lands. Each pulse expands the radius and applies X, time slow, and stacking X for X against the victim.",
+        "icon": "panorama/images/hud/abilities/chrono/chrono_time_bomb_psd.vtex_c",
+        "slug": "pulse_grenade"
+      },
+      {
+        "key": "citadel_ability_chrono_time_wall",
+        "name": "Time Wall",
+        "quip": "Create a wall that greatly slows projectiles",
+        "description": "Create a time warping wall that stops time for all enemy projectiles and bullets that touch it and increases the speed and damage of friendly bullets. Enemies that touch the wall will be briefly slowed.",
+        "icon": "panorama/images/hud/abilities/chrono/chrono_time_wall_psd.vtex_c",
+        "slug": "time_wall"
+      },
+      {
+        "key": "citadel_ability_chrono_kinetic_carbine",
+        "name": "Kinetic Carbine",
+        "quip": "Charge up your weapon to deal high damage and timestop",
+        "description": "Charge up a powerful shot of time energy, dealing X and applying a Time-Stop to enemies hit. The damage dealt increases with X. Move speed is increased while charging. While in the air and charging, X to timeslow your movement.",
+        "icon": "panorama/images/hud/abilities/duo/duo_attack_psd.vtex_c",
+        "slug": "kinetic_carbine"
+      },
+      {
+        "key": "citadel_ability_chrono_swap",
+        "name": "Paradoxical Swap",
+        "quip": "Swap positions with an enemy hero.",
+        "description": "Fire a projectile that swaps your position with the target enemy hero.",
+        "icon": "panorama/images/hud/abilities/chrono/chrono_swap_psd.vtex_c",
+        "slug": "swap"
+      }
+    ],
+    "model": "models/heroes_staging/chrono/chrono.vmdl",
+    "modelFolder": "models/heroes_staging/chrono/",
+    "height": 101.26179075241089,
+    "skeleton": "models/heroes_staging/chrono/chrono.vnmskel",
+    "boneMasks": [
+      "Cast_UpperBody",
+      "melee_UpperBody",
+      "Parry_UpperBody",
+      "Reload_Crouch",
+      "Reload_Haspath",
+      "Reload_HasPath_ALT",
+      "Reload_HasPathCrouch",
+      "Reload_HasPathCrouch_ALT",
+      "Reload_Idle",
+      "Reload_InAir",
+      "Reload_InAir_ALT",
+      "Reload_Slide",
+      "Throw_UpperBody",
+      "UpperBodyReplace_Asleep",
+      "UpperBodyReplace_InAir",
+      "UpperBodyReplace_Slide",
+      "UpperBodyReplace_Turn"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/chrono_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/chrono_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/chrono_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/chrono_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/chrono_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/chrono_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/paradox_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      },
+      {
+        "path": "panorama/images/heroes/guns/chrono_gun_psd.vtex_c",
+        "label": "Weapon picture",
+        "width": 600,
+        "height": 300
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/chrono/chrono_swap_psd.vtex_c",
+        "label": "swap",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/chrono/chrono_time_bomb_psd.vtex_c",
+        "label": "time bomb",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/chrono/chrono_time_wall_psd.vtex_c",
+        "label": "time wall",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/duo/duo_attack_psd.vtex_c",
+        "label": "ability icon",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/paradox_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/paradox.vsvg_c",
+        "panorama/images/heroes/hero_names/paradox_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/chrono.vpk"
+    },
+    "particleFolders": [
+      "particles/abilities/chrono/",
+      "particles/weapon_fx/chrono/"
+    ],
+    "effects": 243,
+    "nameKeys": [
+      "Steam_RP_hero_chrono",
+      "hero_chrono:n",
+      "hero_chrono_search:n"
+    ],
+    "tagKeys": [
+      "Citadel_Chrono_HeroTag_1",
+      "Citadel_Chrono_HeroTag_2",
+      "Citadel_Chrono_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

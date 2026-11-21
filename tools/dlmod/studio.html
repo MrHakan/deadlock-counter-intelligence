@@ -51,6 +51,57 @@ canvas { display: block; }
 .busy { position: absolute; inset: 0; display: none; place-items: center; background: rgba(18,19,23,.55); font-size: 15px; }
 .busy.on { display: grid; }
 .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); text-align: center; pointer-events: none; }
+.tabs { display: flex; gap: 2px; margin: 10px 0 0; border-bottom: 1px solid var(--line); }
+.tabs button { flex: 1; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--dim);
+  padding: 7px 2px; font-size: 12px; }
+.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+input[type=search], input[type=text] { font: inherit; color: var(--text); background: #23262e; border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; width: 100%; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.chips button { font-size: 12px; padding: 3px 8px; border-radius: 99px; }
+.chips button.on { background: var(--accent-dim); border-color: var(--accent); color: var(--text); }
+.panel { position: absolute; inset: 0; overflow-y: auto; padding: 14px 18px; background: var(--bg); }
+.list { width: 100%; border-collapse: collapse; font-size: 13px; }
+.list th { text-align: left; color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  padding: 6px 6px; border-bottom: 1px solid var(--line); position: sticky; top: -14px; background: var(--bg); }
+.list td { padding: 4px 6px; border-bottom: 1px solid #1f2128; vertical-align: middle; }
+.list tr.over td { background: #221f17; }
+.list tr.replaced td.name { color: var(--ok); }
+.list .tag { font-size: 11px; color: var(--dim); }
+.list button { font-size: 12px; padding: 2px 8px; }
+.list .yours { color: var(--ok); font-size: 12px; }
+.play { width: 28px; padding: 2px 0 !important; }
+.empty-panel { color: var(--dim); padding: 40px 0; text-align: center; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.card.over { border-color: var(--accent); background: #221f17; }
+.card.replaced { border-color: #3d5a43; }
+.card h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.card small { color: var(--dim); font-size: 11px; }
+.card .pics { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; min-height: 90px; }
+.card .pics.one { grid-template-columns: 1fr; }
+.card .pics figure { margin: 0; text-align: center; }
+.card .pics img { max-width: 100%; max-height: 160px; background: repeating-conic-gradient(#25272e 0% 25%, #1c1e24 0% 50%) 50% / 16px 16px; border-radius: 4px; }
+.card figcaption { font-size: 11px; color: var(--dim); }
+.card .buttons { margin-top: 0; }
+.entry { border-bottom: 1px solid #1f2128; padding: 8px 0; }
+.entry .key { font-size: 11px; color: var(--dim); font-family: ui-monospace, Consolas, monospace; display: flex; gap: 8px; align-items: center; }
+.entry .key .edited { color: var(--ok); }
+.entry .key .dirty { color: var(--accent); }
+.entry .key button { margin-left: auto; font-size: 11px; padding: 1px 8px; }
+.entry textarea { width: 100%; margin-top: 4px; font: inherit; font-size: 13px; color: var(--text); background: #1b1d23; border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; resize: vertical; min-height: 34px; }
+.entry textarea:focus { outline: none; border-color: var(--accent-dim); }
+.entry .was { font-size: 11px; color: var(--dim); margin-top: 2px; }
+.joint { display: grid; grid-template-columns: 1fr 52px 120px; gap: 6px; align-items: center; font-size: 12px; padding: 2px 0; }
+.joint span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.joint small { color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+.joint select, #weightBone, #pinBone { font-size: 12px; padding: 3px 4px; }
+.joint.changed span { color: var(--accent); }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 8px; }
+.swatch { border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+.swatch .halves { display: grid; grid-template-columns: 1fr 1fr; height: 46px; }
+.swatch small { display: block; font-size: 10px; color: var(--dim); padding: 2px 6px; background: var(--panel); font-variant-numeric: tabular-nums; }
 [hidden] { display: none !important; }
 @media (max-width: 760px) { .app { grid-template-columns: 1fr; grid-template-rows: auto 60vh; } aside { border-right: 0; } }
 </style>
@@ -58,15 +109,80 @@ canvas { display: block; }
 <body>
 <div class="app">
 <aside>
-  <h1>Deadlock Modkit · <span>Model Studio</span></h1>
-  <div class="sub">Put any model on a hero. It keeps the hero's animations, hitboxes and abilities.</div>
+  <h1>Deadlock Modkit · <span>Hero Studio</span></h1>
+  <div class="sub">Change a hero's model, voice and sounds. Everything installs as dlmod mods you can switch off.</div>
 
   <section>
-    <h2>1 · Hero</h2>
+    <h2>Hero</h2>
     <select id="hero"><option value="">Pick a hero…</option></select>
     <div class="info" id="heroInfo"></div>
+    <nav class="tabs" id="tabs">
+      <button data-tab="model" class="on">Model</button><button data-tab="sounds">Sounds</button>
+      <button data-tab="images">Images</button><button data-tab="text">Text</button><button data-tab="effects">Effects</button>
+    </nav>
   </section>
 
+  <div id="tab-effects" hidden>
+  <section>
+    <h2>Effect colours</h2>
+    <div class="info" id="effectInfo">Recolour the hero's ability effects. The swatches show each colour the effects use, before and after.</div>
+    <div class="row"><label for="fxHue">Hue</label><input type="range" id="fxHue" min="-180" max="180" step="1" value="0"><output id="fxHueOut">0°</output></div>
+    <div class="row"><label for="fxSat">Saturation</label><input type="range" id="fxSat" min="0" max="2" step="0.01" value="1"><output id="fxSatOut">100%</output></div>
+    <div class="row"><label for="fxBright">Brightness</label><input type="range" id="fxBright" min="0.2" max="2" step="0.01" value="1"><output id="fxBrightOut">100%</output></div>
+    <div class="row"><label for="fxTint">Tint</label><input type="range" id="fxStrength" min="0" max="1" step="0.01" value="0"><input type="color" id="fxTint" value="#3fd0ff" style="width:52px;height:26px;padding:0;border:0;background:none"></div>
+    <label class="info" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="fxWeapon"> Also the weapon's muzzle flashes and tracers</label>
+    <div class="buttons"><button id="fxReset">Reset sliders</button></div>
+  </section>
+  <section>
+    <button class="primary" id="fxApply" disabled>Apply to the hero's effects</button>
+    <div class="buttons"><button id="fxRestore" disabled>Restore the game's colours</button></div>
+    <div class="log" id="fxLog"></div>
+  </section>
+  </div>
+
+  <div id="tab-images" hidden>
+  <section>
+    <h2>Images</h2>
+    <div class="info">The hero's card on the hero select screen and in the HUD, portraits, minimap icon, background and ability icons.
+      Drop a PNG or JPEG on one: it is fitted to the game's size, cropped in the middle.</div>
+    <div class="chips" id="imageGroups"></div>
+    <div class="log" id="imageLog"></div>
+  </section>
+  </div>
+
+  <div id="tab-text" hidden>
+  <section>
+    <h2>Text</h2>
+    <div class="info">Ability names and descriptions, role, playstyle and lore, as the game shows them. Keep the {s:...} and
+      &lt;span&gt; parts: the game fills in numbers and colours there.</div>
+    <div class="row" style="grid-template-columns: 64px 1fr"><label for="textLanguage">Language</label><select id="textLanguage"></select></div>
+    <input type="search" id="textSearch" placeholder="Search names, keys or text">
+    <div class="buttons"><button class="primary" id="textSave" disabled>Save changes</button></div>
+    <div class="buttons"><button id="textRevert" disabled>Undo unsaved changes</button></div>
+    <div class="info" id="textInfo" style="margin-top:8px"></div>
+    <div class="log" id="textLog"></div>
+  </section>
+  </div>
+
+  <div id="tab-sounds" hidden>
+  <section>
+    <h2>Sounds</h2>
+    <input type="search" id="soundSearch" placeholder="Search, e.g. kill, ult, footstep">
+    <div class="chips" id="soundGroups"></div>
+    <div class="info" id="soundInfo" style="margin-top:8px"></div>
+  </section>
+  <section>
+    <h2>Replace</h2>
+    <div class="info">Drop an audio file on a sound in the list, or use its Replace button. .wav and .mp3 work.</div>
+    <div class="drop" id="soundDrop" style="margin-top:8px"><b>Drop a voice pack here</b>Files named like the game's sounds
+      (kill_01.wav for kill_01) replace them all at once.</div>
+    <input type="file" id="soundPicker" multiple hidden accept=".wav,.mp3,audio/*">
+    <div class="buttons"><button id="soundRestoreAll" disabled>Restore all of this hero's sounds</button></div>
+    <div class="log" id="soundLog"></div>
+  </section>
+  </div>
+
+  <div id="tab-model">
   <section>
     <h2>2 · Model</h2>
     <div class="drop" id="drop"><b>Drop a .glb, .gltf or .obj here</b>with its textures, .mtl or .bin, or a .zip of them. Or click to pick files.</div>
@@ -104,14 +220,72 @@ canvas { display: block; }
     </div>
   </section>
 
+  <section id="advanced" hidden>
+    <h2>Advanced rig</h2>
+    <div class="chips" id="advTools">
+      <button data-tool="pose" class="on">Pose preview</button><button data-tool="weights">Weights</button>
+      <button data-tool="pin">Pin pieces</button><button data-tool="joints" id="jointsTool">Joint map</button>
+    </div>
+    <div id="tool-pose" style="margin-top:8px">
+      <div class="buttons">
+        <button data-anim="walk">Walk</button><button data-anim="run">Run</button><button data-anim="crouch">Crouch</button>
+        <button data-anim="jump">Jump</button><button data-anim="armsup">Arms up</button><button data-anim="look">Look around</button>
+      </div>
+      <div class="buttons"><button data-anim="">Stop</button></div>
+      <div class="info" style="margin-top:6px">The hero's own skeleton bends here and moves your model by its weights, as the game does.
+        The motions are made up to show how the rig bends; the game's own animation clips are not read yet.</div>
+    </div>
+    <div id="tool-weights" hidden style="margin-top:8px">
+      <select id="weightBone"></select>
+      <div class="info" style="margin-top:6px">Red follows the bone fully, blue not at all. Paint to change it, then apply.</div>
+      <label class="info" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="brushOn"> Paint with the mouse (drag over the model)</label>
+      <div class="row"><label for="brushSize">Brush</label><input type="range" id="brushSize" min="0.5" max="20" step="0.5" value="4"><output id="brushSizeOut">4</output></div>
+      <div class="row"><label for="brushWeight">Weight</label><input type="range" id="brushWeight" min="0" max="1" step="0.05" value="1"><output id="brushWeightOut">100%</output></div>
+      <div class="buttons"><button id="paintApply" disabled>Apply painting</button><button id="paintClear" disabled>Clear painting</button></div>
+    </div>
+    <div id="tool-pin" hidden style="margin-top:8px">
+      <div class="info">Click a piece of your model (a hat, a bag, a sword) and pick the bone it should follow without bending.</div>
+      <div class="info" id="pinPicked" style="margin:6px 0">No piece picked.</div>
+      <select id="pinBone"></select>
+      <div class="buttons"><button id="pinAdd" disabled>Pin to this bone</button></div>
+      <div class="parts" id="pinList"></div>
+    </div>
+    <div id="tool-joints" hidden style="margin-top:8px">
+      <div class="info">Your model's own joints, the vertices each mostly moves, and the hero bone it follows. Change one to remap it.</div>
+      <div id="jointList"></div>
+    </div>
+    <div class="info" id="advInfo" style="margin-top:6px"></div>
+  </section>
+
   <section>
     <h2>6 · Install</h2>
     <button class="primary" id="install" disabled>Install on hero</button>
     <div class="log" id="log"></div>
   </section>
+  </div>
 </aside>
 <main id="view">
   <div class="empty" id="empty">Pick a hero and drop a model</div>
+  <div class="panel" id="soundsPanel" hidden>
+    <div class="empty-panel" id="soundsEmpty">Pick a hero to see their sounds.</div>
+    <table class="list" id="soundTable" hidden>
+      <thead><tr><th></th><th>Sound</th><th>Kind</th><th>Plays instead</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <audio id="player"></audio>
+  </div>
+  <div class="panel" id="imagesPanel" hidden>
+    <div class="empty-panel" id="imagesEmpty">Pick a hero to see their images.</div>
+    <div class="grid" id="imageGrid"></div>
+  </div>
+  <div class="panel" id="effectsPanel" hidden>
+    <div class="empty-panel" id="effectsEmpty">Pick a hero to see their effect colours.</div>
+    <div class="swatches" id="swatches"></div>
+  </div>
+  <div class="panel" id="textPanel" hidden>
+    <div class="empty-panel" id="textEmpty">Pick a hero to see their text.</div>
+    <div id="textList"></div>
+  </div>
   <div class="toggles">
     <label><input type="checkbox" id="showHero" checked> hero</label>
     <label><input type="checkbox" id="showModel" checked> model</label>
@@ -197,13 +371,23 @@ function drawHero() {
 }
 
 const textureCache = {};
-function drawModel(positions) {
+// drawModel shows the model at positions; colors (RGB per vertex) replace its materials, for the
+// weight heat map and picked pieces.
+function drawModel(positions, colors) {
   if (!THREE || !state.model) return;
   modelGroup.clear();
   const uvs = state.model.uvs;
   state.model.parts.forEach((part, i) => {
-    const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(...part.color.slice(0, 3)), side: THREE.DoubleSide,
-      roughness: 0.8, wireframe: $("wire").checked });
+    // dlmod writes a part's colour into its texture as it is, sRGB, so the preview reads it so too.
+    const material = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(...part.color.slice(0, 3), THREE.SRGBColorSpace),
+      side: THREE.DoubleSide, roughness: 0.8, wireframe: $("wire").checked });
+    if (colors) {
+      const g = geometryOf(positions, part.indices, uvs);
+      g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      material.vertexColors = true; material.color.set(0xffffff);
+      modelGroup.add(new THREE.Mesh(g, material));
+      return;
+    }
     if (part.texture) {
       if (!textureCache[i]) {
         textureCache[i] = new THREE.TextureLoader().load(`/api/texture?part=${i}&t=${TOKEN}`);
@@ -220,7 +404,13 @@ function drawModel(positions) {
 // --- fitting, the same as dlmod does it (source2 Model.Fit) ---
 function options() {
   return { keep: state.keep, scale: +$("scale").value, yaw: +$("yaw").value, zup: state.zup,
-    offset: [+$("offx").value, +$("offy").value, +$("offz").value], pose: null };
+    offset: [+$("offx").value, +$("offy").value, +$("offz").value], pose: null,
+    jointMap: adv.joints, pins: adv.pins, paint: paintStrokes() };
+}
+// The advanced rig tools' state; the edits go with every rig and install (options above).
+const adv = { joints: {}, pins: {}, paint: new Map(), tool: "pose", anim: "", picked: -1 };
+function paintStrokes() {
+  return [...adv.paint].map(([bone, painted]) => ({ bone, vertices: [...painted.keys()], weights: [...painted.values()] }));
 }
 function heroBounds() {
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
@@ -277,7 +467,8 @@ function refresh() {
     $(id + "Out").textContent = id === "scale" ? Math.round(v * 100) + "%" : id === "yaw" ? v + "°" : v;
   }
   $("zup").textContent = "Z is up: " + (state.zup ? "on" : "off");
-  if (state.rig) { state.rig = null; $("rigInfo").textContent = "Settings changed: rig again to check."; $("bendButtons").hidden = true; }
+  if (state.rig) { state.rig = null; $("rigInfo").textContent = "Settings changed: rig again to check."; $("bendButtons").hidden = true;
+    $("advanced").hidden = true; stopAnim(); }
   if (state.model && state.hero) drawModel(fitted());
   $("rig").disabled = !(state.model && state.hero);
   $("install").disabled = !(state.model && state.hero);
@@ -309,7 +500,24 @@ $("hero").onchange = async () => {
     drawHero(); refresh(); $("empty").hidden = !!state.model;
   } catch (e) { $("heroInfo").textContent = e.message; }
   busy();
+  for (const hook of heroHooks) hook();
 };
+const heroHooks = []; // tabs that show something of the hero reload when it changes
+
+// --- tabs: the model tab shows the 3D view, the others their own panel over it ---
+const panels = { sounds: "soundsPanel", images: "imagesPanel", text: "textPanel", effects: "effectsPanel" };
+let tab = "model";
+function showTab(name) {
+  tab = name;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
+  for (const t of ["model", ...Object.keys(panels)]) $("tab-" + t).hidden = t !== name;
+  for (const [t, id] of Object.entries(panels)) $(id).hidden = t !== name;
+  $("hud").hidden = name !== "model";
+  document.querySelector(".toggles").hidden = name !== "model";
+  for (const hook of tabHooks[name] || []) hook();
+}
+const tabHooks = {};
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
 // --- model ---
 function showModel(model) {
@@ -339,7 +547,7 @@ $("picker").onchange = e => upload([...e.target.files]);
 for (const target of [drop, $("view")]) {
   target.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
   target.addEventListener("dragleave", () => drop.classList.remove("over"));
-  target.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); upload([...e.dataTransfer.files]); });
+  target.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); if (tab === "model") upload([...e.dataTransfer.files]); });
 }
 
 // --- fit controls ---
@@ -353,8 +561,9 @@ $("showModel").onchange = () => modelGroup && (modelGroup.visible = $("showModel
 $("wire").onchange = () => { drawHero(); if (state.model) drawModel(state.bent || state.rig || fitted()); };
 
 // --- rig ---
-$("rig").onclick = async () => {
-  busy("Rigging: matching the pose and copying bone weights…");
+async function doRig(text) {
+  busy(text || "Rigging: matching the pose and copying bone weights…");
+  stopAnim();
   try {
     const result = await api("rig", options());
     state.rig = decodeFloats(result.positions); state.bent = null;
@@ -362,15 +571,261 @@ $("rig").onclick = async () => {
     $("rigInfo").textContent = `Rigged in ${result.seconds.toFixed(1)} s. The hero was bent ${p.Arms > 0 ? "arms down" : p.Arms < 0 ? "arms up" : "arms as they are"} (${p.Arms}°)` +
       `${p.Legs ? `, legs ${p.Legs > 0 ? "apart" : "together"} (${p.Legs}°)` : ""} to match. Shown in the hero's bind pose; try the poses below.`;
     $("bendButtons").hidden = false;
-    drawModel(state.rig);
+    setupAdvanced(result);
+    showTool(adv.tool);
   } catch (e) { $("rigInfo").textContent = e.message; }
   busy();
-};
+}
+$("rig").onclick = () => doRig();
 document.querySelectorAll("[data-bend]").forEach(b => b.onclick = async () => {
   const [arms, legs] = b.dataset.bend.split(",").map(Number);
+  stopAnim();
   try { const result = await api("bend", { Arms: arms, Legs: legs }); state.bent = decodeFloats(result.positions); drawModel(state.bent); }
   catch (e) { $("rigInfo").textContent = e.message; }
 });
+
+// --- advanced rig: pose preview, weights, pins, joint map ---
+function setupAdvanced(result) {
+  if (!result.skeleton) { $("advanced").hidden = true; return; }
+  const bin = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0)).buffer;
+  adv.skeleton = result.skeleton;
+  adv.bones = new Uint16Array(bin(result.bones)); adv.weights = new Float32Array(bin(result.weights));
+  adv.pieces = new Uint32Array(bin(result.pieces)); adv.pieceCount = result.pieceCount;
+  adv.jointMap = result.jointMap || {}; adv.jointVertices = result.jointVertices || {};
+  adv.index = {}; result.skeleton.names.forEach((n, i) => adv.index[n] = i);
+  // Body bones to offer, in the skeleton's order (pelvis first).
+  adv.core = result.skeleton.names.filter((n, i) => result.skeleton.core[i]);
+  for (const id of ["weightBone", "pinBone"]) {
+    const select = $(id), keep = select.value; select.innerHTML = "";
+    for (const n of adv.core) select.add(new Option(n, n));
+    if (adv.core.includes(keep)) select.value = keep; else if (id === "pinBone" && adv.core.includes("head")) select.value = "head";
+  }
+  $("jointsTool").hidden = !Object.keys(adv.jointMap).length;
+  renderPins(); renderJoints();
+  $("advanced").hidden = false;
+  const edits = Object.keys(adv.pins).length + Object.keys(adv.joints).length + adv.paint.size;
+  $("advInfo").textContent = edits ? "Your rig edits are in this rig and go with Install." : "";
+}
+function showTool(tool) {
+  adv.tool = tool;
+  document.querySelectorAll("#advTools button").forEach(b => b.classList.toggle("on", b.dataset.tool === tool));
+  for (const t of ["pose", "weights", "pin", "joints"]) $("tool-" + t).hidden = t !== tool;
+  if (tool !== "pose") stopAnim();
+  redraw();
+}
+document.querySelectorAll("#advTools button").forEach(b => b.onclick = () => showTool(b.dataset.tool));
+// redraw shows the model as the current tool wants it: weights as heat, a picked piece lit.
+function redraw() {
+  if (!state.rig) return;
+  if (adv.tool === "weights" && adv.bones) return drawModel(state.rig, heatColors());
+  if (adv.tool === "pin" && adv.picked >= 0) return drawModel(state.rig, pieceColors(adv.picked));
+  if (!adv.anim) drawModel(state.bent || state.rig);
+}
+function boneWeight(v, bone) {
+  let w = 0;
+  for (let k = 0; k < 4; k++) if (adv.bones[v * 4 + k] === bone) w += adv.weights[v * 4 + k];
+  return w;
+}
+function heatColors() {
+  const name = $("weightBone").value, bone = adv.index[name], painted = adv.paint.get(name);
+  const n = state.rig.length / 3, colors = new Float32Array(n * 3);
+  for (let v = 0; v < n; v++) {
+    let w = painted?.has(v) ? painted.get(v) : boneWeight(v, bone);
+    // blue (none) through green to red (all)
+    colors[v * 3] = Math.min(1, w * 2); colors[v * 3 + 1] = 1 - Math.abs(w - 0.5) * 2; colors[v * 3 + 2] = Math.max(0, 1 - w * 2);
+    if (w === 0) { colors[v * 3] = 0.12; colors[v * 3 + 1] = 0.16; colors[v * 3 + 2] = 0.45; }
+  }
+  return colors;
+}
+function pieceColors(piece) {
+  const n = state.rig.length / 3, colors = new Float32Array(n * 3);
+  for (let v = 0; v < n; v++) {
+    const lit = adv.pieces[v] === piece, pinned = adv.pins[adv.pieces[v]] !== undefined;
+    colors.set(lit ? [0.91, 0.69, 0.29] : pinned ? [0.5, 0.77, 0.54] : [0.45, 0.46, 0.5], v * 3);
+  }
+  return colors;
+}
+$("weightBone").onchange = redraw;
+
+// Picking and painting on the model in the 3D view.
+const ray = THREE ? new THREE.Raycaster() : null;
+function hitModel(event) {
+  if (!ray || !state.rig) return null;
+  const r = renderer.domElement.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2((event.clientX - r.left) / r.width * 2 - 1, -(event.clientY - r.top) / r.height * 2 + 1), camera);
+  const hits = ray.intersectObjects(modelGroup.children, false);
+  return hits.length ? hits[0] : null;
+}
+let pointer = null;
+if (renderer) {
+  const canvas = renderer.domElement;
+  canvas.addEventListener("pointerdown", e => {
+    pointer = { x: e.clientX, y: e.clientY, painting: adv.tool === "weights" && $("brushOn").checked && !$("advanced").hidden };
+    if (pointer.painting) { controls.enabled = false; paintAt(e); }
+  });
+  canvas.addEventListener("pointermove", e => { if (pointer?.painting) paintAt(e); });
+  canvas.addEventListener("pointerup", e => {
+    const click = pointer && Math.hypot(e.clientX - pointer.x, e.clientY - pointer.y) < 4;
+    if (pointer?.painting) { controls.enabled = true; redraw(); }
+    else if (click && adv.tool === "pin" && !$("advanced").hidden) pickPiece(e);
+    pointer = null;
+  });
+}
+function paintAt(event) {
+  const hit = hitModel(event);
+  if (!hit) return;
+  const name = $("weightBone").value, radius = +$("brushSize").value, weight = +$("brushWeight").value;
+  if (!adv.paint.has(name)) adv.paint.set(name, new Map());
+  const painted = adv.paint.get(name), p = hit.point, pos = state.rig, r2 = radius * radius;
+  for (let v = 0; v < pos.length / 3; v++) {
+    const dx = pos[v * 3] - p.x, dy = pos[v * 3 + 1] - p.y, dz = pos[v * 3 + 2] - p.z;
+    if (dx * dx + dy * dy + dz * dz <= r2) painted.set(v, weight);
+  }
+  $("paintApply").disabled = $("paintClear").disabled = false;
+  // Light up what was painted without rebuilding the whole view each move.
+  const colors = modelGroup.children[0]?.geometry.getAttribute("color");
+  if (colors) {
+    const heat = heatColors();
+    for (const mesh of modelGroup.children) { const c = mesh.geometry.getAttribute("color"); c.array.set(heat); c.needsUpdate = true; }
+  }
+}
+$("brushSize").oninput = () => $("brushSizeOut").textContent = $("brushSize").value;
+$("brushWeight").oninput = () => $("brushWeightOut").textContent = Math.round($("brushWeight").value * 100) + "%";
+$("paintApply").onclick = () => doRig("Rigging with your painting…");
+$("paintClear").onclick = () => { adv.paint.clear(); $("paintApply").disabled = $("paintClear").disabled = true; doRig("Rigging without painting…"); };
+
+function pickPiece(event) {
+  const hit = hitModel(event);
+  if (!hit) return;
+  const v = hit.object.geometry.index.array[hit.faceIndex * 3];
+  adv.picked = adv.pieces[v];
+  let count = 0; for (const p of adv.pieces) if (p === adv.picked) count++;
+  $("pinPicked").textContent = `Piece ${adv.picked + 1} of ${adv.pieceCount}: ${count.toLocaleString()} vertices` +
+    (adv.pins[adv.picked] ? `, pinned to ${adv.pins[adv.picked]}` : "");
+  $("pinAdd").disabled = false;
+  redraw();
+}
+$("pinAdd").onclick = () => { if (adv.picked < 0) return; adv.pins[adv.picked] = $("pinBone").value; doRig("Rigging with the pin…"); };
+function renderPins() {
+  const list = $("pinList"); list.innerHTML = "";
+  for (const [piece, bone] of Object.entries(adv.pins)) {
+    const row = document.createElement("label");
+    row.innerHTML = `<span></span><small><button>Remove</button></small>`;
+    row.querySelector("span").textContent = `Piece ${+piece + 1} → ${bone}`;
+    row.querySelector("button").onclick = e => { e.preventDefault(); delete adv.pins[piece]; doRig("Rigging without the pin…"); };
+    list.append(row);
+  }
+}
+function renderJoints() {
+  const list = $("jointList"); list.innerHTML = "";
+  const joints = Object.keys(adv.jointMap).sort((a, b) => (adv.jointVertices[b] || 0) - (adv.jointVertices[a] || 0));
+  for (const joint of joints) {
+    const row = document.createElement("div");
+    row.className = "joint" + (adv.joints[joint] ? " changed" : "");
+    row.innerHTML = `<span></span><small>${(adv.jointVertices[joint] || 0).toLocaleString()}</small><select></select>`;
+    row.querySelector("span").textContent = joint; row.querySelector("span").title = joint;
+    const select = row.querySelector("select");
+    select.add(new Option("auto", ""));
+    for (const n of adv.skeleton.names) select.add(new Option(n, n));
+    select.value = adv.joints[joint] || "";
+    select.options[0].text = "auto: " + (adv.joints[joint] ? "…" : adv.jointMap[joint]);
+    select.onchange = () => { if (select.value) adv.joints[joint] = select.value; else delete adv.joints[joint]; doRig("Rigging with the new joint map…"); };
+    list.append(row);
+  }
+}
+
+// Pose preview: bend the hero's bones and move the model by its weights (linear blend skinning).
+// Bone matrices are 3x4, row-major, as dlmod sends them.
+function mul(a, b) {
+  const o = new Array(12);
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++)
+    o[r * 4 + c] = a[r * 4] * b[c] + a[r * 4 + 1] * b[4 + c] + a[r * 4 + 2] * b[8 + c] + (c === 3 ? a[r * 4 + 3] : 0);
+  return o;
+}
+function inverse(m) { // rotation and uniform scale: the inverse rotation is the transpose over scale squared
+  const s2 = m[0] * m[0] + m[4] * m[4] + m[8] * m[8] || 1;
+  const t = [m[0], m[4], m[8], 0, m[1], m[5], m[9], 0, m[2], m[6], m[10], 0].map(x => x / s2);
+  for (let r = 0; r < 3; r++) t[r * 4 + 3] = -(t[r * 4] * m[3] + t[r * 4 + 1] * m[7] + t[r * 4 + 2] * m[11]);
+  return t;
+}
+function axisAngle(axis, degrees) {
+  const [x, y, z] = axis, a = degrees * Math.PI / 180, c = Math.cos(a), s = Math.sin(a), t = 1 - c;
+  return [t * x * x + c, t * x * y - s * z, t * x * z + s * y, 0, t * x * y + s * z, t * y * y + c, t * y * z - s * x, 0,
+    t * x * z - s * y, t * y * z + s * x, t * z * z + c, 0];
+}
+// A turn about a world axis (X forward, Y to the hero's left, Z up) at a bone, carried by its parents.
+function pose(turns, lift) {
+  const sk = adv.skeleton, n = sk.names.length, world = [], posed = [], skin = [];
+  for (let i = 0; i < n; i++) world.push(sk.world.slice(i * 12, i * 12 + 12));
+  for (let i = 0; i < n; i++) {
+    const parent = sk.parents[i];
+    let local = parent >= 0 ? mul(inverse(world[parent]), world[i]) : world[i].slice();
+    const turn = turns[sk.names[i]];
+    if (turn) { // the world turn, in the bone's own frame: Rb^T * R * Rb
+      const rot = world[i].slice(); rot[3] = rot[7] = rot[11] = 0;
+      local = mul(local, mul(inverse(rot), mul(turn, rot)));
+    }
+    posed.push(parent >= 0 ? mul(posed[parent], local) : local);
+    if (parent < 0 && lift) posed[i][11] += lift;
+  }
+  for (let i = 0; i < n; i++) skin.push(mul(posed[i], inverse(world[i])));
+  return skin;
+}
+function skinned(skin) {
+  const bind = state.rig, out = new Float32Array(bind.length), n = bind.length / 3;
+  for (let v = 0; v < n; v++) {
+    const x = bind[v * 3], y = bind[v * 3 + 1], z = bind[v * 3 + 2];
+    let ox = 0, oy = 0, oz = 0;
+    for (let k = 0; k < 4; k++) {
+      const w = adv.weights[v * 4 + k]; if (!w) continue;
+      const m = skin[adv.bones[v * 4 + k]];
+      ox += w * (m[0] * x + m[1] * y + m[2] * z + m[3]); oy += w * (m[4] * x + m[5] * y + m[6] * z + m[7]); oz += w * (m[8] * x + m[9] * y + m[10] * z + m[11]);
+    }
+    out[v * 3] = ox; out[v * 3 + 1] = oy; out[v * 3 + 2] = oz;
+  }
+  return out;
+}
+const X = [1, 0, 0], Y = [0, 1, 0], Z = [0, 0, 1];
+// Each motion gives the turns of a moment t (seconds). Swinging a leg forward is a turn about -Y.
+const motions = {
+  walk: t => { const s = Math.sin(t * 5), k = Math.max(0, Math.sin(t * 5 + 1.6));
+    return { turns: { leg_upper_L: axisAngle(Y, -28 * s), leg_upper_R: axisAngle(Y, 28 * s), leg_lower_L: axisAngle(Y, 35 * k),
+      leg_lower_R: axisAngle(Y, 35 * Math.max(0, -Math.sin(t * 5 + 1.6))), arm_upper_L: axisAngle(Y, 22 * s), arm_upper_R: axisAngle(Y, -22 * s),
+      spine_1: axisAngle(Z, 6 * s) }, lift: -1.5 * Math.abs(Math.cos(t * 5)) }; },
+  run: t => { const s = Math.sin(t * 9);
+    return { turns: { leg_upper_L: axisAngle(Y, -50 * s), leg_upper_R: axisAngle(Y, 50 * s), leg_lower_L: axisAngle(Y, 70 * Math.max(0, Math.sin(t * 9 + 1.4))),
+      leg_lower_R: axisAngle(Y, 70 * Math.max(0, -Math.sin(t * 9 + 1.4))), arm_upper_L: axisAngle(Y, 45 * s), arm_upper_R: axisAngle(Y, -45 * s),
+      arm_lower_L: axisAngle(Y, -60), arm_lower_R: axisAngle(Y, -60), spine_1: axisAngle(Y, 12) }, lift: -3 * Math.abs(Math.cos(t * 9)) }; },
+  crouch: t => { const d = (1 - Math.cos(t * 2)) / 2;
+    return { turns: { leg_upper_L: axisAngle(Y, -70 * d), leg_upper_R: axisAngle(Y, -70 * d), leg_lower_L: axisAngle(Y, 120 * d),
+      leg_lower_R: axisAngle(Y, 120 * d), ankle_L: axisAngle(Y, -50 * d), ankle_R: axisAngle(Y, -50 * d), spine_1: axisAngle(Y, 25 * d) }, lift: -18 * d }; },
+  jump: t => { const p = (t * 1.2) % 1, up = Math.sin(p * Math.PI), tuck = Math.sin(p * Math.PI * 2) > 0 ? Math.sin(p * Math.PI * 2) : 0;
+    return { turns: { leg_upper_L: axisAngle(Y, -60 * tuck), leg_upper_R: axisAngle(Y, -40 * tuck), leg_lower_L: axisAngle(Y, 100 * tuck),
+      leg_lower_R: axisAngle(Y, 80 * tuck), arm_upper_L: axisAngle(X, 50 * up), arm_upper_R: axisAngle(X, -50 * up) }, lift: 30 * up }; },
+  armsup: t => { const d = (1 - Math.cos(t * 2)) / 2;
+    return { turns: { arm_upper_L: axisAngle(X, 110 * d), arm_upper_R: axisAngle(X, -110 * d), arm_lower_L: axisAngle(X, 20 * d), arm_lower_R: axisAngle(X, -20 * d) } }; },
+  look: t => ({ turns: { neck_0: axisAngle(Z, 35 * Math.sin(t * 1.5)), head: mul(axisAngle(Z, 25 * Math.sin(t * 1.5)), axisAngle(Y, 20 * Math.sin(t * 0.9))),
+    spine_3: axisAngle(Z, 10 * Math.sin(t * 1.5)) } }),
+};
+let animFrame = 0;
+function stopAnim() { adv.anim = ""; cancelAnimationFrame(animFrame); }
+function play(name) {
+  stopAnim();
+  if (!name || !state.rig || !adv.skeleton) { redraw(); return; }
+  adv.anim = name;
+  drawModel(new Float32Array(state.rig));
+  for (const mesh of modelGroup.children) mesh.frustumCulled = false; // a jump leaves the bind pose's bounds
+  const start = performance.now();
+  const frame = now => {
+    if (adv.anim !== name) return;
+    const { turns, lift } = motions[name]((now - start) / 1000);
+    const moved = skinned(pose(turns, lift || 0));
+    for (const mesh of modelGroup.children) { const a = mesh.geometry.getAttribute("position"); a.array.set(moved); a.needsUpdate = true; }
+    animFrame = requestAnimationFrame(frame);
+  };
+  animFrame = requestAnimationFrame(frame);
+}
+document.querySelectorAll("[data-anim]").forEach(b => b.onclick = () => play(b.dataset.anim));
 
 // --- install ---
 $("install").onclick = async () => {
@@ -382,6 +837,331 @@ $("install").onclick = async () => {
   } catch (e) { log(e.message, "bad"); }
   busy();
 };
+
+// --- sounds: play and replace a hero's voice lines, ability sounds, footsteps ---
+const sounds = { hero: null, list: [], group: "All", query: "" };
+function soundLog(text, kind) { const line = document.createElement("div"); if (kind) line.className = kind; line.textContent = text; $("soundLog").append(line); $("soundLog").scrollTop = 1e9; }
+async function loadSounds() {
+  const hero = $("hero").value;
+  if (!hero) return;
+  if (sounds.hero === hero && sounds.list.length) return renderSounds();
+  $("soundsEmpty").textContent = "Reading the game's sounds…"; $("soundsEmpty").hidden = false; $("soundTable").hidden = true;
+  try {
+    const result = await api("sounds", { hero });
+    sounds.hero = hero; sounds.list = result.sounds; sounds.total = result.replacedTotal;
+    renderSounds();
+  } catch (e) { $("soundsEmpty").textContent = e.message; }
+}
+function soundURL(path, which) { return `/api/sound?path=${encodeURIComponent(path)}&which=${which}&t=${TOKEN}`; }
+function playSound(path, which) {
+  const player = $("player");
+  player.src = soundURL(path, which);
+  player.play().catch(e => soundLog("Cannot play: " + e.message, "bad"));
+}
+function renderSounds() {
+  const groups = ["All", ...new Set(sounds.list.map(s => s.group))];
+  if (!groups.includes(sounds.group)) sounds.group = "All";
+  $("soundGroups").innerHTML = "";
+  for (const g of groups) {
+    const count = g === "All" ? sounds.list.length : sounds.list.filter(s => s.group === g).length;
+    const b = document.createElement("button");
+    b.textContent = `${g} ${count}`; b.classList.toggle("on", g === sounds.group);
+    b.onclick = () => { sounds.group = g; renderSounds(); };
+    $("soundGroups").append(b);
+  }
+  const words = sounds.query.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = sounds.list.filter(s => (sounds.group === "All" || s.group === sounds.group) &&
+    words.every(w => s.path.toLowerCase().includes(w) || (s.replaced || "").toLowerCase().includes(w)));
+  const replaced = sounds.list.filter(s => s.replaced).length;
+  $("soundInfo").innerHTML = `<b>${shown.length}</b> shown of ${sounds.list.length} · <b>${replaced}</b> replaced for this hero`;
+  $("soundRestoreAll").disabled = !replaced;
+  const body = $("soundTable").querySelector("tbody");
+  body.innerHTML = "";
+  for (const s of shown) {
+    const row = document.createElement("tr");
+    row.className = s.replaced ? "replaced" : "";
+    row.innerHTML = `<td><button class="play" title="Play the game's sound">▶</button></td><td class="name"></td><td class="tag"></td>
+      <td>${s.replaced ? `<button class="play yoursPlay" title="Play yours">▶</button> <span class="yours"></span>` : ""}</td>
+      <td><button class="replace">Replace…</button> ${s.replaced ? `<button class="restore">Restore</button>` : ""}</td>`;
+    row.querySelector(".name").textContent = s.name; row.querySelector(".name").title = s.path;
+    row.querySelector(".tag").textContent = s.group;
+    if (s.replaced) row.querySelector(".yours").textContent = s.replaced;
+    row.querySelector(".play").onclick = () => playSound(s.path, "game");
+    row.querySelector(".yoursPlay")?.addEventListener("click", () => playSound(s.path, "yours"));
+    row.querySelector(".replace").onclick = () => { sounds.target = s.path; $("soundPicker").click(); };
+    row.querySelector(".restore")?.addEventListener("click", () => restoreSounds([s.path]));
+    row.addEventListener("dragover", e => { e.preventDefault(); row.classList.add("over"); });
+    row.addEventListener("dragleave", () => row.classList.remove("over"));
+    row.addEventListener("drop", e => { e.preventDefault(); e.stopPropagation(); row.classList.remove("over"); replaceSounds([...e.dataTransfer.files].slice(0, 1), s.path); });
+    body.append(row);
+  }
+  $("soundsEmpty").hidden = shown.length > 0;
+  $("soundsEmpty").textContent = sounds.list.length ? "No sounds match." : "This hero has no sounds of their own in the game.";
+  $("soundTable").hidden = !shown.length;
+}
+async function replaceSounds(files, path) {
+  if (!files.length) return;
+  const form = new FormData();
+  form.append("hero", $("hero").value);
+  if (path) form.append("path", path);
+  for (const f of files) form.append("file", f, f.name);
+  busy(path ? "Compiling the sound and installing…" : `Matching ${files.length} files to the hero's sounds…`);
+  try {
+    const result = await api("sounds/replace", form, true);
+    for (const m of result.messages) soundLog(m);
+    for (const m of result.problems || []) soundLog(m, "bad");
+    if (result.replaced) soundLog("Installed as the Custom sounds mod. Restart the match to hear it.", "ok");
+    sounds.list = []; await loadSounds();
+  } catch (e) { soundLog(e.message, "bad"); }
+  busy();
+}
+async function restoreSounds(paths) {
+  busy("Restoring…");
+  try {
+    const result = await api("sounds/restore", { paths });
+    for (const m of result.messages) soundLog(m, "ok");
+    sounds.list = []; await loadSounds();
+  } catch (e) { soundLog(e.message, "bad"); }
+  busy();
+}
+$("soundSearch").oninput = e => { sounds.query = e.target.value; renderSounds(); };
+$("soundPicker").onchange = e => { const files = [...e.target.files]; e.target.value = ""; replaceSounds(sounds.target ? files.slice(0, 1) : files, sounds.target); sounds.target = null; };
+$("soundDrop").onclick = () => { sounds.target = null; $("soundPicker").click(); };
+for (const ev of ["dragover", "dragleave", "drop"]) $("soundDrop").addEventListener(ev, e => {
+  e.preventDefault(); $("soundDrop").classList.toggle("over", ev === "dragover");
+  if (ev === "drop") replaceSounds([...e.dataTransfer.files]);
+});
+$("soundRestoreAll").onclick = () => restoreSounds(sounds.list.filter(s => s.replaced).map(s => s.path));
+tabHooks.sounds = [loadSounds];
+heroHooks.push(() => { if (tab === "sounds") loadSounds(); });
+
+// --- images: the hero's cards, portraits and ability icons ---
+const images = { hero: null, list: [], group: "All", stamp: Date.now() };
+function imageLog(text, kind) { const line = document.createElement("div"); if (kind) line.className = kind; line.textContent = text; $("imageLog").append(line); $("imageLog").scrollTop = 1e9; }
+async function loadImages(force) {
+  const hero = $("hero").value;
+  if (!hero) return;
+  if (!force && images.hero === hero && images.list.length) return renderImages();
+  $("imagesEmpty").textContent = "Reading the game's images…"; $("imagesEmpty").hidden = false; $("imageGrid").innerHTML = "";
+  try { const result = await api("images", { hero }); images.hero = hero; images.list = result.images; renderImages(); }
+  catch (e) { $("imagesEmpty").textContent = e.message; }
+}
+function imageURL(path, which, size) { return `/api/image?path=${encodeURIComponent(path)}&which=${which}&size=${size}&t=${TOKEN}&s=${images.stamp}`; }
+function renderImages() {
+  const groups = ["All", ...new Set(images.list.map(i => i.group))];
+  $("imageGroups").innerHTML = "";
+  for (const g of groups) {
+    const b = document.createElement("button");
+    b.textContent = `${g} ${g === "All" ? images.list.length : images.list.filter(i => i.group === g).length}`;
+    b.classList.toggle("on", g === images.group); b.onclick = () => { images.group = g; renderImages(); };
+    $("imageGroups").append(b);
+  }
+  const grid = $("imageGrid"); grid.innerHTML = "";
+  const shown = images.list.filter(i => images.group === "All" || i.group === images.group);
+  for (const img of shown) {
+    const card = document.createElement("div");
+    card.className = "card" + (img.replaced ? " replaced" : "");
+    const size = img.width > 1024 ? 512 : 320;
+    card.innerHTML = `<div><h3></h3><small>${img.width}×${img.height}${img.replaced ? " · yours: <span></span>" : ""}</small></div>
+      <div class="pics${img.replaced ? "" : " one"}"><figure><img loading="lazy" alt=""><figcaption>Game</figcaption></figure>
+      ${img.replaced ? `<figure><img loading="lazy" alt="" class="yours"><figcaption>Yours</figcaption></figure>` : ""}</div>
+      <div class="buttons"><button class="replace"${img.editable ? "" : " disabled title=\"This image is stored in a way dlmod cannot write yet\""}>Replace…</button>
+      ${img.replaced ? `<button class="restore">Restore</button>` : ""}</div>`;
+    card.querySelector("h3").textContent = img.label; card.querySelector("h3").title = img.path;
+    if (img.replaced) card.querySelector("small span").textContent = img.replaced;
+    card.querySelector("img").src = imageURL(img.path, "game", size);
+    if (img.replaced) card.querySelector("img.yours").src = imageURL(img.path, "yours", size);
+    const pick = () => { const input = document.createElement("input"); input.type = "file"; input.accept = ".png,.jpg,.jpeg,image/png,image/jpeg";
+      input.onchange = () => input.files[0] && replaceImage(img.path, input.files[0]); input.click(); };
+    card.querySelector(".replace").onclick = pick;
+    card.querySelector(".restore")?.addEventListener("click", () => restoreImages([img.path]));
+    if (img.editable) {
+      card.addEventListener("dragover", e => { e.preventDefault(); card.classList.add("over"); });
+      card.addEventListener("dragleave", () => card.classList.remove("over"));
+      card.addEventListener("drop", e => { e.preventDefault(); e.stopPropagation(); card.classList.remove("over"); if (e.dataTransfer.files[0]) replaceImage(img.path, e.dataTransfer.files[0]); });
+    }
+    grid.append(card);
+  }
+  $("imagesEmpty").hidden = shown.length > 0;
+  $("imagesEmpty").textContent = "No images of this hero were found in the game.";
+}
+async function replaceImage(path, file) {
+  const form = new FormData(); form.append("path", path); form.append("file", file, file.name);
+  busy("Fitting the picture and installing…");
+  try {
+    const result = await api("images/replace", form, true);
+    for (const m of result.messages) imageLog(m);
+    imageLog("Installed as the Custom images mod.", "ok");
+    images.stamp = Date.now(); await loadImages(true);
+  } catch (e) { imageLog(e.message, "bad"); }
+  busy();
+}
+async function restoreImages(paths) {
+  busy("Restoring…");
+  try { const result = await api("images/restore", { paths }); for (const m of result.messages) imageLog(m, "ok"); images.stamp = Date.now(); await loadImages(true); }
+  catch (e) { imageLog(e.message, "bad"); }
+  busy();
+}
+tabHooks.images = [() => loadImages()];
+heroHooks.push(() => { if (tab === "images") loadImages(); });
+
+// --- text: ability names, descriptions and lore in a language ---
+const text = { hero: null, language: "", entries: [], dirty: new Map(), query: "" };
+function textLog(line, kind) { const d = document.createElement("div"); if (kind) d.className = kind; d.textContent = line; $("textLog").append(d); $("textLog").scrollTop = 1e9; }
+const textKey = e => e.file + "\n" + e.key;
+async function loadText(force) {
+  const hero = $("hero").value;
+  if (!hero) return;
+  if (!force && text.hero === hero && text.entries.length && text.language === $("textLanguage").value) return renderText();
+  if (text.dirty.size && !confirm("Drop the unsaved text changes?")) return;
+  text.dirty.clear();
+  $("textEmpty").textContent = "Reading the game's text…"; $("textEmpty").hidden = false; $("textList").innerHTML = "";
+  try {
+    const result = await api("text", { hero, language: $("textLanguage").value || text.language });
+    text.hero = hero; text.language = result.language; text.entries = result.entries;
+    const select = $("textLanguage");
+    if (select.options.length !== result.languages.length) {
+      select.innerHTML = ""; for (const l of result.languages) select.add(new Option(l[0].toUpperCase() + l.slice(1), l));
+    }
+    select.value = result.language;
+    renderText();
+  } catch (e) { $("textEmpty").textContent = e.message; }
+}
+function renderText() {
+  const list = $("textList"); list.innerHTML = "";
+  const words = text.query.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = text.entries.filter(e => words.every(w => (e.key + " " + e.text + " " + (text.dirty.get(textKey(e)) ?? "")).toLowerCase().includes(w)));
+  for (const e of shown) {
+    const row = document.createElement("div"); row.className = "entry";
+    row.innerHTML = `<div class="key"><span class="name"></span><span class="state"></span><button class="reset" hidden>Game's text</button></div>
+      <textarea rows="1" spellcheck="false"></textarea><div class="was" hidden></div>`;
+    row.querySelector(".name").textContent = e.key; row.querySelector(".name").title = e.file;
+    const area = row.querySelector("textarea");
+    area.value = text.dirty.get(textKey(e)) ?? e.text;
+    const fit = () => { area.style.height = "auto"; area.style.height = area.scrollHeight + 2 + "px"; };
+    const mark = () => {
+      const value = area.value, dirty = value !== e.text;
+      if (dirty) text.dirty.set(textKey(e), value); else text.dirty.delete(textKey(e));
+      const edited = value !== e.original;
+      row.querySelector(".state").textContent = dirty ? "unsaved" : e.edited ? "changed" : "";
+      row.querySelector(".state").className = "state " + (dirty ? "dirty" : e.edited ? "edited" : "");
+      row.querySelector(".reset").hidden = !edited;
+      row.querySelector(".was").hidden = !edited; row.querySelector(".was").textContent = "Game: " + e.original;
+      updateTextButtons();
+    };
+    area.oninput = () => { fit(); mark(); };
+    row.querySelector(".reset").onclick = () => { area.value = e.original; fit(); mark(); };
+    list.append(row); requestAnimationFrame(fit); mark();
+  }
+  $("textEmpty").hidden = shown.length > 0;
+  $("textEmpty").textContent = text.entries.length ? "No lines match." : "No lines of this hero were found.";
+  updateTextButtons();
+}
+function updateTextButtons() {
+  const edited = text.entries.filter(e => e.edited).length;
+  $("textSave").disabled = $("textRevert").disabled = !text.dirty.size;
+  $("textSave").textContent = text.dirty.size ? `Save ${text.dirty.size} change${text.dirty.size > 1 ? "s" : ""}` : "Save changes";
+  $("textInfo").innerHTML = `<b>${text.entries.length}</b> lines · <b>${edited}</b> changed in the game`;
+}
+$("textSave").onclick = async () => {
+  const edits = text.entries.filter(e => text.dirty.has(textKey(e))).map(e => ({ file: e.file, key: e.key, text: text.dirty.get(textKey(e)) }));
+  busy("Saving and installing…");
+  try {
+    const result = await api("text/save", { edits });
+    for (const m of result.messages) textLog(m, "ok");
+    text.dirty.clear(); await loadText(true);
+  } catch (e) { textLog(e.message, "bad"); }
+  busy();
+};
+$("textRevert").onclick = () => { text.dirty.clear(); renderText(); };
+$("textSearch").oninput = e => { text.query = e.target.value; renderText(); };
+$("textLanguage").onchange = () => loadText(true);
+window.addEventListener("beforeunload", e => { if (text.dirty.size) e.preventDefault(); });
+tabHooks.text = [() => loadText()];
+heroHooks.push(() => { if (tab === "text") loadText(true); });
+
+// --- effects: recolour the hero's ability particles (the same arithmetic as effectSettings.recolor) ---
+const fx = { hero: null, colors: [], applied: null };
+function fxLog(line, kind) { const d = document.createElement("div"); if (kind) d.className = kind; d.textContent = line; $("fxLog").append(d); $("fxLog").scrollTop = 1e9; }
+function rgbToHsv([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const hi = Math.max(r, g, b), lo = Math.min(r, g, b), d = hi - lo;
+  let h = 0;
+  if (d) h = hi === r ? ((g - b) / d) % 6 : hi === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h *= 60; if (h < 0) h += 360;
+  return [h, hi ? d / hi : 0, hi];
+}
+function hsvToRgb(h, s, v) {
+  h = ((h % 360) + 360) % 360 / 60;
+  const c = v * s, x = c * (1 - Math.abs(h % 2 - 1)), m = v - c;
+  const [r, g, b] = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.min(5, Math.floor(h))];
+  return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+}
+function fxSettings() {
+  return { hue: +$("fxHue").value, saturation: +$("fxSat").value, brightness: +$("fxBright").value,
+    tint: $("fxTint").value, strength: +$("fxStrength").value, weapon: $("fxWeapon").checked };
+}
+function recolor(c, e) {
+  let [h, s, v] = rgbToHsv(c);
+  if (e.strength > 0 && /^#[0-9a-f]{6}$/i.test(e.tint)) {
+    const n = parseInt(e.tint.slice(1), 16), [th, ts] = rgbToHsv([n >> 16 & 255, n >> 8 & 255, n & 255]), t = Math.min(1, e.strength);
+    if (s < 0.05) h = th; else h += (((th - h + 540) % 360) - 180) * t;
+    s += (ts - s) * t;
+  }
+  h += e.hue; s = Math.max(0, Math.min(1, s * e.saturation)); v = Math.max(0, Math.min(1, v * e.brightness));
+  return hsvToRgb(h, s, v);
+}
+const css = c => `rgb(${c.map(x => Math.round(Math.max(0, Math.min(255, x)))).join(",")})`;
+function renderFx() {
+  const e = fxSettings();
+  $("fxHueOut").textContent = e.hue + "°"; $("fxSatOut").textContent = Math.round(e.saturation * 100) + "%";
+  $("fxBrightOut").textContent = Math.round(e.brightness * 100) + "%";
+  const grid = $("swatches"); grid.innerHTML = "";
+  for (const s of fx.colors) {
+    const d = document.createElement("div"); d.className = "swatch";
+    d.innerHTML = `<div class="halves"><div></div><div></div></div><small>${s.uses}×</small>`;
+    d.title = `rgb(${s.color.join(", ")}), used ${s.uses} times`;
+    d.querySelectorAll(".halves div")[0].style.background = css(s.color);
+    d.querySelectorAll(".halves div")[1].style.background = css(recolor(s.color, e));
+    grid.append(d);
+  }
+  $("effectsEmpty").hidden = fx.colors.length > 0;
+}
+async function loadFx(force) {
+  const hero = $("hero").value;
+  if (!hero) return;
+  if (!force && fx.hero === hero) return renderFx();
+  $("effectsEmpty").textContent = "Reading the hero's effects…"; $("effectsEmpty").hidden = false; $("swatches").innerHTML = "";
+  try {
+    const r = await api("effects", { hero });
+    fx.hero = hero; fx.colors = r.colors; fx.applied = r.settings;
+    const s = r.settings || { hue: 0, saturation: 1, brightness: 1, tint: $("fxTint").value, strength: 0, weapon: false };
+    $("fxHue").value = s.hue; $("fxSat").value = s.saturation; $("fxBright").value = s.brightness;
+    if (s.tint) $("fxTint").value = s.tint;
+    $("fxStrength").value = s.strength; $("fxWeapon").checked = s.weapon;
+    $("effectInfo").innerHTML = `<b>${r.abilities}</b> ability effects and <b>${r.weapon}</b> weapon effects. ` +
+      (r.settings ? "Recoloured now; the sliders show how." : "The game's own colours now.");
+    $("fxApply").disabled = !r.abilities; $("fxRestore").disabled = !r.settings;
+    $("effectsEmpty").textContent = r.abilities ? "These effects use no colours dlmod can change." : "This hero has no ability effects of their own.";
+    renderFx();
+  } catch (e) { $("effectsEmpty").textContent = e.message; }
+}
+for (const id of ["fxHue", "fxSat", "fxBright", "fxStrength", "fxTint"]) $(id).oninput = renderFx;
+$("fxReset").onclick = () => { $("fxHue").value = 0; $("fxSat").value = 1; $("fxBright").value = 1; $("fxStrength").value = 0; renderFx(); };
+$("fxApply").onclick = async () => {
+  busy("Recolouring the effects and installing…");
+  try { const r = await api("effects/apply", { hero: $("hero").value, settings: fxSettings() }); for (const m of r.messages) fxLog(m, "ok"); await loadFx(true); }
+  catch (e) { fxLog(e.message, "bad"); }
+  busy();
+};
+$("fxRestore").onclick = async () => {
+  busy("Restoring…");
+  try { const r = await api("effects/restore", { hero: $("hero").value }); for (const m of r.messages) fxLog(m, "ok"); await loadFx(true); }
+  catch (e) { fxLog(e.message, "bad"); }
+  busy();
+};
+tabHooks.effects = [() => loadFx()];
+heroHooks.push(() => { if (tab === "effects") loadFx(true); });
 </script>
 </body>
 </html>

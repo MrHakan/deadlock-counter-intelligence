@@ -25,9 +25,10 @@ type ImportedMesh struct {
 
 	// A rigged model's own skinning: each vertex's joints (into JointNames) and weights. The
 	// importer maps these joints onto the hero's bones instead of guessing weights from scratch.
-	Joints       [][]JointWeight
-	JointNames   []string
-	JointParents []int // -1 for a root
+	Joints         [][]JointWeight
+	JointNames     []string
+	JointParents   []int        // -1 for a root
+	JointPositions [][3]float32 // where each joint stands at rest, in the same space as Positions
 }
 
 // JointWeight is one joint of the imported model's own skeleton a vertex follows.
@@ -687,12 +688,14 @@ func loadGLTF(data []byte, open func(string) ([]byte, error)) (*ImportedMesh, er
 					mesh.Joints = make([][]JointWeight, len(mesh.Positions))
 					mesh.JointNames = make([]string, len(doc.Nodes))
 					mesh.JointParents = make([]int, len(doc.Nodes))
+					mesh.JointPositions = make([][3]float32, len(doc.Nodes))
 					for k, node := range doc.Nodes {
 						mesh.JointNames[k] = node.Name
 						if node.Name == "" {
 							mesh.JointNames[k] = fmt.Sprintf("joint%d", k)
 						}
 						mesh.JointParents[k] = -1
+						mesh.JointPositions[k] = transformPoint(worlds[k], []float64{0, 0, 0})
 					}
 					for k, node := range doc.Nodes {
 						for _, child := range node.Children {

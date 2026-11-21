@@ -1,0 +1,485 @@
+{
+  "hero": "astro",
+  "name": "Holliday",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Crackshot",
+      "Explosive",
+      "Apprehender"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces Holliday in Deadlock, a stylized third-person hero shooter (Holliday: Bounces about dispensing trick shots). Its abilities are Powder Keg, Bounce Pad, Crackshot, Spirit Lasso. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on Holliday's weapon, Doc's Orders. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_staging/astro/astro.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to Holliday's height (92 units) and rigs it to Holliday's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on Holliday's weapon, Doc's Orders. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality and its part in a team (bounces about dispensing trick shots). Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/astro_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/astro_card_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/astro_card_critical_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/astro_card_gloat_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/astro_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/astro_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/astro_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "gun",
+      "title": "Weapon picture",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Side view of the weapon or held prop of {{CHARACTER}} from the reference sheet, alone, horizontal, stylized 3D render. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/gun.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/guns/astro_gun_psd.vtex_c",
+      "size": "600x300",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_powder_keg",
+      "title": "Ability icon: Powder Keg",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Powder Keg\", an ability of {{CHARACTER}} from the reference sheet: Throw a barrel that explodes when shot. Throw a barrel that explodes after a delay, dealing X, setting enemies on fire and applying X. The barrel can be detonated early by being shot, melee'd, or detonated by another barrel. The burn stacks, so overlapping. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_powder_keg.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/astro/holliday_powder_keg_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_bounce_pad",
+      "title": "Ability icon: Bounce Pad",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Bounce Pad\", an ability of {{CHARACTER}} from the reference sheet: Send yourself and others flying. Drop a bounce pad in the world that launches any hero. You explode on landing, dealing Damage to any nearby enemies. The explosion can only occur once per person per Bounce Pad. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_bounce_pad.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/astro/holliday_bounce_pad_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_crackshot",
+      "title": "Ability icon: Crackshot",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Crackshot\", an ability of {{CHARACTER}} from the reference sheet: Deal bonus damage with headshots. Headshots deal bonus Damage and applies a Fading Move Speed penalty. This effect can only occur when off cooldown. Cooldown is reduced by X% on NPC hits. Crackshot ignores range damage fall-off and does not apply to. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_crackshot.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/astro/holliday_crackshot_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_spirit_lasso",
+      "title": "Ability icon: Spirit Lasso",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Spirit Lasso\", an ability of {{CHARACTER}} from the reference sheet: Grab an enemy and drag them behind you. Throw out your lasso, dealing X, X, and applying X. Using a Bounce Pad extends the duration of Spirit Lasso. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_spirit_lasso.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/astro/holliday_spirit_lasso_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "prop_astro_duck_target",
+      "title": "Ability model: astro_duck_target",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Holliday's \"astro duck target\" ability model. Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_astro_duck_target.glb",
+      "kind": "prop",
+      "target": "models/abilities/astro_duck_target.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_astro_explosive",
+      "title": "Ability model: astro_explosive",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Holliday's \"astro explosive\" ability model. It is used by \"Bounce Pad\" (Send yourself and others flying). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_astro_explosive.glb",
+      "kind": "prop",
+      "target": "models/abilities/astro_explosive.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    }
+  ],
+  "game": {
+    "id": "astro",
+    "name": "Holliday",
+    "role": "Bounces about dispensing trick shots",
+    "playstyle": "Holliday depends on her skills as a crack shot, shooting things she's bounced into the air. With good aim she can lay out heavy damage. Her movement skills let her isolate her enemies or beat a hasty retreat.",
+    "weapon": "Doc's Orders",
+    "tags": [
+      "Crackshot",
+      "Explosive",
+      "Apprehender"
+    ],
+    "abilities": [
+      {
+        "key": "ability_explosive_barrel",
+        "name": "Powder Keg",
+        "quip": "Throw a barrel that explodes when shot",
+        "description": "Throw a barrel that explodes after a delay, dealing X, setting enemies on fire and applying X. The barrel can be detonated early by being shot, melee'd, or detonated by another barrel. The burn stacks, so overlapping barrels burn for their combined damage. Can be Alt-Cast to place the barrel in front of X.",
+        "icon": "panorama/images/hud/abilities/astro/holliday_powder_keg_psd.vtex_c",
+        "slug": "explosive_barrel",
+        "props": "models/abilities/astro_explosive.vmdl"
+      },
+      {
+        "key": "ability_bounce_pad",
+        "name": "Bounce Pad",
+        "quip": "Send yourself and others flying",
+        "description": "Drop a bounce pad in the world that launches any hero. You explode on landing, dealing Damage to any nearby enemies. The explosion can only occur once per person per Bounce Pad.",
+        "icon": "panorama/images/hud/abilities/astro/holliday_bounce_pad_psd.vtex_c",
+        "slug": "bounce_pad",
+        "props": "models/abilities/astro_explosive.vmdl"
+      },
+      {
+        "key": "ability_crackshot",
+        "name": "Crackshot",
+        "quip": "Deal bonus damage with headshots",
+        "description": "Headshots deal bonus Damage and applies a Fading Move Speed penalty. This effect can only occur when off cooldown. Cooldown is reduced by X% on NPC hits. Crackshot ignores range damage fall-off and does not apply to objectives.",
+        "icon": "panorama/images/hud/abilities/astro/holliday_crackshot_psd.vtex_c",
+        "slug": "crackshot"
+      },
+      {
+        "key": "ability_gravity_lasso",
+        "name": "Spirit Lasso",
+        "quip": "Grab an enemy and drag them behind you",
+        "description": "Throw out your lasso, dealing X, X, and applying X. Using a Bounce Pad extends the duration of Spirit Lasso.",
+        "icon": "panorama/images/hud/abilities/astro/holliday_spirit_lasso_psd.vtex_c",
+        "slug": "gravity_lasso"
+      }
+    ],
+    "model": "models/heroes_staging/astro/astro.vmdl",
+    "modelFolder": "models/heroes_staging/astro/",
+    "height": 91.88737297058105,
+    "skeleton": "models/heroes_staging/astro/astro.vnmskel",
+    "boneMasks": [
+      "Cast_UpperBody",
+      "Throw_UpperBody",
+      "UpperBodyReplace_Turn",
+      "UpperBodyReplace_InAir",
+      "UpperBodyReplace_Slide",
+      "Reload_Idle",
+      "Reload_Haspath",
+      "Reload_Slide",
+      "Reload_InAir",
+      "UpperBodyReplace_Asleep",
+      "Parry_UpperBody",
+      "melee_UpperBody",
+      "Reload_HasPath_ALT",
+      "Reload_InAir_ALT",
+      "Reload_Crouch",
+      "Reload_HasPathCrouch",
+      "Reload_HasPathCrouch_ALT"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/astro_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/astro_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/astro_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/astro_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/astro_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/astro_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/astro_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      },
+      {
+        "path": "panorama/images/heroes/guns/astro_gun_psd.vtex_c",
+        "label": "Weapon picture",
+        "width": 600,
+        "height": 300
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/astro/bounce_pad_psd.vtex_c",
+        "label": "bounce pad",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/astro/gravity_lasso_psd.vtex_c",
+        "label": "gravity lasso",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/astro/holliday_bounce_pad_psd.vtex_c",
+        "label": "bounce pad",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/astro/holliday_crackshot_psd.vtex_c",
+        "label": "crackshot",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/astro/holliday_powder_keg_psd.vtex_c",
+        "label": "powder keg",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/astro/holliday_spirit_lasso_psd.vtex_c",
+        "label": "spirit lasso",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/astro_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/holliday.vsvg_c",
+        "panorama/images/heroes/hero_names/holliday_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/astro.vpk"
+    },
+    "abilityModels": [
+      "models/abilities/astro_duck_target.vmdl",
+      "models/abilities/astro_explosive.vmdl"
+    ],
+    "particleFolders": [
+      "particles/abilities/astro/",
+      "particles/weapon_fx/astro/"
+    ],
+    "effects": 191,
+    "nameKeys": [
+      "Steam_RP_hero_astro",
+      "hero_astro:n",
+      "hero_astro_search:n"
+    ],
+    "tagKeys": [
+      "Citadel_Astro_HeroTag_1",
+      "Citadel_Astro_HeroTag_2",
+      "Citadel_Astro_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 )
 
 // DXGI formats compiled meshes use for their vertex attributes.
@@ -26,7 +27,7 @@ const (
 
 // VertexAttribute is one field of a vertex, such as its position or bone weights.
 type VertexAttribute struct {
-	Name   string // "position", "normal", "texcoord", "blendindices", "blendweights", ...
+	Name   string // as the file spells it: "POSITION", "texcoord", "blendweight", ... (see semantic)
 	Index  int    // the semantic index: texcoord 1 is a second UV set
 	Format int    // a DXGI format number
 	Offset int
@@ -221,10 +222,22 @@ func (m *Model) bufferData(desc *Value, count, size int, vertex bool) ([]byte, e
 	}
 }
 
-// Attribute finds a vertex attribute by name and semantic index.
+// semantic is an attribute name the way dlmod compares it. Compilers spell them differently:
+// Deadlock's own hero models say POSITION, TEXCOORD, BLENDINDICES and blendweight, other
+// compiled models say position, texcoord, blendindices and blendweights.
+func semantic(name string) string {
+	name = strings.ToLower(name)
+	if name == "blendweight" {
+		return "blendweights"
+	}
+	return name
+}
+
+// Attribute finds a vertex attribute by name (any spelling, see semantic) and semantic index.
 func (b *VertexBuffer) Attribute(name string, index int) *VertexAttribute {
+	want := semantic(name)
 	for i := range b.Attributes {
-		if b.Attributes[i].Name == name && b.Attributes[i].Index == index {
+		if semantic(b.Attributes[i].Name) == want && b.Attributes[i].Index == index {
 			return &b.Attributes[i]
 		}
 	}

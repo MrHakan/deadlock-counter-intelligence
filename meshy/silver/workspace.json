@@ -1,0 +1,455 @@
+{
+  "hero": "werewolf",
+  "name": "Silver",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Feral",
+      "Hot Mess",
+      "Transformation"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces Silver in Deadlock, a stylized third-person hero shooter. Its abilities are Slam Fire, Boot Kick, Entangling Bola, Lycan Curse. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on Silver's weapon, Hair of the Dog. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_wip/werewolf/werewolf.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to Silver's height (110 units) and rigs it to Silver's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on Silver's weapon, Hair of the Dog. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality. Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/werewolf_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/werewolf_card_psd.vtex_c",
+      "size": "240x320",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/werewolf_card_critical_psd.vtex_c",
+      "size": "240x320",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/werewolf_card_gloat_psd.vtex_c",
+      "size": "240x320",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/werewolf_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/werewolf_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/werewolf_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "gun",
+      "title": "Weapon picture",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Side view of the weapon or held prop of {{CHARACTER}} from the reference sheet, alone, horizontal, stylized 3D render. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/gun.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/guns/werewolf_gun_psd.vtex_c",
+      "size": "600x300",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_slam_fire",
+      "title": "Ability icon: Slam Fire",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Slam Fire\", an ability of {{CHARACTER}} from the reference sheet: Instantly reload your gun. You gain X and deal bonus X based on the target's health for a limited number of shots, but suffer from reduced accuracy. Deals bonus Weapon Damage against troopers and neutrals. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_slam_fire.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/werewolf/werewolf_slamfire_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_boot_kick",
+      "title": "Ability icon: Boot Kick",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Boot Kick\", an ability of {{CHARACTER}} from the reference sheet: . Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_boot_kick.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/werewolf/werewolf_jumpback_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_entangling_bola",
+      "title": "Ability icon: Entangling Bola",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Entangling Bola\", an ability of {{CHARACTER}} from the reference sheet: Throw a bola, dealing X, applying X and preventing movement abilities or stamina. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_entangling_bola.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/werewolf/werewolf_bola_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_lycan_curse",
+      "title": "Ability icon: Lycan Curse",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Lycan Curse\", an ability of {{CHARACTER}} from the reference sheet: Passive: Dealing damage generates bloodlust, increased at low health. At max bloodlust, you automatically cast Lycan Curse. Active: Instantly transform, gaining increased X, and stacking X on enemy heroes, and replacing. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_lycan_curse.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/werewolf/werewolf_lycancurse_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    }
+  ],
+  "game": {
+    "id": "werewolf",
+    "name": "Silver",
+    "weapon": "Hair of the Dog",
+    "tags": [
+      "Feral",
+      "Hot Mess",
+      "Transformation"
+    ],
+    "abilities": [
+      {
+        "key": "ability_werewolf_unloadgun",
+        "name": "Slam Fire",
+        "description": "Instantly reload your gun. You gain X and deal bonus X based on the target's health for a limited number of shots, but suffer from reduced accuracy. Deals bonus Weapon Damage against troopers and neutrals.",
+        "icon": "panorama/images/hud/abilities/werewolf/werewolf_slamfire_psd.vtex_c",
+        "slug": "unloadgun"
+      },
+      {
+        "key": "ability_werewolf_kickflip",
+        "name": "Boot Kick",
+        "icon": "panorama/images/hud/abilities/werewolf/werewolf_jumpback_psd.vtex_c",
+        "slug": "kickflip"
+      },
+      {
+        "key": "ability_werewolf_netshot",
+        "name": "Entangling Bola",
+        "description": "Throw a bola, dealing X, applying X and preventing movement abilities or stamina.",
+        "icon": "panorama/images/hud/abilities/werewolf/werewolf_bola_psd.vtex_c",
+        "slug": "netshot"
+      },
+      {
+        "key": "ability_werewolf_transformation",
+        "name": "Lycan Curse",
+        "description": "Passive: Dealing damage generates bloodlust, increased at low health. At max bloodlust, you automatically cast Lycan Curse. Active: Instantly transform, gaining increased X, and stacking X on enemy heroes, and replacing your abilities and weapon with their ferocious versions.",
+        "icon": "panorama/images/hud/abilities/werewolf/werewolf_lycancurse_psd.vtex_c",
+        "slug": "transformation"
+      }
+    ],
+    "model": "models/heroes_wip/werewolf/werewolf.vmdl",
+    "modelFolder": "models/heroes_wip/werewolf/",
+    "height": 110.16688442230225,
+    "skeleton": "models/heroes_wip/werewolf/werewolf.vnmskel",
+    "boneMasks": [
+      "Cast_UpperBody",
+      "FullBody",
+      "melee_dash",
+      "melee_UpperBody",
+      "NULL",
+      "Parry_UpperBody",
+      "Reload_Crouch",
+      "Reload_Crouch_ALT",
+      "Reload_Haspath",
+      "Reload_HasPath_ALT",
+      "Reload_HasPathCrouch",
+      "Reload_HasPathCrouch_ALT",
+      "Reload_Idle",
+      "Reload_InAir",
+      "Reload_Slide",
+      "Reload_Zoomed",
+      "Throw_UpperBody",
+      "Turn_LowerBody",
+      "UpperBodyReplace_AirDash",
+      "UpperBodyReplace_Asleep",
+      "UpperBodyReplace_Asleep_Channeling",
+      "UpperBodyReplace_GroundDash",
+      "UpperBodyReplace_InAir",
+      "UpperBodyReplace_Slide",
+      "UpperBodyReplace_Turn",
+      "Ability_SlamFire_UpperBody",
+      "Ability_EntanglingBola_UpperBody"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/werewolf_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 240,
+        "height": 320
+      },
+      {
+        "path": "panorama/images/heroes/werewolf_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 240,
+        "height": 320
+      },
+      {
+        "path": "panorama/images/heroes/werewolf_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 240,
+        "height": 320
+      },
+      {
+        "path": "panorama/images/heroes/werewolf_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/werewolf_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/werewolf_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/werewolf_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      },
+      {
+        "path": "panorama/images/heroes/guns/werewolf_gun_psd.vtex_c",
+        "label": "Weapon picture",
+        "width": 600,
+        "height": 300
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/werewolf/werewolf_bite_psd.vtex_c",
+        "label": "bite",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/werewolf/werewolf_bola_psd.vtex_c",
+        "label": "bola",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/werewolf/werewolf_jumpback_psd.vtex_c",
+        "label": "jumpback",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/werewolf/werewolf_lycancurse_psd.vtex_c",
+        "label": "lycancurse",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/werewolf/werewolf_slamfire_psd.vtex_c",
+        "label": "slamfire",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/werewolf/werewolf_tailwhack_psd.vtex_c",
+        "label": "tailwhack",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/werewolf/werewolf_wolfforward_psd.vtex_c",
+        "label": "wolfforward",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/werewolf_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/werewolf.vsvg_c",
+        "panorama/images/heroes/hero_names/werewolf_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/werewolf.vpk"
+    },
+    "particleFolders": [
+      "particles/abilities/werewolf/",
+      "particles/weapon_fx/werewolf/"
+    ],
+    "effects": 162,
+    "nameKeys": [
+      "Steam_RP_hero_werewolf",
+      "hero_werewolf:n",
+      "hero_werewolf_search:n",
+      "hero_werewolf_sort:n"
+    ],
+    "tagKeys": [
+      "Citadel_Werewolf_HeroTag_1",
+      "Citadel_Werewolf_HeroTag_2",
+      "Citadel_Werewolf_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

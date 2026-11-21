@@ -1,0 +1,446 @@
+{
+  "hero": "priest",
+  "name": "Venator",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Devout",
+      "Arms Expert",
+      "Tactical"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces Venator in Deadlock, a stylized third-person hero shooter. Its abilities are Consecrating Grenade, Gutshot, Hex-Lined Snap Trap, Ira Domini. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on Venator's weapon, 51:20. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_wip/priest/priest.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to Venator's height (114 units) and rigs it to Venator's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on Venator's weapon, 51:20. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality. Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/priest_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/priest_card_psd.vtex_c",
+      "size": "240x320",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/priest_card_critical_psd.vtex_c",
+      "size": "240x320",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/priest_card_gloat_psd.vtex_c",
+      "size": "240x320",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/priest_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/priest_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/priest_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "gun",
+      "title": "Weapon picture",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Side view of the weapon or held prop of {{CHARACTER}} from the reference sheet, alone, horizontal, stylized 3D render. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/gun.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/guns/priest_gun_psd.vtex_c",
+      "size": "600x300",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_consecrating_grenade",
+      "title": "Ability icon: Consecrating Grenade",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Consecrating Grenade\", an ability of {{CHARACTER}} from the reference sheet: Fire a grenade that bounces before exploding, dealing X and setting enemies on fire. Burning targets deal X to enemies in the area and suffer from reduced healing. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_consecrating_grenade.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/priest/priest_grenade_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_gutshot",
+      "title": "Ability icon: Gutshot",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Gutshot\", an ability of {{CHARACTER}} from the reference sheet: Fire a blast with your shotgun, dealing X and pushing enemies back. Enemies near a wall receive X and take X. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_gutshot.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/priest/priest_shotgun_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_hex_lined_snap_trap",
+      "title": "Ability icon: Hex-Lined Snap Trap",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Hex-Lined Snap Trap\", an ability of {{CHARACTER}} from the reference sheet: Kick a trap that arms after a brief delay. The trap springs on the first enemy it touches, dealing X, applying X, and revealing enemies for a duration afterwards. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_hex_lined_snap_trap.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/priest/priest_trap_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_ira_domini",
+      "title": "Ability icon: Ira Domini",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Ira Domini\", an ability of {{CHARACTER}} from the reference sheet: Load your crossbow with 3 stakes, dealing massively increased X. The final stake is blessed, dealing bonus X and executing low-health enemies. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_ira_domini.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/priest/priest_crossbow_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    }
+  ],
+  "game": {
+    "id": "priest",
+    "name": "Venator",
+    "weapon": "51:20",
+    "tags": [
+      "Devout",
+      "Arms Expert",
+      "Tactical"
+    ],
+    "abilities": [
+      {
+        "key": "ability_priest_flashbang",
+        "name": "Consecrating Grenade",
+        "description": "Fire a grenade that bounces before exploding, dealing X and setting enemies on fire. Burning targets deal X to enemies in the area and suffer from reduced healing.",
+        "icon": "panorama/images/hud/abilities/priest/priest_grenade_psd.vtex_c",
+        "slug": "flashbang"
+      },
+      {
+        "key": "ability_priest_knockback",
+        "name": "Gutshot",
+        "description": "Fire a blast with your shotgun, dealing X and pushing enemies back. Enemies near a wall receive X and take X.",
+        "icon": "panorama/images/hud/abilities/priest/priest_shotgun_psd.vtex_c",
+        "slug": "knockback"
+      },
+      {
+        "key": "ability_priest_beartrap",
+        "name": "Hex-Lined Snap Trap",
+        "description": "Kick a trap that arms after a brief delay. The trap springs on the first enemy it touches, dealing X, applying X, and revealing enemies for a duration afterwards.",
+        "icon": "panorama/images/hud/abilities/priest/priest_trap_psd.vtex_c",
+        "slug": "beartrap"
+      },
+      {
+        "key": "ability_priest_weaponswap",
+        "name": "Ira Domini",
+        "description": "Load your crossbow with 3 stakes, dealing massively increased X. The final stake is blessed, dealing bonus X and executing low-health enemies.",
+        "icon": "panorama/images/hud/abilities/priest/priest_crossbow_psd.vtex_c",
+        "slug": "weaponswap"
+      }
+    ],
+    "model": "models/heroes_wip/priest/priest.vmdl",
+    "modelFolder": "models/heroes_wip/priest/",
+    "height": 114.04683494567871,
+    "skeleton": "models/heroes_wip/priest/priest.vnmskel",
+    "boneMasks": [
+      "ability_knockback_upperbody",
+      "UpperBodyReplace_InAir",
+      "Cast_UpperBody",
+      "FullBody",
+      "melee_dash",
+      "melee_UpperBody",
+      "Parry_UpperBody",
+      "Reload_Crouch",
+      "Reload_Idle",
+      "Root",
+      "Throw_UpperBody",
+      "Turn_LowerBody",
+      "UpperBodyReplace_AirDash",
+      "UpperBodyReplace_Asleep",
+      "UpperBodyReplace_GroundDash",
+      "UpperBodyReplace_Asleep_Channeling",
+      "UpperBodyReplace_Slide",
+      "UpperBodyReplace_Turn",
+      "zero",
+      "Reload_Haspath",
+      "Reload_InAir",
+      "Reload_Slide",
+      "Reload_HasPathCrouch",
+      "ability_knockback_crouch",
+      "ability_incense_throw",
+      "ability_crossbow",
+      "ability_trap_inair",
+      "ability_trap_haspath",
+      "ability_trap_crossbow",
+      "ability_flashbang",
+      "ability_knockback_sliding",
+      "ability_crossbow_shoot",
+      "Right_Arm",
+      "ability_knockback_dash_ground",
+      "Reload_Crouch_Crossbow"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/priest_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 240,
+        "height": 320
+      },
+      {
+        "path": "panorama/images/heroes/priest_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 240,
+        "height": 320
+      },
+      {
+        "path": "panorama/images/heroes/priest_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 240,
+        "height": 320
+      },
+      {
+        "path": "panorama/images/heroes/priest_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/priest_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/priest_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/priest_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      },
+      {
+        "path": "panorama/images/heroes/guns/priest_gun_psd.vtex_c",
+        "label": "Weapon picture",
+        "width": 600,
+        "height": 300
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/priest/priest_crossbow_psd.vtex_c",
+        "label": "crossbow",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/priest/priest_grenade_psd.vtex_c",
+        "label": "grenade",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/priest/priest_shotgun_psd.vtex_c",
+        "label": "shotgun",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/priest/priest_trap_psd.vtex_c",
+        "label": "trap",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/priest_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/priest.vsvg_c",
+        "panorama/images/heroes/hero_names/priest_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/priest.vpk"
+    },
+    "particleFolders": [
+      "particles/abilities/priest/",
+      "particles/weapon_fx/priest/"
+    ],
+    "effects": 188,
+    "nameKeys": [
+      "Steam_RP_hero_priest",
+      "hero_priest:n",
+      "hero_priest_search:n",
+      "hero_priest_sort:n"
+    ],
+    "tagKeys": [
+      "Citadel_Priest_HeroTag_1",
+      "Citadel_Priest_HeroTag_2",
+      "Citadel_Priest_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

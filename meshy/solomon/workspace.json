@@ -1,0 +1,505 @@
+{
+  "hero": "chessmaster",
+  "name": "Solomon",
+  "concept": "",
+  "select": {
+    "name": "",
+    "tags": [
+      "Strategist",
+      "Focused",
+      "Checkmate"
+    ],
+    "colors": null,
+    "hideScene": true
+  },
+  "steps": [
+    {
+      "id": "design_sheet",
+      "title": "Character design sheet",
+      "tool": "meshy_text_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "prompt": "Character design sheet for a 3D game character: {{CONCEPT}}. It replaces Solomon in Deadlock, a stylized third-person hero shooter. Its abilities are Setup Bishop, Kingside Knight, Rook Battery, Develop Queen. The character must read at a glance from behind in third person, so give it a strong silhouette and one or two bold colours. It carries its own take on Solomon's weapon, Alekhine's Gun. Show a large hero render, a front / three-quarter / side / back turnaround in a relaxed A-pose, close-ups of the head, hands and weapon, a colour palette with hex codes, and its two or three iconic symbols. Stylized PBR, clean studio light, dark background, labels only.",
+      "output": "assets/design_sheet.png",
+      "note": "Every later picture uses this sheet as its reference, so redo it until the character is right."
+    },
+    {
+      "id": "turnaround",
+      "title": "Front, side and back views for 3D",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "reference": "assets/design_sheet.png",
+      "options": {
+        "generate_multi_view": true
+      },
+      "prompt": "{{CHARACTER}} from the reference sheet alone, full body, standing in a relaxed A-pose (arms 45 degrees down, legs slightly apart), empty hands, neutral expression, even light, plain light grey background, no shadows, no text.",
+      "output": "assets/views.png",
+      "note": "Empty hands: a held weapon is better as its own model (weapon step), and dlmod can keep the hero's gun instead (-keep gun)."
+    },
+    {
+      "id": "model",
+      "title": "3D model",
+      "tool": "meshy_multi_image_to_3d",
+      "aiModel": "meshy-7.1",
+      "textureModel": "meshy-7",
+      "credits": 30,
+      "reference": "assets/views.png",
+      "options": {
+        "enable_pbr": false,
+        "texture_resolution": "2k"
+      },
+      "output": "assets/model.glb",
+      "kind": "model",
+      "target": "models/heroes_wip/chessmaster/chessmaster.vmdl",
+      "note": "Detailed geometry reads best close up in third person, and Meshy models of about 200k triangles install fine. dlmod scales it to Solomon's height (107 units) and rigs it to Solomon's skeleton. For a lighter model use meshy_image_to_3d with meshy-t2.5 + meshy-n1 (15 credits, target_polycount 60000) on the front view."
+    },
+    {
+      "id": "rig",
+      "title": "Rig (humanoid characters)",
+      "tool": "meshy_rig",
+      "credits": 5,
+      "reference": "assets/model.glb",
+      "output": "assets/model.glb",
+      "optional": true,
+      "note": "Only for characters with arms and legs: dlmod maps Meshy's joints to the hero's bones by their structure. Skip it for blob-like characters: dlmod rigs them on the hero's own bones (see Animations in README.md). Meshy's animation clips are not used: the game plays the hero's own clips."
+    },
+    {
+      "id": "weapon",
+      "title": "Signature weapon or held prop",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 15000
+      },
+      "prompt": "A single game-ready prop: the signature weapon of {{CONCEPT}}. It is its own take on Solomon's weapon, Alekhine's Gun. Stylized PBR in the character's colours, centered, no hands, no base.",
+      "output": "assets/weapon.glb",
+      "optional": true,
+      "note": "Join it to model.glb in the right hand before installing, or keep the hero's own gun with -keep gun."
+    },
+    {
+      "id": "select_art",
+      "title": "Hero select screen art",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Splash art for a hero select screen: {{CHARACTER}} from the reference sheet in a setting that shows off its personality. Put the character in the RIGHT half of the frame, its centre at about 70% of the width and its head in the top third; keep the LEFT 45% calm and dark, it sits under the hero grid; keep the bottom-right corner simple, the name, tags and ability icons go there. Cinematic light, rich detail, no text, no logos.",
+      "output": "assets/select.png",
+      "kind": "select",
+      "target": "panorama/images/heroes/backgrounds/chessmaster_bg_psd.vtex_c",
+      "size": "4096x2312",
+      "note": "dlmod select hides the hero's 3D scene so the picture shows on its own (scene=hide) and fades the left side to black under the hero grid."
+    },
+    {
+      "id": "card",
+      "title": "Hero card",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Hero card portrait of {{CHARACTER}} from the reference sheet: chest-up, three-quarter view, facing the viewer with confidence, its weapon in view, dramatic rim light, stylized 3D render, centered with some headroom. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/chessmaster_card_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_critical",
+      "title": "Card at low health",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, badly hurt: scuffed and cracked, cringing but defiant, red danger light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_critical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/chessmaster_card_critical_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "card_gloat",
+      "title": "Card after a kill",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "3:4",
+      "reference": "assets/design_sheet.png",
+      "prompt": "The same hero card portrait of {{CHARACTER}} from the reference sheet, triumphant: a taunting gesture after a kill, warm golden light, same framing. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/card_gloat.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/chessmaster_card_gloat_psd.vtex_c",
+      "size": "280x380",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "vertical",
+      "title": "Tall portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "9:16",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Full-body portrait of {{CHARACTER}} from the reference sheet standing tall in its signature pose, the whole character in frame. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/vertical.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/chessmaster_vertical_psd.vtex_c",
+      "size": "120x200",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "sm",
+      "title": "Small portrait",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Head-and-shoulders portrait of {{CHARACTER}} from the reference sheet, front-facing, big simple shapes that read when small. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/sm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/chessmaster_sm_psd.vtex_c",
+      "size": "128x128",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "mm",
+      "title": "Minimap icon",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Minimap icon of {{CHARACTER}} from the reference sheet: the head only, front view, flat colours, thick dark outline, readable at 32 pixels. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/mm.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/chessmaster_mm_psd.vtex_c",
+      "size": "50x50",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "gun",
+      "title": "Weapon picture",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "16:9",
+      "reference": "assets/design_sheet.png",
+      "prompt": "Side view of the weapon or held prop of {{CHARACTER}} from the reference sheet, alone, horizontal, stylized 3D render. On a flat pure green (#00FF00) background, no green on the character, no text.",
+      "output": "assets/gun.png",
+      "kind": "image",
+      "target": "panorama/images/heroes/guns/chessmaster_gun_psd.vtex_c",
+      "size": "600x300",
+      "note": "dlmod apply keys out the green background."
+    },
+    {
+      "id": "icon_setup_bishop",
+      "title": "Ability icon: Setup Bishop",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Setup Bishop\", an ability of {{CHARACTER}} from the reference sheet: Create a bishop that remains in place indefinitely. Move (X): Moves the bishop, applying a fading X and dealing X to enemies it passes through. After a delay, activates diagonal squares that deal additional X when. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_setup_bishop.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/chess/chessmaster_bishop_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_kingside_knight",
+      "title": "Ability icon: Kingside Knight",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Kingside Knight\", an ability of {{CHARACTER}} from the reference sheet: Promote an ally to be a knight, granting bonus stamina and X for a duration. If self-cast you develop yourself as king instead, granting double the X but no stamina. Move (X): Moves the piece, making it invulnerable. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_kingside_knight.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/chess/chessmaster_knight_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_rook_battery",
+      "title": "Ability icon: Rook Battery",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Rook Battery\", an ability of {{CHARACTER}} from the reference sheet: Release a pair of rooks that travel forward, dealing X and applying X. If the rooks hit a wall, they reflect back in the opposite direction. Re-Activate: Split the rooks perpendicularly. Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_rook_battery.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/chess/chessmaster_rook_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "icon_develop_queen",
+      "title": "Ability icon: Develop Queen",
+      "tool": "meshy_image_to_image",
+      "aiModel": "nano-banana-pro",
+      "credits": 9,
+      "aspectRatio": "1:1",
+      "reference": "assets/design_sheet.png",
+      "prompt": "A single game ability icon glyph for \"Develop Queen\", an ability of {{CHARACTER}} from the reference sheet: . Draw the idea with the character's own shapes and props, not its whole body. Flat solid pure white silhouette with a few clean cut-out interior lines, bold readable shapes, centered, filling about 80% of the frame, on a pure flat black background. No gradients, no shading, no colour, no text, no border, no circle frame.",
+      "output": "assets/icon_develop_queen.png",
+      "kind": "icon",
+      "target": "panorama/images/hud/abilities/chess/chessmaster_queen_psd.vtex_c",
+      "size": "137x137",
+      "note": "dlmod turns it into a white glyph on transparency."
+    },
+    {
+      "id": "prop_chessmaster_rook_crown_fx_model",
+      "title": "Ability model: chessmaster_rook_crown_fx_model",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Solomon's \"chessmaster rook crown fx model\" ability model. It is used by \"Rook Battery\" (Release a pair of rooks that travel forward, dealing X and applying X. If the rooks hit a wall, they reflect back in…). Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_chessmaster_rook_crown_fx_model.glb",
+      "kind": "prop",
+      "target": "models/abilities/chessmaster_rook_crown_fx_model.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    },
+    {
+      "id": "prop_chessmaster_tile_model",
+      "title": "Ability model: chessmaster_tile_model",
+      "tool": "meshy_text_to_3d",
+      "aiModel": "meshy-t2.5",
+      "credits": 15,
+      "options": {
+        "refine": true,
+        "target_polycount": 10000
+      },
+      "prompt": "A game-ready 3D prop for {{CONCEPT}}: it replaces Solomon's \"chessmaster tile model\" ability model. Single object, stylized PBR in the character's colours, centered, no base, no characters.",
+      "output": "assets/prop_chessmaster_tile_model.glb",
+      "kind": "prop",
+      "target": "models/abilities/chessmaster_tile_model.vmdl",
+      "optional": true,
+      "note": "Thrown and placed ability props (bombs, statues, traps) are replaced this way; dlmod prop pins it to the prop's root bone."
+    }
+  ],
+  "game": {
+    "id": "chessmaster",
+    "name": "Solomon",
+    "weapon": "Alekhine's Gun",
+    "tags": [
+      "Strategist",
+      "Focused",
+      "Checkmate"
+    ],
+    "abilities": [
+      {
+        "key": "ability_chessmaster_throwbishop",
+        "name": "Setup Bishop",
+        "description": "Create a bishop that remains in place indefinitely. Move (X): Moves the bishop, applying a fading X and dealing X to enemies it passes through. After a delay, activates diagonal squares that deal additional X when stepped on. Re-activate to recall all bishops, ending the ability.",
+        "icon": "panorama/images/hud/abilities/chess/chessmaster_bishop_psd.vtex_c",
+        "slug": "throwbishop"
+      },
+      {
+        "key": "ability_chessmaster_knightbuff",
+        "name": "Kingside Knight",
+        "description": "Promote an ally to be a knight, granting bonus stamina and X for a duration. If self-cast you develop yourself as king instead, granting double the X but no stamina. Move (X): Moves the piece, making it invulnerable during the duration before landing. If self-cast, re-activate the ability to move instead.",
+        "icon": "panorama/images/hud/abilities/chess/chessmaster_knight_psd.vtex_c",
+        "slug": "knightbuff"
+      },
+      {
+        "key": "ability_chessmaster_forkpiece",
+        "name": "Rook Battery",
+        "description": "Release a pair of rooks that travel forward, dealing X and applying X. If the rooks hit a wall, they reflect back in the opposite direction. Re-Activate: Split the rooks perpendicularly.",
+        "icon": "panorama/images/hud/abilities/chess/chessmaster_rook_psd.vtex_c",
+        "slug": "forkpiece",
+        "props": "models/abilities/chessmaster_rook_crown_fx_model.vmdl"
+      },
+      {
+        "key": "ability_chessmaster_queen",
+        "name": "Develop Queen",
+        "icon": "panorama/images/hud/abilities/chess/chessmaster_queen_psd.vtex_c",
+        "slug": "queen"
+      }
+    ],
+    "model": "models/heroes_wip/chessmaster/chessmaster.vmdl",
+    "modelFolder": "models/heroes_wip/chessmaster/",
+    "height": 107.16530172526836,
+    "skeleton": "models/heroes_wip/chessmaster/chessmaster.vnmskel",
+    "boneMasks": [
+      "UpperBodyReplace_Turn",
+      "UpperBodyReplace_Slide",
+      "UpperBodyReplace_InAir",
+      "UpperBodyReplace_Asleep",
+      "UpperBody_Weapon_Shoot_Run",
+      "shoot_turn",
+      "shoot_slide",
+      "shoot_inair",
+      "shoot_Idle",
+      "shoot_haspath",
+      "shoot_crouch",
+      "Reload_Slide",
+      "Reload_InAir",
+      "Reload_Idle",
+      "Reload_HasPathCrouch",
+      "Reload_Haspath",
+      "Reload_Crouch",
+      "melee_movementMask",
+      "Game_Pieces",
+      "Game_Pieces_Ability_Knight",
+      "Game_Pieces_Ability_Bishop",
+      "Null_Mask",
+      "UpperBodyReplace_Ability",
+      "Cast_UpperBody",
+      "Throw_UpperBody",
+      "Turn_LowerBody"
+    ],
+    "images": [
+      {
+        "path": "panorama/images/heroes/chessmaster_card_psd.vtex_c",
+        "label": "Hero card (hero select, HUD)",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/chessmaster_card_critical_psd.vtex_c",
+        "label": "Card at low health",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/chessmaster_card_gloat_psd.vtex_c",
+        "label": "Card after a kill",
+        "width": 280,
+        "height": 380
+      },
+      {
+        "path": "panorama/images/heroes/chessmaster_vertical_psd.vtex_c",
+        "label": "Tall portrait",
+        "width": 120,
+        "height": 200
+      },
+      {
+        "path": "panorama/images/heroes/chessmaster_sm_psd.vtex_c",
+        "label": "Small portrait",
+        "width": 128,
+        "height": 128
+      },
+      {
+        "path": "panorama/images/heroes/chessmaster_mm_psd.vtex_c",
+        "label": "Minimap icon",
+        "width": 50,
+        "height": 50
+      },
+      {
+        "path": "panorama/images/heroes/backgrounds/chessmaster_bg_psd.vtex_c",
+        "label": "Background",
+        "width": 4096,
+        "height": 2312
+      },
+      {
+        "path": "panorama/images/heroes/guns/chessmaster_gun_psd.vtex_c",
+        "label": "Weapon picture",
+        "width": 600,
+        "height": 300
+      }
+    ],
+    "icons": [
+      {
+        "path": "panorama/images/hud/abilities/chess/chessmaster_bishop_psd.vtex_c",
+        "label": "bishop",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/chess/chessmaster_fork_psd.vtex_c",
+        "label": "fork",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/chess/chessmaster_knight_psd.vtex_c",
+        "label": "knight",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/chess/chessmaster_moveking_psd.vtex_c",
+        "label": "moveking",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/chess/chessmaster_movepiece_psd.vtex_c",
+        "label": "movepiece",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/chess/chessmaster_queen_psd.vtex_c",
+        "label": "queen",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/chess/chessmaster_rook_psd.vtex_c",
+        "label": "rook",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/chess/chessmaster_undobishop_psd.vtex_c",
+        "label": "undobishop",
+        "width": 137,
+        "height": 137
+      },
+      {
+        "path": "panorama/images/hud/abilities/chess/chessmaster_undoqueen_psd.vtex_c",
+        "label": "undoqueen",
+        "width": 137,
+        "height": 137
+      }
+    ],
+    "select": {
+      "Background": "panorama/images/heroes/backgrounds/chessmaster_bg_psd.vtex_c",
+      "Logos": [
+        "panorama/images/heroes/hero_names/solomon.vsvg_c",
+        "panorama/images/heroes/hero_names/solomon_localized.vsvg_c"
+      ],
+      "Scene": "maps/ui/hero_prefabs/chessmaster.vpk"
+    },
+    "abilityModels": [
+      "models/abilities/chessmaster_rook_crown_fx_model.vmdl",
+      "models/abilities/chessmaster_tile_model.vmdl"
+    ],
+    "particleFolders": [
+      "particles/abilities/chessmaster/",
+      "particles/weapon_fx/chessmaster/"
+    ],
+    "effects": 246,
+    "nameKeys": [
+      "Steam_RP_hero_chessmaster",
+      "hero_chessmaster:n",
+      "hero_chessmaster_search:n",
+      "hero_chessmaster_sort:n"
+    ],
+    "tagKeys": [
+      "Citadel_Chessmaster_HeroTag_1",
+      "Citadel_Chessmaster_HeroTag_2",
+      "Citadel_Chessmaster_HeroTag_3"
+    ],
+    "textSection": "hero_abilities.go"
+  }
+}

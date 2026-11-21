@@ -41,8 +41,18 @@ Usage:
                                dlmod extract models/heroes_staging/haze
   dlmod studio                 open the model studio in your browser: drop a .glb, .gltf or .obj
                                on a hero, check the fit and the rig, install
-  dlmod model <hero> <file> [-keep gun] [-scale 1] [-yaw 0] [-zup]
-                               put a model on a hero without the studio
+  dlmod model <hero> <file> [-keep gun] [-move gun=X,Y,Z] [-scale 1] [-yaw 0] [-zup]
+  dlmod image <game image> <picture> [...]  put pictures over game images (panorama/images/...vtex_c)
+  dlmod text KEY=VALUE [...]           change lines of the English hero text (KEY= restores one)
+  dlmod select <hero> [bg=PIC] [name=TEXT] [logo=SVG] [tags=A,B,C] [colors=#rrggbb,...] [scene=hide]
+                               the hero select screen: background, name logo, tags, tag colours, 3D scene
+  dlmod icons <hero> [ICON=PIC ...]  list or replace ability icons (pictures become white glyphs)
+  dlmod meshy <hero|all> [folder] [concept=...]
+                               write a Meshy workspace: per-hero prompts for a full replacement character
+  dlmod apply <workspace folder>  install the generated files of a hero's Meshy workspace
+  dlmod prop <game model> <file> [particle ...] [-scale 1]  put a model in place of an ability prop (a thrown bomb)
+  dlmod effects <hero> <#rrggbb|palette> [strength|name]  recolour a hero's ability and weapon particles (or: restore)
+  dlmod paint <hero> [palette|restore] [-skip NAME]  repaint a hero's ability particles, materials and textures
   dlmod profile                list profiles (named sets of mods)
   dlmod profile save <name>    remember which mods are on now
   dlmod profile use <name>     switch on exactly the mods in a profile
@@ -58,9 +68,13 @@ Options:
   -game DIR   the Deadlock folder (found through Steam when omitted; DEADLOCK_DIR also works)
   -plain      use the simple numbered menu instead of the full-screen one
   -keep LIST  for model: hero parts to keep, by part of their names (default: weapons)
+  -move P=X,Y,Z for model: move a kept part at rest, in game units (a weapon out of a wider body)
+  -material PART=MAT for model: draw a part of the file with a game material (models/.../x.vmat)
   -scale N    for model: size on top of fitting the hero's height
   -yaw DEG    for model: turn the model around before fitting it
   -zup        for model: the file is Z-up (as Blender's .obj exports can be)
+  -skip LIST  for paint: ability prop names to skip (comma-separated, e.g. ivy_thornbomb_model)
+  -preview DIR  for paint: write before/after PNG contact sheets into DIR without installing
 `
 
 type options struct {
@@ -68,6 +82,10 @@ type options struct {
 	hero, category string
 	help, plain    bool
 	keep           string
+	skip           string
+	preview        string
+	move           map[string][3]float64 // kept parts moved at rest, by part of their names
+	material       map[string]string     // imported parts drawn with a game material, by part name
 	scale, yaw     float64
 	zup            bool
 }
@@ -83,7 +101,7 @@ func parseArgs(argv []string) ([]string, options, error) {
 		}
 		key, value, hasValue := strings.Cut(strings.TrimLeft(arg, "-"), "=")
 		switch key {
-		case "game", "name", "hero", "category", "keep", "scale", "yaw":
+		case "game", "name", "hero", "category", "keep", "skip", "preview", "move", "material", "scale", "yaw":
 			if !hasValue {
 				if i+1 >= len(argv) {
 					return nil, opts, fmt.Errorf("%s needs a value", arg)
@@ -100,6 +118,41 @@ func parseArgs(argv []string) ([]string, options, error) {
 				opts.hero = value
 			case "keep":
 				opts.keep = value
+			case "skip":
+				if opts.skip != "" {
+					opts.skip += "," + value
+				} else {
+					opts.skip = value
+				}
+			case "preview":
+				opts.preview = value
+			case "material":
+				part, mat, ok := strings.Cut(value, "=")
+				if !ok || part == "" || mat == "" {
+					return nil, opts, fmt.Errorf("%s needs PART=MATERIAL", arg)
+				}
+				if opts.material == nil {
+					opts.material = map[string]string{}
+				}
+				opts.material[part] = strings.TrimSuffix(mat, "_c")
+			case "move":
+				part, xyz, ok := strings.Cut(value, "=")
+				nums := strings.Split(xyz, ",")
+				if !ok || part == "" || len(nums) != 3 {
+					return nil, opts, fmt.Errorf("%s needs PART=X,Y,Z", arg)
+				}
+				var v [3]float64
+				for k, s := range nums {
+					n, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+					if err != nil {
+						return nil, opts, fmt.Errorf("%s needs numbers", arg)
+					}
+					v[k] = n
+				}
+				if opts.move == nil {
+					opts.move = map[string][3]float64{}
+				}
+				opts.move[strings.ToLower(part)] = v
 			case "scale", "yaw":
 				number, err := strconv.ParseFloat(value, 64)
 				if err != nil {
@@ -133,7 +186,7 @@ var commands = map[string]bool{
 	"install": true, "list": true, "status": true, "on": true, "enable": true, "off": true,
 	"disable": true, "remove": true, "uninstall": true, "patch": true, "repair": true,
 	"unpatch": true, "play": true, "help": true, "update": true, "profile": true, "profiles": true,
-	"search": true, "get": true, "extract": true, "model": true, "studio": true,
+	"search": true, "get": true, "extract": true, "model": true, "image": true, "prop": true, "effects": true, "paint": true, "text": true, "select": true, "icons": true, "meshy": true, "apply": true, "studio": true,
 }
 
 // palette holds escape sequences; every field is empty when colours are off (NO_COLOR, old consoles).
@@ -331,7 +384,7 @@ func execute(ui *UI, game Game, command string, args []string, opts options) err
 	if err != nil {
 		return err
 	}
-	if command != "list" && command != "status" && command != "studio" && gameRunning() {
+	if command != "list" && command != "status" && command != "studio" && !(command == "paint" && opts.preview != "") && gameRunning() {
 		return errRunning
 	}
 	switch command {
@@ -407,8 +460,26 @@ func execute(ui *UI, game Game, command string, args []string, opts options) err
 		return nil
 	case "model":
 		return modelCommand(ui, store, game, args, opts)
+	case "select":
+		return selectCommand(ui, game, args)
+	case "icons":
+		return iconsCommand(ui, store, game, args)
+	case "meshy":
+		return meshyCommand(ui, game, args)
+	case "apply":
+		return applyCommand(ui, store, game, args, opts)
+	case "text":
+		return textCommand(ui, game, args)
+	case "image":
+		return imageCommand(ui, store, game, args)
+	case "prop":
+		return propCommand(ui, store, game, args, opts)
+	case "effects":
+		return effectsCommand(ui, store, game, args)
+	case "paint":
+		return paintCommand(ui, store, game, args, opts)
 	case "studio":
-		return runStudio(ui, store, game, args...)
+		return runStudio(ui, game, args...)
 	case "extract":
 		if len(args) < 1 || len(args) > 2 {
 			return errors.New("name what to extract, for example: dlmod extract models/heroes_staging/haze")

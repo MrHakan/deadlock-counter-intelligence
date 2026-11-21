@@ -35,7 +35,6 @@ var studioPage string
 type studio struct {
 	mu    sync.Mutex
 	game  Game
-	store *Store
 	index *source2.VPKIndex
 	token string
 
@@ -50,6 +49,11 @@ type studio struct {
 
 	rigKey string
 	rigged *source2.Rigged
+
+	sounds    *source2.VPKIndex // the game's sounds, read on the Sounds tab's first use
+	allSounds []string
+	images    *source2.VPKIndex // the game's interface images, read on the Images tab's first use
+	particles *source2.VPKIndex // the game's particle systems, read on the Effects tab's first use
 }
 
 // studioOptions are the page's settings, as ImportOptions takes them.
@@ -60,6 +64,11 @@ type studioOptions struct {
 	ZUp    bool            `json:"zup"`
 	Offset [3]float64      `json:"offset"`
 	Pose   *source2.Pose   `json:"pose"` // nil to match the model's pose automatically
+
+	// The advanced rig tools' edits.
+	JointMap map[string]string     `json:"jointMap"`
+	Pins     map[int]string        `json:"pins"`
+	Paint    []source2.PaintStroke `json:"paint"`
 }
 
 func (o studioOptions) importOptions() source2.ImportOptions {
@@ -67,41 +76,55 @@ func (o studioOptions) importOptions() source2.ImportOptions {
 	for k, v := range o.Keep {
 		keep[k] = v
 	}
-	return source2.ImportOptions{Keep: keep, Scale: o.Scale, Yaw: o.Yaw, ZUp: o.ZUp, Offset: o.Offset}
+	return source2.ImportOptions{Keep: keep, Scale: o.Scale, Yaw: o.Yaw, ZUp: o.ZUp, Offset: o.Offset,
+		JointMap: o.JointMap, Pins: o.Pins, Paint: o.Paint}
 }
 
 // runStudio serves the studio until dlmod is closed. A model file given (dropped on dlmod) is
 // loaded before the page opens, with the files next to it that it names.
-func runStudio(ui *UI, store *Store, game Game, preload ...string) error {
-	index, err := openHeroModels(game)
+func runStudio(ui *UI, game Game, preload ...string) error {
+	url, serve, loaded, err := startStudio(game, preload...)
 	if err != nil {
 		return err
 	}
-	secret := make([]byte, 16)
-	if _, err := rand.Read(secret); err != nil {
-		return err
+	if loaded != "" {
+		ui.say("%s", loaded)
 	}
-	s := &studio{game: game, store: store, index: index, token: hex.EncodeToString(secret)}
-	if len(preload) > 0 {
-		mesh, err := source2.LoadMeshFile(preload[0])
-		if err != nil {
-			return err
-		}
-		s.mesh, s.fileName = mesh, filepath.Base(preload[0])
-		ui.say("Loaded %s: %d triangles.", s.fileName, mesh.TriangleCount())
-	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return err
-	}
-	url := fmt.Sprintf("http://%s/?t=%s", listener.Addr(), s.token)
 	ui.say("The model studio is at %s", url)
 	ui.say("It opens in your browser; leave this window open while you use it, and press Ctrl+C to stop.")
 	if err := openInPlayer(url); err != nil {
 		ui.say("Open the address above in your browser.")
 	}
+	return serve()
+}
+
+// startStudio gets the studio ready on a port of this computer and returns its address and the
+// function that serves it (until dlmod quits), so the full-screen view can run it in the
+// background. loaded describes a preloaded model.
+func startStudio(game Game, preload ...string) (url string, serve func() error, loaded string, err error) {
+	index, err := openHeroModels(game)
+	if err != nil {
+		return "", nil, "", err
+	}
+	secret := make([]byte, 16)
+	if _, err := rand.Read(secret); err != nil {
+		return "", nil, "", err
+	}
+	s := &studio{game: game, index: index, token: hex.EncodeToString(secret)}
+	if len(preload) > 0 {
+		mesh, err := source2.LoadMeshFile(preload[0])
+		if err != nil {
+			return "", nil, "", err
+		}
+		s.mesh, s.fileName = mesh, filepath.Base(preload[0])
+		loaded = fmt.Sprintf("Loaded %s: %d triangles.", s.fileName, mesh.TriangleCount())
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", nil, "", err
+	}
 	server := &http.Server{Handler: s.routes(), ReadHeaderTimeout: 10 * time.Second}
-	return server.Serve(listener)
+	return fmt.Sprintf("http://%s/?t=%s", listener.Addr(), s.token), func() error { return server.Serve(listener) }, loaded, nil
 }
 
 func (s *studio) routes() http.Handler {
@@ -134,6 +157,11 @@ func (s *studio) routes() http.Handler {
 				w.Write(image)
 				return
 			}
+			if file, ok := result.(download); ok {
+				w.Header().Set("Content-Type", file.contentType)
+				w.Write(file.data)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(result)
 		})
@@ -146,11 +174,25 @@ func (s *studio) routes() http.Handler {
 	api("rig", s.rig)
 	api("bend", s.bend)
 	api("install", s.install)
+	api("sounds", s.soundList)
+	api("sound", s.soundAudio)
+	api("sounds/replace", s.soundReplace)
+	api("sounds/restore", s.soundRestore)
+	api("images", s.imageList)
+	api("image", s.imageFile)
+	api("images/replace", s.imageReplace)
+	api("images/restore", s.imageRestore)
+	api("text", s.textList)
+	api("text/save", s.textSave)
+	api("effects", s.effectList)
+	api("effects/apply", s.effectApply)
+	api("effects/restore", s.effectRestore)
 	return mux
 }
 
 func readJSON(r *http.Request, into any) error {
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(into); err != nil {
+	// Painted weights of a big model take some megabytes.
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<20)).Decode(into); err != nil {
 		return fmt.Errorf("bad request: %v", err)
 	}
 	return nil
@@ -419,8 +461,65 @@ func (s *studio) rig(r *http.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"pose": rigged.Pose, "positions": floats(rigged.Mesh.Positions),
-		"seconds": time.Since(start).Seconds()}, nil
+	out := map[string]any{"pose": rigged.Pose, "positions": floats(rigged.Mesh.Positions), "seconds": time.Since(start).Seconds()}
+	s.mu.Lock()
+	model, mesh := s.model, s.mesh
+	s.mu.Unlock()
+	// For the advanced rig tools: the hero's skeleton and each vertex's bones, to show weights and
+	// bend the model in the page; the model's pieces, to pin; a rigged model's joints, to remap.
+	skeleton, err := model.Skeleton()
+	if err != nil {
+		return out, nil
+	}
+	index := map[string]int{}
+	var core []bool
+	var world []float64
+	for i, name := range skeleton.Names {
+		index[name] = i
+		core = append(core, source2.CoreBone(name))
+		world = append(world, skeleton.World[i][:]...)
+	}
+	bones := make([]byte, 0, len(rigged.Skin)*8)
+	weights := make([]byte, 0, len(rigged.Skin)*16)
+	for _, influences := range rigged.Skin {
+		for k := 0; k < 4; k++ {
+			bone, weight := 0, float32(0)
+			if k < len(influences) {
+				bone, weight = index[influences[k].Bone], influences[k].Weight
+			}
+			bones = binary.LittleEndian.AppendUint16(bones, uint16(bone))
+			weights = binary.LittleEndian.AppendUint32(weights, math.Float32bits(weight))
+		}
+	}
+	pieces := source2.Pieces(mesh)
+	var pieceIDs []uint32
+	count := 0
+	for _, p := range pieces {
+		pieceIDs = append(pieceIDs, uint32(p))
+		count = max(count, p+1)
+	}
+	joints := map[string]int{} // vertices each joint holds most of
+	if len(mesh.Joints) == len(mesh.Positions) {
+		for _, influences := range mesh.Joints {
+			best := -1
+			for k, j := range influences {
+				if best < 0 || j.Weight > influences[best].Weight {
+					best = k
+				}
+			}
+			if best >= 0 && influences[best].Joint < len(mesh.JointNames) {
+				joints[mesh.JointNames[influences[best].Joint]]++
+			}
+		}
+	}
+	out["skeleton"] = map[string]any{"names": skeleton.Names, "parents": skeleton.Parent, "core": core, "world": world}
+	out["bones"] = base64.StdEncoding.EncodeToString(bones)
+	out["weights"] = base64.StdEncoding.EncodeToString(weights)
+	out["pieces"] = indexBytes(pieceIDs)
+	out["pieceCount"] = count
+	out["jointMap"] = rigged.JointMap
+	out["jointVertices"] = joints
+	return out, nil
 }
 
 func (s *studio) bend(r *http.Request) (any, error) {
@@ -477,9 +576,15 @@ func (s *studio) install(r *http.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Read the mod list again: dlmod's full-screen view may have changed it since the studio
+	// opened, and installing from a stale list would undo that.
+	store, err := openStore(s.game)
+	if err != nil {
+		return nil, err
+	}
 	p := &webPrompter{}
 	p.messages = append(p.messages, result.Notes...)
-	if err := installModel(p, s.store, hero, result); err != nil {
+	if err := installModel(p, store, hero, result); err != nil {
 		return nil, err
 	}
 	if err := ensurePatched(p, s.game); err != nil {

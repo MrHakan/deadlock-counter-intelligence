@@ -53,6 +53,7 @@ type Manifest struct {
 	NextID   int              `json:"nextId"`
 	Mods     []*Mod           `json:"mods"`
 	Profiles map[string][]int `json:"profiles,omitempty"` // profile name -> IDs of the mods it switches on
+	HideKeys bool             `json:"hideKeys,omitempty"` // the full-screen view hides its key hints (Tab)
 }
 
 // Entry is one mod: a filled slot in citadel/addons, or a switched-off mod in dlmod's folder.
@@ -128,20 +129,32 @@ type Store struct {
 }
 
 func openStore(game Game) (*Store, error) {
-	store := &Store{game: game, manifest: Manifest{NextID: 1}}
-	data, err := os.ReadFile(store.manifestPath())
-	switch {
-	case err == nil:
-		if err := json.Unmarshal(data, &store.manifest); err != nil {
-			return nil, fmt.Errorf("%s is damaged: %v", store.manifestPath(), err)
-		}
-	case !errors.Is(err, os.ErrNotExist):
+	store := &Store{game: game}
+	if err := store.reload(); err != nil {
 		return nil, err
 	}
-	if store.manifest.NextID < 1 {
-		store.manifest.NextID = 1
-	}
 	return store, nil
+}
+
+// reload reads the list of mods again. Commands that build several mods (dlmod apply) open the
+// store more than once, and an install through one copy must not be lost when another saves, so
+// listing and installing start from what is on disk.
+func (s *Store) reload() error {
+	manifest := Manifest{NextID: 1}
+	data, err := os.ReadFile(s.manifestPath())
+	switch {
+	case err == nil:
+		if err := json.Unmarshal(data, &manifest); err != nil {
+			return fmt.Errorf("%s is damaged: %v", s.manifestPath(), err)
+		}
+	case !errors.Is(err, os.ErrNotExist):
+		return err
+	}
+	if manifest.NextID < 1 {
+		manifest.NextID = 1
+	}
+	s.manifest = manifest
+	return nil
 }
 
 func (s *Store) manifestPath() string { return filepath.Join(s.game.StateDir(), "mods.json") }
@@ -230,6 +243,9 @@ func (s *Store) freeSlot() (int, error) {
 
 // entries lists every mod by slot; switched-off mods keep the slot they had.
 func (s *Store) entries() ([]*Entry, error) {
+	if err := s.reload(); err != nil {
+		return nil, err
+	}
 	used, err := s.slots()
 	if err != nil {
 		return nil, err
@@ -391,7 +407,11 @@ func readSources(file string) ([]*source, []string, func(), error) {
 			files = append(files, &sourceFile{entry.Name, entry.Open, int64(entry.UncompressedSize64)})
 		}
 		sources, err := groupSources(files)
-		return sources, skipped, func() { archive.Close() }, err
+		if err != nil { // the caller only closes what it got without an error
+			archive.Close()
+			return nil, nil, nil, err
+		}
+		return sources, skipped, func() { archive.Close() }, nil
 	}
 	if ext := strings.ToLower(filepath.Ext(file)); ext == ".rar" || ext == ".7z" {
 		folder, err := extractArchive(file, os.TempDir())
@@ -399,7 +419,11 @@ func readSources(file string) ([]*source, []string, func(), error) {
 			return nil, nil, nil, err
 		}
 		sources, skipped, err := folderSources(folder)
-		return sources, skipped, func() { os.RemoveAll(folder) }, err
+		if err != nil {
+			os.RemoveAll(folder)
+			return nil, nil, nil, err
+		}
+		return sources, skipped, func() { os.RemoveAll(folder) }, nil
 	}
 	if !strings.EqualFold(filepath.Ext(file), ".vpk") {
 		return nil, nil, nil, errors.New("dlmod installs .zip, .rar, .7z and .vpk files")
@@ -527,6 +551,9 @@ func modName(file string) string {
 // install copies the mods in file into free slots. When an archive holds several mods (often
 // colour variants of one mod) it asks which to install; without a console it installs all.
 func (s *Store) install(p prompter, file, name string) error {
+	if err := s.reload(); err != nil {
+		return err
+	}
 	sources, skipped, closeSources, err := readSources(file)
 	if err != nil {
 		return err

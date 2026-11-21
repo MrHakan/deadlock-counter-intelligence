@@ -1,6 +1,7 @@
 package source2
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -62,6 +63,146 @@ type ImportOptions struct {
 	Offset    [3]float64        // moved after fitting, in game units (Z is up)
 	ZUp       bool              // the file is Z-up (Blender's axes) rather than Y-up
 	Materials map[string]string // imported part name to the material it is drawn with
+
+	// Hand edits from the studio's rig tools, applied over the computed weights.
+	JointMap map[string]string // a rigged model's joint (by name) -> hero bone, over the automatic choice
+	Pins     map[int]string    // a piece of the model (see Pieces) -> the one hero bone it follows
+	Paint    []PaintStroke     // painted weights, in order
+
+	// Kept parts moved, by part name, in the model's space at rest (game units): a weapon pulled
+	// out of a wider body. The part still follows its bones, so the move turns with them.
+	KeptShift map[string][3]float64
+	// Bones moved at rest, by name, in the model's space: only bones the animations leave alone
+	// (a muzzle, which follows its parent as it rests), to go with a moved part.
+	BoneShift map[string][3]float64
+}
+
+// moveBones shifts bones at rest in the model's skeleton and in its animation group's decode
+// key, keeping their parents; the game places a bone no clip animates from these.
+func (m *Model) moveBones(blocks []Block, shift map[string][3]float64) error {
+	if len(shift) == 0 {
+		return nil
+	}
+	sk, err := m.Skeleton()
+	if err != nil {
+		return err
+	}
+	local := map[string][3]float64{} // each move in its parent's space
+	for name, s := range shift {
+		i, ok := sk.index[name]
+		if !ok {
+			return fmt.Errorf("there is no bone %s to move", name)
+		}
+		if p := sk.Parent[i]; p >= 0 {
+			r := sk.World[p]
+			s = [3]float64{
+				r[0]*s[0] + r[4]*s[1] + r[8]*s[2],
+				r[1]*s[0] + r[5]*s[1] + r[9]*s[2],
+				r[2]*s[0] + r[6]*s[1] + r[10]*s[2],
+			}
+		}
+		local[name] = s
+	}
+	rewrite := func(kind string, edit func(root *Value) int) error {
+		for i := range blocks {
+			if blocks[i].Type != kind {
+				continue
+			}
+			root, format, err := ReadKV3(blocks[i].Data)
+			if err != nil {
+				return err
+			}
+			if edit(root) == 0 {
+				continue
+			}
+			data, err := WriteKV3(root, format)
+			if err != nil {
+				return err
+			}
+			blocks[i].Data = data
+		}
+		return nil
+	}
+	moved := 0
+	err = rewrite("DATA", func(root *Value) int {
+		skel := root.Get("m_modelSkeleton")
+		if skel == nil || skel.Get("m_boneName") == nil || skel.Get("m_bonePosParent") == nil {
+			return 0
+		}
+		n := 0
+		for i, name := range skel.Get("m_boneName").Items {
+			if s, ok := local[name.S]; ok && i < len(skel.Get("m_bonePosParent").Items) {
+				pos := skel.Get("m_bonePosParent").Items[i]
+				for k := 0; k < 3 && k < len(pos.Items); k++ {
+					pos.Items[k].F += s[k]
+				}
+				n++
+			}
+		}
+		moved = n
+		return n
+	})
+	if err != nil {
+		return err
+	}
+	if moved != len(local) {
+		return fmt.Errorf("moved %d of %d bones in the skeleton", moved, len(local))
+	}
+	return rewrite("AGRP", func(root *Value) int {
+		key := root.Get("m_decodeKey")
+		if key == nil || key.Get("m_boneArray") == nil {
+			return 0
+		}
+		n := 0
+		for _, bone := range key.Get("m_boneArray").Items {
+			if name := bone.Get("m_name"); name != nil {
+				if s, ok := local[name.S]; ok && bone.Get("m_pos") != nil {
+					for k := 0; k < 3 && k < len(bone.Get("m_pos").Items); k++ {
+						bone.Get("m_pos").Items[k].F += s[k]
+					}
+					n++
+				}
+			}
+		}
+		return n
+	})
+}
+
+// shiftKept moves a kept mesh's vertices at rest, and its bounds, by shift.
+func shiftKept(mesh *Mesh, shift [3]float64, setBlock func(int, []byte) error, plain func(*Value, int, int)) error {
+	for _, vb := range mesh.VertexBuffers {
+		at := vb.Attribute("position", 0)
+		if at == nil {
+			continue
+		}
+		if at.Format != FormatR32G32B32Float && at.Format != FormatR32G32B32A32Float {
+			return fmt.Errorf("%s: positions in format %d cannot be moved", mesh.Name, at.Format)
+		}
+		data := append([]byte{}, vb.Data...)
+		for i := 0; i < vb.Count; i++ {
+			p := data[i*vb.Stride+at.Offset:]
+			for k := 0; k < 3; k++ {
+				v := math.Float32frombits(binary.LittleEndian.Uint32(p[4*k:])) + float32(shift[k])
+				binary.LittleEndian.PutUint32(p[4*k:], math.Float32bits(v))
+			}
+		}
+		plain(vb.Desc, vb.Count, vb.Stride)
+		if err := setBlock(vb.Block, data); err != nil {
+			return err
+		}
+	}
+	if objects := mesh.Render.Get("m_sceneObjects"); objects != nil {
+		for _, object := range objects.Items {
+			for _, key := range []string{"m_vMinBounds", "m_vMaxBounds"} {
+				if v := object.Get(key); v != nil && len(v.Items) == 3 {
+					for k := 0; k < 3; k++ {
+						v.Items[k].F += shift[k]
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (o ImportOptions) kept(name string) bool { return o.Keep[baseName(name)] }
@@ -174,6 +315,29 @@ func (m *Model) Fit(in *ImportedMesh, opts ImportOptions) (*ImportedMesh, error)
 	if height <= 0 {
 		return nil, errors.New("the model is flat: it has no height")
 	}
+	if (opts.Scale == 0 || opts.Scale == 1) && m.inHeroSpace(in, turn, hi[2]-lo[2]) {
+		// Rigged on the hero's own bones where they stand: already in the hero's space, where a
+		// rig made for the hero's motion must stay. Fitting would move it off its bones.
+		out.Positions = make([][3]float32, len(turned))
+		for i, p := range turned {
+			for k := 0; k < 3; k++ {
+				out.Positions[i][k] = float32(p[k] + opts.Offset[k])
+			}
+		}
+		out.Normals = make([][3]float32, len(in.Normals))
+		for i, n := range in.Normals {
+			t := normalize(turn(n))
+			out.Normals[i] = [3]float32{float32(t[0]), float32(t[1]), float32(t[2])}
+		}
+		out.JointPositions = make([][3]float32, len(in.JointPositions))
+		for i, p := range in.JointPositions {
+			t := turn(p)
+			for k := 0; k < 3; k++ {
+				out.JointPositions[i][k] = float32(t[k] + opts.Offset[k])
+			}
+		}
+		return out, nil
+	}
 	scale := (hi[2] - lo[2]) / height
 	if opts.Scale > 0 {
 		scale *= opts.Scale
@@ -196,7 +360,37 @@ func (m *Model) Fit(in *ImportedMesh, opts ImportOptions) (*ImportedMesh, error)
 		t := normalize(turn(n))
 		out.Normals[i] = [3]float32{float32(t[0]), float32(t[1]), float32(t[2])}
 	}
+	if in.JointPositions != nil {
+		out.JointPositions = make([][3]float32, len(in.JointPositions))
+		for i, p := range in.JointPositions {
+			t := turn(p)
+			for k := 0; k < 3; k++ {
+				out.JointPositions[i][k] = float32((t[k]-centre[k])*scale + target[k] + opts.Offset[k])
+			}
+		}
+	}
 	return out, nil
+}
+
+// inHeroSpace tells whether a rigged model's joints, turned into the hero's axes, sit on the
+// hero's bones of the same names, as they do in a model rigged for this hero.
+func (m *Model) inHeroSpace(in *ImportedMesh, turn func([3]float32) [3]float64, height float64) bool {
+	if len(in.JointPositions) == 0 || len(in.Joints) != len(in.Positions) {
+		return false
+	}
+	skeleton, err := m.Skeleton()
+	if err != nil {
+		return false
+	}
+	probe := &ImportedMesh{Joints: in.Joints, JointNames: in.JointNames, Positions: in.Positions,
+		JointPositions: make([][3]float32, len(in.JointPositions))}
+	for i, p := range in.JointPositions {
+		t := turn(p)
+		probe.JointPositions[i] = [3]float32{float32(t[0]), float32(t[1]), float32(t[2])}
+	}
+	// No limb needed here: a rig on the body's bones alone is still placed on the hero.
+	named, _ := heroJoints(probe, skeleton, height)
+	return named >= 4
 }
 
 // BoneWeight is a bone, by name, and how much a vertex follows it.
@@ -209,7 +403,16 @@ type pointGrid struct {
 	cell  float64
 	cells map[[3]int][]int
 	pts   [][3]float32
+
+	// The cells again, laid out by freeze over the box the points fill, x fastest: cell c holds
+	// items[starts[c]:starts[c+1]]. Nil until the first search, and after any add.
+	lo, size [3]int
+	starts   []int32
+	items    []int32
 }
+
+// maxFrozenCells caps the array freeze builds; a grid spread wider keeps searching its map.
+const maxFrozenCells = 1 << 22
 
 type gridHit struct {
 	index    int
@@ -231,11 +434,64 @@ func (g *pointGrid) add(index int, p [3]float32) {
 	g.pts[index] = p
 	k := g.key(p)
 	g.cells[k] = append(g.cells[k], index)
+	g.starts = nil
+}
+
+func (g *pointGrid) cellIndex(k [3]int) int {
+	return ((k[2]-g.lo[2])*g.size[1]+(k[1]-g.lo[1]))*g.size[0] + (k[0] - g.lo[0])
+}
+
+// freeze lays the cells out as one array over the box the points fill. A search far from the
+// points (a round model's belly, nowhere near the hero's thin arm) walks dozens of rings of
+// empty cells; as map lookups that took most of a minute per model, as array reads it does not,
+// and cells outside the box are not visited at all.
+func (g *pointGrid) freeze() {
+	var hi [3]int
+	first := true
+	for k := range g.cells {
+		for a := 0; a < 3; a++ {
+			if first || k[a] < g.lo[a] {
+				g.lo[a] = k[a]
+			}
+			if first || k[a] > hi[a] {
+				hi[a] = k[a]
+			}
+		}
+		first = false
+	}
+	total := 1
+	for a := 0; a < 3; a++ {
+		g.size[a] = hi[a] - g.lo[a] + 1
+		total *= g.size[a]
+		if total > maxFrozenCells {
+			return
+		}
+	}
+	starts := make([]int32, total+1)
+	for k, list := range g.cells {
+		starts[g.cellIndex(k)+1] += int32(len(list))
+	}
+	for c := 1; c <= total; c++ {
+		starts[c] += starts[c-1]
+	}
+	items := make([]int32, starts[total])
+	next := append([]int32(nil), starts[:total]...)
+	for k, list := range g.cells {
+		c := g.cellIndex(k)
+		for _, i := range list { // in the order added, so ties go the same way as before
+			items[next[c]] = int32(i)
+			next[c]++
+		}
+	}
+	g.starts, g.items = starts, items
 }
 
 // nearest finds up to n points closest to p, searching outward ring by ring and keeping only the
 // best n seen so far.
 func (g *pointGrid) nearest(p [3]float32, n int) []gridHit {
+	if g.starts == nil && len(g.cells) > 0 {
+		g.freeze()
+	}
 	center := g.key(p)
 	best := make([]gridHit, 0, n) // ordered by squared distance until the end
 	consider := func(i int) {
@@ -254,23 +510,50 @@ func (g *pointGrid) nearest(p [3]float32, n int) []gridHit {
 		}
 		best[at] = gridHit{i, d}
 	}
+	frozen := g.starts != nil
+	visit := func(k [3]int) {
+		if !frozen {
+			for _, i := range g.cells[k] {
+				consider(i)
+			}
+			return
+		}
+		c := g.cellIndex(k)
+		for _, i := range g.items[g.starts[c]:g.starts[c+1]] {
+			consider(int(i))
+		}
+	}
+	// span is the part of a ring's side along one axis that lies in the box (all of it unfrozen).
+	span := func(axis, ring int) (int, int) {
+		if !frozen {
+			return -ring, ring
+		}
+		return max(-ring, g.lo[axis]-center[axis]), min(ring, g.lo[axis]+g.size[axis]-1-center[axis])
+	}
 	for ring := 0; ring < 64; ring++ {
-		for dx := -ring; dx <= ring; dx++ {
-			for dy := -ring; dy <= ring; dy++ {
+		x0, x1 := span(0, ring)
+		y0, y1 := span(1, ring)
+		z0, z1 := span(2, ring)
+		for dx := x0; dx <= x1; dx++ {
+			for dy := y0; dy <= y1; dy++ {
 				edge := abs(dx) == ring || abs(dy) == ring
-				for dz := -ring; dz <= ring; dz++ {
+				for dz := z0; dz <= z1; dz++ {
 					if !edge && abs(dz) != ring {
 						dz = ring - 1 // inside the shell: jump to its far face
 						continue
 					}
-					for _, i := range g.cells[[3]int{center[0] + dx, center[1] + dy, center[2] + dz}] {
-						consider(i)
-					}
+					visit([3]int{center[0] + dx, center[1] + dy, center[2] + dz})
 				}
 			}
 		}
 		// Every point within ring cells has been seen once n points lie within that distance.
 		if reach := float64(ring) * g.cell; len(best) == n && best[n-1].distance <= reach*reach {
+			break
+		}
+		// Once the ring holds the whole box, every point has been seen.
+		if frozen && x0 == g.lo[0]-center[0] && x1 == g.lo[0]+g.size[0]-1-center[0] &&
+			y0 == g.lo[1]-center[1] && y1 == g.lo[1]+g.size[1]-1-center[1] &&
+			z0 == g.lo[2]-center[2] && z1 == g.lo[2]+g.size[2]-1-center[2] {
 			break
 		}
 	}
@@ -344,12 +627,31 @@ func cloneValue(v *Value) *Value {
 	return &c
 }
 
-// boneIndex maps bone names to a mesh's own bone numbers. A bone the mesh lacks falls back to its
-// nearest ancestor the mesh has, through the model's skeleton.
+// boneLimit is the highest bone number a mesh's first vertex buffer can store: one byte per bone
+// in most layouts, though Wraith's body lists 347 bones (the ones past 255 are cloth, which only
+// her other buffers with 16-bit indices use).
+func boneLimit(mesh *Mesh) int {
+	if len(mesh.VertexBuffers) == 0 {
+		return 0
+	}
+	if a := mesh.VertexBuffers[0].Attribute("blendindices", 0); a != nil {
+		switch a.Format {
+		case FormatR8G8B8A8Uint, FormatR16G16B16A16Uint:
+			return 255
+		}
+	}
+	return 65535
+}
+
+// boneIndex maps bone names to a mesh's own bone numbers. A bone the mesh lacks, or cannot store
+// (see boneLimit), falls back to its nearest ancestor the mesh has, through the model's skeleton.
 func (m *Model) boneIndex(mesh *Mesh) func(string) int {
 	own := map[string]int{}
+	limit := boneLimit(mesh)
 	for i, name := range mesh.Bones {
-		own[name] = i
+		if i <= limit {
+			own[name] = i
+		}
 	}
 	parents := map[string]string{}
 	if skeleton := m.Data.Get("m_modelSkeleton"); skeleton != nil {
@@ -376,12 +678,31 @@ func (m *Model) boneIndex(mesh *Mesh) func(string) int {
 }
 
 // Replace writes the model with the fitted, rigged mesh in place of the parts it replaces: the
-// mesh is drawn by the biggest replaced part at every level of detail and the other replaced
+// mesh is drawn by one replaced part at every level of detail and the other replaced
 // parts are emptied. Skeleton, animations, hitboxes, physics and attachments stay the hero's.
 func (m *Model) Replace(raw []byte, fitted *ImportedMesh, skin [][]BoneWeight, opts ImportOptions) ([]byte, error) {
 	fresh, err := LoadModel(raw) // edit a copy so the caller's model stays as it was
 	if err != nil {
 		return nil, err
+	}
+	// A level of detail is drawn by the part whose own bones carry most of the new skin's weight,
+	// then the biggest. A bone a mesh lacks falls back to an ancestor and stops moving on its own,
+	// and no part has them all: Wraith's body has no forearm or finger bones, her arms no neck.
+	// Picking by size chose her body at LOD0 but her arms at LOD1, so the model changed with distance.
+	used := map[string]float64{}
+	for _, bones := range skin {
+		for _, b := range bones {
+			used[b.Bone] += float64(b.Weight)
+		}
+	}
+	covers := map[*Mesh]float64{}
+	for _, mesh := range fresh.Meshes {
+		limit := boneLimit(mesh)
+		for i, name := range mesh.Bones {
+			if i <= limit {
+				covers[mesh] += used[name]
+			}
+		}
 	}
 	targets := map[*Mesh]bool{}
 	covered := 0
@@ -398,7 +719,7 @@ func (m *Model) Replace(raw []byte, fitted *ImportedMesh, skin [][]BoneWeight, o
 			if vb.Attribute("position", 0) == nil || vb.Attribute("blendindices", 0) == nil || vb.Attribute("normal", 0) == nil {
 				continue
 			}
-			if best == nil || vertexCount(mesh) > vertexCount(best) {
+			if best == nil || covers[mesh] > covers[best] || (covers[mesh] == covers[best] && vertexCount(mesh) > vertexCount(best)) {
 				best = mesh
 			}
 		}
@@ -444,6 +765,20 @@ func (m *Model) Replace(raw []byte, fitted *ImportedMesh, skin [][]BoneWeight, o
 	}
 	for _, mesh := range fresh.Meshes {
 		if opts.kept(mesh.Name) {
+			shift, ok := opts.KeptShift[baseName(mesh.Name)]
+			if !ok || shift == ([3]float64{}) {
+				continue
+			}
+			if err := shiftKept(mesh, shift, setBlock, plain); err != nil {
+				return nil, err
+			}
+			format := [16]byte{}
+			copy(format[:], blocks[mesh.DataBlock].Data[4:20])
+			encoded, err := WriteKV3(mesh.Render, format)
+			if err != nil {
+				return nil, err
+			}
+			blocks[mesh.DataBlock].Data = encoded
 			continue
 		}
 		setNumber(mesh.Desc, "m_nMorphBlock", -1)
@@ -494,6 +829,9 @@ func (m *Model) Replace(raw []byte, fitted *ImportedMesh, skin [][]BoneWeight, o
 		return nil, err
 	}
 	blocks[ctrlIndex].Data = ctrl
+	if err := fresh.moveBones(blocks, opts.BoneShift); err != nil {
+		return nil, err
+	}
 	if err := fresh.addReferences(blocks, opts); err != nil {
 		return nil, err
 	}
@@ -506,7 +844,11 @@ func (m *Model) writeTarget(mesh *Mesh, fitted *ImportedMesh, skin [][]BoneWeigh
 	vb := mesh.VertexBuffers[0]
 	ib := mesh.IndexBuffers[0]
 	index := m.boneIndex(mesh)
-	data := VertexData{Positions: fitted.Positions, Normals: fitted.Normals, UVs: fitted.UVs, Skin: make([][]Influence, len(skin))}
+	positions, normals := fitted.Positions, fitted.Normals
+	if sk, err := m.Skeleton(); err == nil {
+		positions, normals = rootUnturn(sk, positions, normals, skin)
+	}
+	data := VertexData{Positions: positions, Normals: normals, UVs: fitted.UVs, Skin: make([][]Influence, len(skin))}
 	for i, bones := range skin {
 		for _, b := range bones {
 			data.Skin[i] = append(data.Skin[i], Influence{index(b.Bone), b.Weight})

@@ -1,10 +1,6 @@
 package main
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,42 +18,11 @@ import (
 
 const customSoundsName = "Custom sounds"
 
-// soundProject is the list of replaced sounds, kept in game/dlmod/sounds.
-type soundProject struct {
-	Replaced map[string]soundReplacement `json:"replaced"` // game path -> replacement
-}
-
-type soundReplacement struct {
-	Source   string `json:"source"`   // the file the player chose, for display
-	Compiled string `json:"compiled"` // the compiled .vsnd_c, inside game/dlmod/sounds/files
-}
-
 func (g Game) soundsDir() string { return filepath.Join(g.StateDir(), "sounds") }
 
-func loadSoundProject(game Game) (*soundProject, error) {
-	project := &soundProject{Replaced: map[string]soundReplacement{}}
-	data, err := os.ReadFile(filepath.Join(game.soundsDir(), "replaced.json"))
-	if errors.Is(err, os.ErrNotExist) {
-		return project, nil
-	}
-	if err == nil {
-		err = json.Unmarshal(data, project)
-	}
-	if project.Replaced == nil {
-		project.Replaced = map[string]soundReplacement{}
-	}
-	return project, err
-}
-
-func (p *soundProject) save(game Game) error {
-	data, err := json.MarshalIndent(p, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(game.soundsDir(), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(game.soundsDir(), "replaced.json"), data, 0o644)
+// loadSoundProject reads the replaced sounds, kept in game/dlmod/sounds.
+func loadSoundProject(game Game) (*replacementProject, error) {
+	return loadReplacements(game.soundsDir(), customSoundsName)
 }
 
 // gameSounds opens the game's own archive and lists its sounds.
@@ -93,61 +58,22 @@ func heroLabel(codename string) string {
 	return codename
 }
 
-// replaceSound compiles audio for one game path and records it.
-func replaceSound(game Game, project *soundProject, gamePath, audioFile string) (source2.SoundInfo, error) {
+// replaceSound compiles an audio file for one game path and records it.
+func replaceSound(project *replacementProject, gamePath, audioFile string) (source2.SoundInfo, error) {
 	audio, err := os.ReadFile(audioFile)
 	if err != nil {
 		return source2.SoundInfo{}, err
 	}
-	compiled, info, err := source2.CompileSound(audio)
-	if err != nil {
-		return info, fmt.Errorf("%s: %v", filepath.Base(audioFile), err)
-	}
-	sum := sha1.Sum(compiled)
-	name := hex.EncodeToString(sum[:10]) + ".vsnd_c"
-	folder := filepath.Join(game.soundsDir(), "files")
-	if err := os.MkdirAll(folder, 0o755); err != nil {
-		return info, err
-	}
-	if err := os.WriteFile(filepath.Join(folder, name), compiled, 0o644); err != nil {
-		return info, err
-	}
-	project.Replaced[gamePath] = soundReplacement{Source: filepath.Base(audioFile), Compiled: name}
-	return info, project.save(game)
+	return replaceSoundData(project, gamePath, filepath.Base(audioFile), audio)
 }
 
-// installCustomSounds packs every replacement into one VPK and installs it in place of the
-// previous version, or removes the mod when nothing is replaced.
-func (s *Store) installCustomSounds(p prompter, project *soundProject) error {
-	entries, err := s.entries()
+// replaceSoundData compiles audio (named source, for display) for one game path and records it.
+func replaceSoundData(project *replacementProject, gamePath, source string, audio []byte) (source2.SoundInfo, error) {
+	compiled, info, err := source2.CompileSound(audio)
 	if err != nil {
-		return err
+		return info, fmt.Errorf("%s: %v", source, err)
 	}
-	for _, entry := range entries {
-		if entry.Mod != nil && entry.Mod.Name == customSoundsName {
-			if err := s.remove(entry); err != nil {
-				return err
-			}
-		}
-	}
-	if len(project.Replaced) == 0 {
-		p.say("No sounds are replaced; the %s mod is removed.", customSoundsName)
-		return nil
-	}
-	files := map[string][]byte{}
-	for gamePath, replacement := range project.Replaced {
-		data, err := os.ReadFile(filepath.Join(s.game.soundsDir(), "files", replacement.Compiled))
-		if err != nil {
-			return fmt.Errorf("the compiled sound for %s is missing: %v", gamePath, err)
-		}
-		files[gamePath] = data
-	}
-	vpk := filepath.Join(s.game.soundsDir(), "pak01_dir.vpk")
-	if err := os.WriteFile(vpk, source2.WriteVPK(files), 0o644); err != nil {
-		return err
-	}
-	defer os.Remove(vpk)
-	return s.install(p, vpk, customSoundsName)
+	return info, project.add(gamePath, source, compiled)
 }
 
 // openInPlayer hands a file to the system's default program, which plays audio.
@@ -193,7 +119,7 @@ type soundScreen struct {
 	typing        bool
 	results       []string
 	selected, top int
-	project       *soundProject
+	project       *replacementProject
 	replacing     string // the game path a dropped file will replace
 }
 
@@ -231,7 +157,7 @@ func (t *tui) openSounds() {
 		}
 		project, err := loadSoundProject(t.game)
 		if err != nil {
-			t.note(toneBad, "game/dlmod/sounds/replaced.json could not be read: "+err.Error())
+			t.note(toneBad, err.Error())
 			return
 		}
 		s := &soundScreen{index: index, all: all, hero: -1, project: project}
@@ -336,12 +262,11 @@ func (t *tui) playSelected(replacement bool) {
 	var data []byte
 	var err error
 	if replacement {
-		chosen, ok := t.sounds.project.Replaced[name]
-		if !ok {
+		if _, ok := t.sounds.project.Replaced[name]; !ok {
 			t.note(toneInfo, "This sound is not replaced; Enter plays the game's own.")
 			return
 		}
-		data, err = os.ReadFile(filepath.Join(t.game.soundsDir(), "files", chosen.Compiled))
+		data, err = t.sounds.project.read(name)
 	} else {
 		data, err = t.sounds.index.Read(name)
 	}
@@ -364,13 +289,13 @@ func (t *tui) replaceWith(file string) {
 		return
 	}
 	t.act(func() error {
-		info, err := replaceSound(t.game, s.project, target, file)
+		info, err := replaceSound(s.project, target, file)
 		if err != nil {
 			return err
 		}
 		t.note(toneGood, fmt.Sprintf("%s now plays %s (%s, %.1f s).", filepath.Base(target), filepath.Base(file),
 			strings.ToLower(info.Format), info.Duration))
-		return t.store.installCustomSounds(t, s.project)
+		return t.store.installReplacements(t, s.project)
 	})
 	t.mode = modeSounds
 }
@@ -382,12 +307,11 @@ func (t *tui) restoreSound() {
 		return
 	}
 	t.act(func() error {
-		delete(s.project.Replaced, name)
-		if err := s.project.save(t.game); err != nil {
+		if _, err := s.project.restore([]string{name}); err != nil {
 			return err
 		}
 		t.note(toneInfo, filepath.Base(name)+" plays the game's own sound again.")
-		return t.store.installCustomSounds(t, s.project)
+		return t.store.installReplacements(t, s.project)
 	})
 	t.mode = modeSounds
 }
