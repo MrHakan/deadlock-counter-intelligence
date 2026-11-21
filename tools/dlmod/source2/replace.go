@@ -647,7 +647,11 @@ func (m *Model) writeTarget(mesh *Mesh, fitted *ImportedMesh, skin [][]BoneWeigh
 	vb := mesh.VertexBuffers[0]
 	ib := mesh.IndexBuffers[0]
 	index := m.boneIndex(mesh)
-	data := VertexData{Positions: fitted.Positions, Normals: fitted.Normals, UVs: fitted.UVs, Skin: make([][]Influence, len(skin))}
+	positions, normals := fitted.Positions, fitted.Normals
+	if sk, err := m.Skeleton(); err == nil {
+		positions, normals = rootUnturn(sk, positions, normals, skin)
+	}
+	data := VertexData{Positions: positions, Normals: normals, UVs: fitted.UVs, Skin: make([][]Influence, len(skin))}
 	for i, bones := range skin {
 		for _, b := range bones {
 			data.Skin[i] = append(data.Skin[i], Influence{index(b.Bone), b.Weight})
